@@ -1,5 +1,6 @@
 import React from 'react';
 import { HistoryEntry } from '../../types/history';
+import { getProxiedArtworkUrl } from '../../services/apiClient';
 
 interface HistoryGridProps {
   history: HistoryEntry[];
@@ -20,7 +21,7 @@ export function HistoryGrid({ history }: HistoryGridProps): React.ReactElement {
             <div style={{ width: '100%', aspectRatio: '1', background: 'var(--surface2)', overflow: 'hidden' }}>
               {entry.artworkResponse.artworkUrl ? (
                 <img
-                  src={entry.artworkResponse.artworkUrl}
+                  src={getProxiedArtworkUrl(entry.artworkResponse.artworkUrl)}
                   alt={entry.recommendation.album}
                   loading="lazy"
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}

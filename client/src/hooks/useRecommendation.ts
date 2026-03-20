@@ -65,6 +65,32 @@ export function useRecommendation(): UseRecommendationReturn {
     saveLibraryToStorage(libraryData);
   }, [libraryData]);
 
+  useEffect(() => {
+    const nullEntries = history.filter((e) => e.artworkResponse.artworkUrl === null);
+    if (nullEntries.length === 0) return;
+
+    // Re-fetch artwork sequentially for any cached history entries missing it.
+    // Sequential execution respects the 1s delay in artworkService.
+    (async () => {
+      for (const entry of nullEntries) {
+        const artwork = await fetchArtwork(
+          entry.recommendation.artist,
+          entry.recommendation.album,
+        );
+        if (artwork.artworkUrl !== null) {
+          setHistory((prev) =>
+            prev.map((e) =>
+              e.recommendation.artist === entry.recommendation.artist &&
+              e.recommendation.album === entry.recommendation.album
+                ? { ...e, artworkResponse: artwork }
+                : e,
+            ),
+          );
+        }
+      }
+    })();
+  }, []); // intentionally empty — run once on mount only to heal stale cache entries
+
   const fetchRecommendation = useCallback(async (): Promise<void> => {
     if (!libraryData) return;
 

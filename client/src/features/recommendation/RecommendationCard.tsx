@@ -1,5 +1,6 @@
 import React from 'react';
 import { RecommendationResponse, ArtworkResponse } from '@shared/types';
+import { getProxiedArtworkUrl } from '../../services/apiClient';
 
 interface RecommendationCardProps {
   recommendation: RecommendationResponse | null;
@@ -53,7 +54,7 @@ export function RecommendationCard({
       <div style={{ display: 'flex', gap: 24, padding: 28 }}>
         <div style={{ width: 140, height: 140, flexShrink: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--surface2)', border: '1px solid var(--border)' }}>
           {artworkResponse?.artworkUrl ? (
-            <img src={artworkResponse.artworkUrl} alt={`${recommendation.album} album artwork`} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            <img src={getProxiedArtworkUrl(artworkResponse.artworkUrl)} alt={`${recommendation.album} album artwork`} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           ) : (
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 40, fontFamily: 'var(--serif)' }}>♪</div>
           )}

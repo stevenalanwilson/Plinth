@@ -36,3 +36,7 @@ export function fetchRecommendation(request: RecommendationRequest): Promise<Rec
 export function fetchArtwork(artist: string, album: string): Promise<ArtworkResponse> {
   return get<ArtworkResponse>('/api/artwork', { artist, album });
 }
+
+export function getProxiedArtworkUrl(artworkUrl: string): string {
+  return `${API_BASE}/api/image?url=${encodeURIComponent(artworkUrl)}`;
+}
