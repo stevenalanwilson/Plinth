@@ -77,6 +77,7 @@ export function LibraryUpload({ libraryData, onLibraryParsed }: LibraryUploadPro
           <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{libraryData.albums.length.toLocaleString()}</span>
           <span style={{ color: 'var(--muted)' }}>albums</span>
           <button
+            type="button"
             onClick={() => onLibraryParsed(null)}
             style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--mono)', padding: '2px 6px' }}
           >

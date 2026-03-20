@@ -10,14 +10,20 @@ function loadHistoryFromStorage(): HistoryEntry[] {
   try {
     const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as HistoryEntry[];
+    // Backfill IDs for entries persisted before the id field was introduced.
+    const parsed = JSON.parse(raw) as Array<Omit<HistoryEntry, 'id'> & { id?: string }>;
+    return parsed.map((entry) => ({ ...entry, id: entry.id ?? crypto.randomUUID() }));
   } catch {
     return [];
   }
 }
 
 function saveHistoryToStorage(history: HistoryEntry[]): void {
-  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch (err) {
+    console.warn('Failed to persist history:', err);
+  }
 }
 
 function loadLibraryFromStorage(): LibraryData | null {
@@ -31,10 +37,14 @@ function loadLibraryFromStorage(): LibraryData | null {
 }
 
 function saveLibraryToStorage(data: LibraryData | null): void {
-  if (data === null) {
-    localStorage.removeItem(LIBRARY_STORAGE_KEY);
-  } else {
-    localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(data));
+  try {
+    if (data === null) {
+      localStorage.removeItem(LIBRARY_STORAGE_KEY);
+    } else {
+      localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(data));
+    }
+  } catch (err) {
+    console.warn('Failed to persist library:', err);
   }
 }
 
@@ -92,18 +102,12 @@ export function useRecommendation(): UseRecommendationReturn {
         if (artwork.artworkUrl !== null) {
           setHistory((prev) => {
             const updated = prev.map((e) =>
-              e.recommendation.artist === entry.recommendation.artist &&
-              e.recommendation.album === entry.recommendation.album
-                ? { ...e, artworkResponse: artwork }
-                : e,
+              e.id === entry.id ? { ...e, artworkResponse: artwork } : e,
             );
 
             // If this is the most recent recommendation, also update artworkResponse
             // so the card refreshes without requiring a page reload.
-            if (
-              updated[0]?.recommendation.artist === entry.recommendation.artist &&
-              updated[0]?.recommendation.album === entry.recommendation.album
-            ) {
+            if (updated[0]?.id === entry.id) {
               setArtworkResponse(artwork);
             }
 
@@ -124,7 +128,13 @@ export function useRecommendation(): UseRecommendationReturn {
     setIsLoading(true);
     setError(null);
 
-    const alreadySuggested = history.map((entry) => entry.recommendation.album);
+    // Read the current history inside a functional update so this callback does not
+    // need `history` in its dependency array — avoiding recreation after every recommendation.
+    let alreadySuggested: string[] = [];
+    setHistory((prev) => {
+      alreadySuggested = prev.map((e) => e.recommendation.album);
+      return prev;
+    });
 
     try {
       const rec = await apiFetchRecommendation({
@@ -139,14 +149,18 @@ export function useRecommendation(): UseRecommendationReturn {
       setRecommendation(rec);
       setArtworkResponse(artwork);
 
-      const newEntry: HistoryEntry = { recommendation: rec, artworkResponse: artwork };
+      const newEntry: HistoryEntry = {
+        id: crypto.randomUUID(),
+        recommendation: rec,
+        artworkResponse: artwork,
+      };
       setHistory((prev) => [newEntry, ...prev]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setIsLoading(false);
     }
-  }, [libraryData, history, genre]);
+  }, [libraryData, genre]);
 
   return {
     libraryData,

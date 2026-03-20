@@ -40,3 +40,7 @@ export function fetchArtwork(artist: string, album: string): Promise<ArtworkResp
 export function getProxiedArtworkUrl(artworkUrl: string): string {
   return `${API_BASE}/api/image?url=${encodeURIComponent(artworkUrl)}`;
 }
+
+export function buildAppleMusicSearchUrl(artist: string, album: string): string {
+  return `https://music.apple.com/gb/search?term=${encodeURIComponent(`${artist} ${album}`)}`;
+}

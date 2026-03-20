@@ -74,6 +74,7 @@ export default function App(): React.ReactElement {
       </div>
 
       <button
+        type="button"
         onClick={fetchRecommendation}
         disabled={isLoading || libraryData === null}
         style={{

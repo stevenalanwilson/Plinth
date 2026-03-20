@@ -6,6 +6,19 @@ const SYSTEM_PROMPT =
   'You make thoughtful, specific, personalised recommendations. ' +
   'Respond only with valid JSON — no markdown, no prose, nothing else.';
 
+// Lazily initialised so the key is read at request time, not import time,
+// which means a missing key throws a clear error rather than crashing on startup.
+let anthropicClient: Anthropic | null = null;
+
+function getAnthropicClient(): Anthropic {
+  if (!anthropicClient) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured');
+    anthropicClient = new Anthropic({ apiKey });
+  }
+  return anthropicClient;
+}
+
 function buildPrompt(request: RecommendationRequest): string {
   const artistText = request.artistList.slice(0, 100).join(', ');
 
@@ -87,10 +100,7 @@ function parseRecommendationJson(raw: string): RecommendationResponse {
 export async function getRecommendation(
   request: RecommendationRequest,
 ): Promise<RecommendationResponse> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured');
-
-  const client = new Anthropic({ apiKey });
+  const client = getAnthropicClient();
 
   const message = await client.messages.create({
     model: 'claude-3-5-haiku-20241022',

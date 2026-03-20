@@ -1,5 +1,7 @@
 import { ArtworkResponse } from '../../shared/types';
 
+const FETCH_TIMEOUT_MS = 8000;
+
 interface MusicBrainzReleaseGroup {
   id: string;
   title: string;
@@ -35,6 +37,16 @@ interface ItunesSearchResult {
   results: ItunesAlbum[];
 }
 
+async function fetchWithTimeout(url: string, options?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function scoreMatch(
   group: MusicBrainzReleaseGroup,
   album: string,
@@ -57,7 +69,7 @@ function scoreMatch(
 async function fetchAppleMusicUrl(artist: string, album: string): Promise<string | null> {
   try {
     const term = encodeURIComponent(`${artist} ${album}`);
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `https://itunes.apple.com/search?term=${term}&media=music&entity=album&limit=5`,
     );
     if (!res.ok) return null;
@@ -96,7 +108,7 @@ export async function fetchArtwork(artist: string, album: string): Promise<Artwo
     const query = encodeURIComponent(`release:${album} AND artist:${artist}`);
     const mbUrl = `https://musicbrainz.org/ws/2/release-group?query=${query}&limit=5&fmt=json`;
 
-    const mbRes = await fetch(mbUrl, {
+    const mbRes = await fetchWithTimeout(mbUrl, {
       headers: { 'User-Agent': 'AlbumRecommender/1.0 (contact@example.com)' },
     });
 
@@ -116,7 +128,7 @@ export async function fetchArtwork(artist: string, album: string): Promise<Artwo
     const mbid = best.id;
 
     let artworkUrl: string | null = null;
-    const caRes = await fetch(`https://coverartarchive.org/release-group/${mbid}`);
+    const caRes = await fetchWithTimeout(`https://coverartarchive.org/release-group/${mbid}`);
 
     if (caRes.ok) {
       const caData = (await caRes.json()) as CoverArtResult;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HistoryEntry } from '../../types/history';
-import { getProxiedArtworkUrl } from '../../services/apiClient';
+import { getProxiedArtworkUrl, buildAppleMusicSearchUrl } from '../../services/apiClient';
 
 interface HistoryGridProps {
   history: HistoryEntry[];
@@ -15,9 +15,7 @@ function HistoryItem({ entry }: HistoryItemProps): React.ReactElement {
 
   const appleMusicUrl =
     entry.artworkResponse.appleMusicUrl ??
-    `https://music.apple.com/gb/search?term=${encodeURIComponent(
-      entry.recommendation.artist + ' ' + entry.recommendation.album,
-    )}`;
+    buildAppleMusicSearchUrl(entry.recommendation.artist, entry.recommendation.album);
 
   return (
     <a
@@ -92,7 +90,7 @@ export function HistoryGrid({ history }: HistoryGridProps): React.ReactElement {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 16 }}>
         {history.map((entry) => (
           <HistoryItem
-            key={`${entry.recommendation.artist}-${entry.recommendation.album}`}
+            key={entry.id}
             entry={entry}
           />
         ))}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { RecommendationResponse, ArtworkResponse } from '@shared/types';
-import { getProxiedArtworkUrl } from '../../services/apiClient';
+import { getProxiedArtworkUrl, buildAppleMusicSearchUrl } from '../../services/apiClient';
 
 interface RecommendationCardProps {
   recommendation: RecommendationResponse | null;
@@ -48,7 +48,7 @@ export function RecommendationCard({
   const year = recommendation.year || artworkResponse?.year || '—';
   const appleMusicUrl =
     artworkResponse?.appleMusicUrl ??
-    `https://music.apple.com/gb/search?term=${encodeURIComponent(recommendation.artist + ' ' + recommendation.album)}`;
+    buildAppleMusicSearchUrl(recommendation.artist, recommendation.album);
   const appleMusicLabel = artworkResponse?.appleMusicUrl ? 'Open in Apple Music' : 'Search in Apple Music';
 
   return (
