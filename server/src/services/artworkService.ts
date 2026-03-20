@@ -25,6 +25,16 @@ interface CoverArtResult {
   images?: CoverArtImage[];
 }
 
+interface ItunesAlbum {
+  collectionName: string;
+  artistName: string;
+  collectionViewUrl: string;
+}
+
+interface ItunesSearchResult {
+  results: ItunesAlbum[];
+}
+
 function scoreMatch(
   group: MusicBrainzReleaseGroup,
   album: string,
@@ -42,6 +52,40 @@ function scoreMatch(
   else if (credit.includes(artistLower) || artistLower.includes(credit)) score += 1;
 
   return score;
+}
+
+async function fetchAppleMusicUrl(artist: string, album: string): Promise<string | null> {
+  try {
+    const term = encodeURIComponent(`${artist} ${album}`);
+    const res = await fetch(
+      `https://itunes.apple.com/search?term=${term}&media=music&entity=album&limit=5`,
+    );
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as ItunesSearchResult;
+    if (!data.results || data.results.length === 0) return null;
+
+    const albumLower = album.toLowerCase();
+    const artistLower = artist.toLowerCase();
+
+    const scored = data.results.map((result) => {
+      let score = 0;
+      if (result.collectionName.toLowerCase() === albumLower) score += 3;
+      else if (result.collectionName.toLowerCase().includes(albumLower)) score += 1;
+      if (result.artistName.toLowerCase() === artistLower) score += 2;
+      else if (
+        result.artistName.toLowerCase().includes(artistLower) ||
+        artistLower.includes(result.artistName.toLowerCase())
+      )
+        score += 1;
+      return { result, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0].result.collectionViewUrl ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchArtwork(artist: string, album: string): Promise<ArtworkResponse> {
@@ -87,8 +131,10 @@ export async function fetchArtwork(artist: string, album: string): Promise<Artwo
       }
     }
 
-    return { artworkUrl, year };
+    const appleMusicUrl = await fetchAppleMusicUrl(artist, album);
+
+    return { artworkUrl, year, appleMusicUrl };
   } catch {
-    return { artworkUrl: null, year: null };
+    return { artworkUrl: null, year: null, appleMusicUrl: null };
   }
 }

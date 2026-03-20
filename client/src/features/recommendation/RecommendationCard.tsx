@@ -46,7 +46,10 @@ export function RecommendationCard({
   }
 
   const year = recommendation.year || artworkResponse?.year || '—';
-  const searchUrl = `https://music.apple.com/gb/search?term=${encodeURIComponent(recommendation.artist + ' ' + recommendation.album)}`;
+  const appleMusicUrl =
+    artworkResponse?.appleMusicUrl ??
+    `https://music.apple.com/gb/search?term=${encodeURIComponent(recommendation.artist + ' ' + recommendation.album)}`;
+  const appleMusicLabel = artworkResponse?.appleMusicUrl ? 'Open in Apple Music' : 'Search in Apple Music';
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden', animation: 'fadeUp 0.4s ease both', marginBottom: 48 }}>
@@ -70,7 +73,7 @@ export function RecommendationCard({
             {year}
           </div>
           <a
-            href={searchUrl}
+            href={appleMusicUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 12px', width: 'fit-content' }}
@@ -79,7 +82,7 @@ export function RecommendationCard({
               <circle cx="5" cy="5" r="3.5" />
               <line x1="8" y1="8" x2="11" y2="11" />
             </svg>
-            Search in Apple Music
+            {appleMusicLabel}
           </a>
         </div>
       </div>

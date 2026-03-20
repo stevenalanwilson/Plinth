@@ -91,6 +91,31 @@ describe('getRecommendation', () => {
     );
   });
 
+  it('includes genre constraint in the prompt when genre is set', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: validJsonResponse }],
+    });
+
+    await getRecommendation({ ...validRequest, genre: 'Jazz' });
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    const prompt = callArgs.messages[0].content as string;
+    expect(prompt).toContain('Jazz');
+    expect(prompt).toContain('Constrain your recommendation specifically to the Jazz genre');
+  });
+
+  it('omits genre constraint from the prompt when genre is not set', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: validJsonResponse }],
+    });
+
+    await getRecommendation(validRequest);
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    const prompt = callArgs.messages[0].content as string;
+    expect(prompt).not.toContain('Constrain your recommendation specifically');
+  });
+
   it('excludes already-suggested albums from the prompt', async () => {
     mockCreate.mockResolvedValue({
       content: [{ type: 'text', text: validJsonResponse }],

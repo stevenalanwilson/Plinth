@@ -4,10 +4,27 @@ import { LibraryUpload } from './features/library/LibraryUpload';
 import { RecommendationCard } from './features/recommendation/RecommendationCard';
 import { HistoryGrid } from './features/history/HistoryGrid';
 
+const GENRES = [
+  'Electronic / Dance',
+  'Hip-Hop / Beats',
+  'Indie / Alternative',
+  'Post-Punk / New Wave',
+  'Art Rock',
+  'Ambient / Neoclassical',
+  'Folk',
+  'Jazz',
+  'Drum & Bass / Breakbeat',
+  'Metal',
+  'Soul / R&B',
+  'Classical',
+];
+
 export default function App(): React.ReactElement {
   const {
     libraryData,
     setLibraryData,
+    genre,
+    setGenre,
     recommendation,
     artworkResponse,
     history,
@@ -28,6 +45,33 @@ export default function App(): React.ReactElement {
       </header>
 
       <LibraryUpload libraryData={libraryData} onLibraryParsed={setLibraryData} />
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+          Genre <span style={{ opacity: 0.5 }}>(optional)</span>
+        </label>
+        <select
+          value={genre}
+          onChange={(e) => setGenre(e.target.value)}
+          style={{
+            width: '100%',
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '10px 14px',
+            color: genre ? 'var(--text)' : 'var(--muted)',
+            fontFamily: 'var(--mono)',
+            fontSize: 13,
+            outline: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          <option value="">— Any genre —</option>
+          {GENRES.map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
+      </div>
 
       <button
         onClick={fetchRecommendation}

@@ -41,6 +41,8 @@ function saveLibraryToStorage(data: LibraryData | null): void {
 interface UseRecommendationReturn {
   libraryData: LibraryData | null;
   setLibraryData: (data: LibraryData | null) => void;
+  genre: string;
+  setGenre: (genre: string) => void;
   recommendation: RecommendationResponse | null;
   artworkResponse: ArtworkResponse | null;
   history: HistoryEntry[];
@@ -51,6 +53,7 @@ interface UseRecommendationReturn {
 
 export function useRecommendation(): UseRecommendationReturn {
   const [libraryData, setLibraryData] = useState<LibraryData | null>(loadLibraryFromStorage);
+  const [genre, setGenre] = useState('');
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
   const [artworkResponse, setArtworkResponse] = useState<ArtworkResponse | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistoryFromStorage);
@@ -69,27 +72,51 @@ export function useRecommendation(): UseRecommendationReturn {
     const nullEntries = history.filter((e) => e.artworkResponse.artworkUrl === null);
     if (nullEntries.length === 0) return;
 
-    // Re-fetch artwork sequentially for any cached history entries missing it.
+    let cancelled = false;
+
+    // Re-fetch artwork sequentially for any history entries missing it.
+    // Runs on mount (stale cache) and whenever a new entry is added (fresh recommendation
+    // that came back without artwork — e.g. MusicBrainz was temporarily unavailable).
     // Sequential execution respects the 1s delay in artworkService.
     (async () => {
       for (const entry of nullEntries) {
+        if (cancelled) break;
+
         const artwork = await fetchArtwork(
           entry.recommendation.artist,
           entry.recommendation.album,
         );
+
+        if (cancelled) break;
+
         if (artwork.artworkUrl !== null) {
-          setHistory((prev) =>
-            prev.map((e) =>
+          setHistory((prev) => {
+            const updated = prev.map((e) =>
               e.recommendation.artist === entry.recommendation.artist &&
               e.recommendation.album === entry.recommendation.album
                 ? { ...e, artworkResponse: artwork }
                 : e,
-            ),
-          );
+            );
+
+            // If this is the most recent recommendation, also update artworkResponse
+            // so the card refreshes without requiring a page reload.
+            if (
+              updated[0]?.recommendation.artist === entry.recommendation.artist &&
+              updated[0]?.recommendation.album === entry.recommendation.album
+            ) {
+              setArtworkResponse(artwork);
+            }
+
+            return updated;
+          });
         }
       }
     })();
-  }, []); // intentionally empty — run once on mount only to heal stale cache entries
+
+    return () => {
+      cancelled = true;
+    };
+  }, [history.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRecommendation = useCallback(async (): Promise<void> => {
     if (!libraryData) return;
@@ -104,6 +131,7 @@ export function useRecommendation(): UseRecommendationReturn {
         artistList: libraryData.artists as string[],
         albumList: libraryData.albums as string[],
         alreadySuggested,
+        ...(genre ? { genre } : {}),
       });
 
       const artwork = await fetchArtwork(rec.artist, rec.album);
@@ -118,11 +146,13 @@ export function useRecommendation(): UseRecommendationReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [libraryData, history]);
+  }, [libraryData, history, genre]);
 
   return {
     libraryData,
     setLibraryData,
+    genre,
+    setGenre,
     recommendation,
     artworkResponse,
     history,
