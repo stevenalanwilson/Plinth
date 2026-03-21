@@ -1,16 +1,13 @@
 import React from 'react';
-import { VALID_GENRES } from '@shared/types';
 import { useRecommendation } from './hooks/useRecommendation';
-import { LibraryUpload } from './features/library/LibraryUpload';
+import { PreferencesPanel } from './features/preferences/PreferencesPanel';
 import { RecommendationCard } from './features/recommendation/RecommendationCard';
 import { HistoryGrid } from './features/history/HistoryGrid';
 
 export default function App(): React.ReactElement {
   const {
-    libraryData,
-    setLibraryData,
-    genre,
-    setGenre,
+    preferences,
+    updatePreferences,
     recommendation,
     artworkResponse,
     history,
@@ -51,54 +48,16 @@ export default function App(): React.ReactElement {
             textTransform: 'uppercase',
           }}
         >
-          Powered by your Apple Music library &amp; Claude AI
+          Powered by Claude AI
         </p>
       </header>
 
-      <LibraryUpload libraryData={libraryData} onLibraryParsed={setLibraryData} />
-
-      <div style={{ marginBottom: 16 }}>
-        <label
-          style={{
-            display: 'block',
-            fontSize: 11,
-            color: 'var(--muted)',
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            marginBottom: 8,
-          }}
-        >
-          Genre <span style={{ opacity: 0.5 }}>(optional)</span>
-        </label>
-        <select
-          value={genre}
-          onChange={(e) => setGenre(e.target.value)}
-          style={{
-            width: '100%',
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            padding: '10px 14px',
-            color: genre ? 'var(--text)' : 'var(--muted)',
-            fontFamily: 'var(--mono)',
-            fontSize: 13,
-            outline: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          <option value="">— Any genre —</option>
-          {VALID_GENRES.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
-      </div>
+      <PreferencesPanel preferences={preferences} onChange={updatePreferences} />
 
       <button
         type="button"
         onClick={fetchRecommendation}
-        disabled={isLoading || libraryData === null}
+        disabled={isLoading}
         style={{
           width: '100%',
           padding: '16px',
@@ -111,8 +70,8 @@ export default function App(): React.ReactElement {
           color: '#0e0e0f',
           fontFamily: 'var(--mono)',
           fontWeight: 500,
-          cursor: isLoading || libraryData === null ? 'not-allowed' : 'pointer',
-          opacity: isLoading || libraryData === null ? 0.35 : 1,
+          cursor: isLoading ? 'not-allowed' : 'pointer',
+          opacity: isLoading ? 0.35 : 1,
         }}
       >
         {isLoading ? 'Finding your next favourite…' : 'Find me something to listen to'}

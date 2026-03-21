@@ -1,10 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { LibraryData, RecommendationResponse, ArtworkResponse } from '@shared/types';
+import { RecommendationPreferences, RecommendationResponse, ArtworkResponse } from '@shared/types';
 import { HistoryEntry } from '../types/history';
 import { fetchRecommendation as apiFetchRecommendation, fetchArtwork } from '../services/apiClient';
 
 const HISTORY_STORAGE_KEY = 'album-recommender-history';
-const LIBRARY_STORAGE_KEY = 'album-recommender-library';
+
+const DEFAULT_PREFERENCES: RecommendationPreferences = {
+  genres: [],
+  moods: [],
+  tempo: 5,
+  energy: 5,
+  density: 5,
+  era: 'any',
+  includeFamiliarArtists: true,
+  prioritiseObscure: false,
+  stayFocused: false,
+};
 
 function loadHistoryFromStorage(): HistoryEntry[] {
   try {
@@ -26,33 +37,9 @@ function saveHistoryToStorage(history: HistoryEntry[]): void {
   }
 }
 
-function loadLibraryFromStorage(): LibraryData | null {
-  try {
-    const raw = localStorage.getItem(LIBRARY_STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as LibraryData;
-  } catch {
-    return null;
-  }
-}
-
-function saveLibraryToStorage(data: LibraryData | null): void {
-  try {
-    if (data === null) {
-      localStorage.removeItem(LIBRARY_STORAGE_KEY);
-    } else {
-      localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(data));
-    }
-  } catch (err) {
-    console.warn('Failed to persist library:', err);
-  }
-}
-
 interface UseRecommendationReturn {
-  libraryData: LibraryData | null;
-  setLibraryData: (data: LibraryData | null) => void;
-  genre: string;
-  setGenre: (genre: string) => void;
+  preferences: RecommendationPreferences;
+  updatePreferences: (partial: Partial<RecommendationPreferences>) => void;
   recommendation: RecommendationResponse | null;
   artworkResponse: ArtworkResponse | null;
   history: HistoryEntry[];
@@ -62,8 +49,7 @@ interface UseRecommendationReturn {
 }
 
 export function useRecommendation(): UseRecommendationReturn {
-  const [libraryData, setLibraryData] = useState<LibraryData | null>(loadLibraryFromStorage);
-  const [genre, setGenre] = useState('');
+  const [preferences, setPreferences] = useState<RecommendationPreferences>(DEFAULT_PREFERENCES);
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
   const [artworkResponse, setArtworkResponse] = useState<ArtworkResponse | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistoryFromStorage);
@@ -73,10 +59,6 @@ export function useRecommendation(): UseRecommendationReturn {
   useEffect(() => {
     saveHistoryToStorage(history);
   }, [history]);
-
-  useEffect(() => {
-    saveLibraryToStorage(libraryData);
-  }, [libraryData]);
 
   useEffect(() => {
     const nullEntries = history.filter((e) => e.artworkResponse.artworkUrl === null);
@@ -92,10 +74,7 @@ export function useRecommendation(): UseRecommendationReturn {
       for (const entry of nullEntries) {
         if (cancelled) break;
 
-        const artwork = await fetchArtwork(
-          entry.recommendation.artist,
-          entry.recommendation.album,
-        );
+        const artwork = await fetchArtwork(entry.recommendation.artist, entry.recommendation.album);
 
         if (cancelled) break;
 
@@ -122,9 +101,11 @@ export function useRecommendation(): UseRecommendationReturn {
     };
   }, [history.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchRecommendation = useCallback(async (): Promise<void> => {
-    if (!libraryData) return;
+  const updatePreferences = useCallback((partial: Partial<RecommendationPreferences>): void => {
+    setPreferences((prev) => ({ ...prev, ...partial }));
+  }, []);
 
+  const fetchRecommendation = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setError(null);
 
@@ -138,10 +119,8 @@ export function useRecommendation(): UseRecommendationReturn {
 
     try {
       const rec = await apiFetchRecommendation({
-        artistList: libraryData.artists as string[],
-        albumList: libraryData.albums as string[],
+        preferences,
         alreadySuggested,
-        ...(genre ? { genre } : {}),
       });
 
       const artwork = await fetchArtwork(rec.artist, rec.album);
@@ -160,13 +139,11 @@ export function useRecommendation(): UseRecommendationReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [libraryData, genre]);
+  }, [preferences]);
 
   return {
-    libraryData,
-    setLibraryData,
-    genre,
-    setGenre,
+    preferences,
+    updatePreferences,
     recommendation,
     artworkResponse,
     history,

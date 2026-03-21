@@ -13,7 +13,7 @@ vi.mock('@anthropic-ai/sdk', () => {
 
 import Anthropic from '@anthropic-ai/sdk';
 import { getRecommendation } from './recommendationService';
-import { RecommendationRequest } from '@shared/types';
+import { RecommendationRequest, RecommendationPreferences } from '@shared/types';
 
 const mockCreate = vi.fn();
 
@@ -25,9 +25,20 @@ beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
 });
 
+const defaultPreferences: RecommendationPreferences = {
+  genres: ['Post-punk', 'Ambient'],
+  moods: ['Late night', 'Melancholic'],
+  tempo: 3,
+  energy: 4,
+  density: 5,
+  era: '80s-90s',
+  includeFamiliarArtists: true,
+  prioritiseObscure: false,
+  stayFocused: false,
+};
+
 const validRequest: RecommendationRequest = {
-  artistList: ['Radiohead', 'Portishead'],
-  albumList: ['OK Computer', 'Dummy'],
+  preferences: defaultPreferences,
   alreadySuggested: [],
 };
 
@@ -95,20 +106,7 @@ describe('getRecommendation', () => {
     await expect(getRecommendation(validRequest)).rejects.toThrow('Incomplete recommendation data');
   });
 
-  it('includes genre constraint in the prompt when genre is set', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{ type: 'text', text: validJsonResponse }],
-    });
-
-    await getRecommendation({ ...validRequest, genre: 'Jazz' });
-
-    const callArgs = mockCreate.mock.calls[0][0];
-    const prompt = callArgs.messages[0].content as string;
-    expect(prompt).toContain('Jazz');
-    expect(prompt).toContain('Constrain your recommendation specifically to the Jazz genre');
-  });
-
-  it('omits genre constraint from the prompt when genre is not set', async () => {
+  it('includes genres in the prompt', async () => {
     mockCreate.mockResolvedValue({
       content: [{ type: 'text', text: validJsonResponse }],
     });
@@ -117,7 +115,61 @@ describe('getRecommendation', () => {
 
     const callArgs = mockCreate.mock.calls[0][0];
     const prompt = callArgs.messages[0].content as string;
-    expect(prompt).not.toContain('Constrain your recommendation specifically');
+    expect(prompt).toContain('Post-punk');
+    expect(prompt).toContain('Ambient');
+  });
+
+  it('includes mood in the prompt', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: validJsonResponse }],
+    });
+
+    await getRecommendation(validRequest);
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    const prompt = callArgs.messages[0].content as string;
+    expect(prompt).toContain('Late night');
+    expect(prompt).toContain('Melancholic');
+  });
+
+  it('includes era in the prompt', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: validJsonResponse }],
+    });
+
+    await getRecommendation(validRequest);
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    const prompt = callArgs.messages[0].content as string;
+    expect(prompt).toContain('80s-90s');
+  });
+
+  it('includes tempo label in the prompt', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: validJsonResponse }],
+    });
+
+    // tempo: 3 → "slow"
+    await getRecommendation(validRequest);
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    const prompt = callArgs.messages[0].content as string;
+    expect(prompt).toContain('slow');
+  });
+
+  it('uses "obscure" language when prioritiseObscure is true', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: validJsonResponse }],
+    });
+
+    await getRecommendation({
+      ...validRequest,
+      preferences: { ...defaultPreferences, prioritiseObscure: true },
+    });
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    const prompt = callArgs.messages[0].content as string;
+    expect(prompt).toContain('lesser-known');
   });
 
   it('excludes already-suggested albums from the prompt', async () => {
@@ -134,5 +186,17 @@ describe('getRecommendation', () => {
     const prompt = callArgs.messages[0].content as string;
     expect(prompt).toContain('Mezzanine');
     expect(prompt).toContain('do NOT recommend');
+  });
+
+  it('omits avoid list when alreadySuggested is empty', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: validJsonResponse }],
+    });
+
+    await getRecommendation(validRequest);
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    const prompt = callArgs.messages[0].content as string;
+    expect(prompt).not.toContain('do NOT recommend');
   });
 });

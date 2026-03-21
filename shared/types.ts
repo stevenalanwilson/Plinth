@@ -1,31 +1,20 @@
-export const VALID_GENRES = [
-  'Electronic / Dance',
-  'Hip-Hop / Beats',
-  'Indie / Alternative',
-  'Post-Punk / New Wave',
-  'Art Rock',
-  'Ambient / Neoclassical',
-  'Folk',
-  'Jazz',
-  'Drum & Bass / Breakbeat',
-  'Metal',
-  'Soul / R&B',
-  'Classical',
-] as const;
+export type Era = 'pre-80s' | '80s-90s' | '00s-10s' | 'recent' | 'any';
 
-export type Genre = (typeof VALID_GENRES)[number];
-
-export interface LibraryData {
-  readonly artists: readonly string[];
-  readonly albums: readonly string[];
-  readonly trackCount: number;
+export interface RecommendationPreferences {
+  readonly genres: readonly string[];
+  readonly moods: readonly string[];
+  readonly tempo: number; // 1–10, 1 = slow, 10 = fast
+  readonly energy: number; // 1–10, 1 = mellow, 10 = intense
+  readonly density: number; // 1–10, 1 = sparse, 10 = dense
+  readonly era: Era;
+  readonly includeFamiliarArtists: boolean;
+  readonly prioritiseObscure: boolean;
+  readonly stayFocused: boolean;
 }
 
 export interface RecommendationRequest {
-  readonly artistList: readonly string[];
-  readonly albumList: readonly string[];
+  readonly preferences: RecommendationPreferences;
   readonly alreadySuggested: readonly string[];
-  readonly genre?: string;
 }
 
 export interface RecommendationResponse {
