@@ -1,3 +1,18 @@
+# ---- Stage 1: Build React client ----
+FROM node:20-alpine AS client-builder
+WORKDIR /app
+
+COPY client/package*.json ./
+RUN npm ci
+
+COPY client/ .
+COPY shared/ /shared/
+
+# VITE_API_URL is empty — client and server share the same origin
+RUN npm run build
+
+
+# ---- Stage 2: Build and run Express server ----
 FROM node:20-alpine
 WORKDIR /app
 
@@ -10,11 +25,9 @@ COPY server/ .
 COPY shared/ /shared/
 
 # Compile shared types to JS (runtime) + .d.ts (compile-time).
-# We then REPLACE the .ts file with the .d.ts so that when the server tsc build
-# resolves @shared/types via the path alias, it finds an ambient declaration file
-# rather than a .ts source file. Declaration files are not "source files" and do
-# not affect rootDir inference — preventing tsc from widening rootDir to "/" and
-# writing output to dist/app/src/index.js instead of dist/index.js.
+# Replacing the .ts file with .d.ts prevents tsc from treating shared/types.ts
+# as a source file, which would widen the inferred rootDir to "/" and cause
+# output to land at dist/app/src/index.js instead of dist/index.js.
 RUN node_modules/.bin/tsc \
   --declaration \
   --target ES2022 \
@@ -36,6 +49,9 @@ RUN test -f dist/index.js || (echo "ERROR: dist/index.js missing after build" &&
 # Place compiled shared where Node.js resolves require("@shared/types")
 RUN mkdir -p dist/node_modules/@shared && \
     cp /tmp/shared-compiled/types.js dist/node_modules/@shared/types.js
+
+# Copy React build so the server can serve it as static files
+COPY --from=client-builder /app/dist ./public
 
 # Remove dev dependencies to keep image lean
 RUN npm prune --omit=dev

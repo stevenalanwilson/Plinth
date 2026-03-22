@@ -7,6 +7,7 @@ if (!process.env.ANTHROPIC_API_KEY) {
   process.exit(1);
 }
 
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -22,6 +23,14 @@ app.use(cors({ origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(pinoHttp({ logger }));
 app.use('/api', apiRouter);
+
+// Serve React client in production (static files built into public/)
+const clientDist = path.join(__dirname, '..', 'public');
+app.use(express.static(clientDist));
+// SPA fallback — all non-API routes serve index.html
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
 
 const server = app.listen(Number(port), () => {
   logger.info({ port }, 'Server running');
