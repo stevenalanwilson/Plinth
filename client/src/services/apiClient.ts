@@ -62,3 +62,7 @@ export function getProxiedArtworkUrl(artworkUrl: string): string {
 export function buildAppleMusicSearchUrl(artist: string, album: string): string {
   return `https://music.apple.com/gb/search?term=${encodeURIComponent(`${artist} ${album}`)}`;
 }
+
+export function buildSpotifySearchUrl(artist: string, album: string): string {
+  return `https://open.spotify.com/search/${encodeURIComponent(`${artist} ${album}`)}`;
+}

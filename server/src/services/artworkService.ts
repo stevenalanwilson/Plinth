@@ -68,46 +68,53 @@ function scoreMatch(group: MusicBrainzReleaseGroup, album: string, artist: strin
   return score;
 }
 
+async function fetchItunesDataOnce(artist: string, album: string): Promise<ItunesData> {
+  const term = encodeURIComponent(`${artist} ${album}`);
+  const res = await fetchWithTimeout(
+    `https://itunes.apple.com/search?term=${term}&media=music&entity=album&limit=5`,
+  );
+  if (!res.ok) return { appleMusicUrl: null, artworkUrl: null };
+
+  const data = (await res.json()) as ItunesSearchResult;
+  if (!data.results || data.results.length === 0) return { appleMusicUrl: null, artworkUrl: null };
+
+  const albumLower = album.toLowerCase();
+  const artistLower = artist.toLowerCase();
+
+  const scored = data.results.map((result) => {
+    let score = 0;
+    if (result.collectionName.toLowerCase() === albumLower) score += 3;
+    else if (result.collectionName.toLowerCase().includes(albumLower)) score += 1;
+    if (result.artistName.toLowerCase() === artistLower) score += 2;
+    else if (
+      result.artistName.toLowerCase().includes(artistLower) ||
+      artistLower.includes(result.artistName.toLowerCase())
+    )
+      score += 1;
+    return { result, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const best = scored[0].result;
+
+  // artworkUrl100 is 100×100; replace to get 500×500
+  const artworkUrl = best.artworkUrl100
+    ? best.artworkUrl100.replace('100x100bb', '500x500bb')
+    : null;
+
+  return { appleMusicUrl: best.collectionViewUrl ?? null, artworkUrl };
+}
+
 async function fetchItunesData(artist: string, album: string): Promise<ItunesData> {
-  try {
-    const term = encodeURIComponent(`${artist} ${album}`);
-    const res = await fetchWithTimeout(
-      `https://itunes.apple.com/search?term=${term}&media=music&entity=album&limit=5`,
-    );
-    if (!res.ok) return { appleMusicUrl: null, artworkUrl: null };
-
-    const data = (await res.json()) as ItunesSearchResult;
-    if (!data.results || data.results.length === 0)
-      return { appleMusicUrl: null, artworkUrl: null };
-
-    const albumLower = album.toLowerCase();
-    const artistLower = artist.toLowerCase();
-
-    const scored = data.results.map((result) => {
-      let score = 0;
-      if (result.collectionName.toLowerCase() === albumLower) score += 3;
-      else if (result.collectionName.toLowerCase().includes(albumLower)) score += 1;
-      if (result.artistName.toLowerCase() === artistLower) score += 2;
-      else if (
-        result.artistName.toLowerCase().includes(artistLower) ||
-        artistLower.includes(result.artistName.toLowerCase())
-      )
-        score += 1;
-      return { result, score };
-    });
-
-    scored.sort((a, b) => b.score - a.score);
-    const best = scored[0].result;
-
-    // artworkUrl100 is 100×100; replace to get 500×500
-    const artworkUrl = best.artworkUrl100
-      ? best.artworkUrl100.replace('100x100bb', '500x500bb')
-      : null;
-
-    return { appleMusicUrl: best.collectionViewUrl ?? null, artworkUrl };
-  } catch {
-    return { appleMusicUrl: null, artworkUrl: null };
+  // Retry once on transient failure before giving up
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await fetchItunesDataOnce(artist, album);
+    } catch {
+      // fall through to retry
+    }
   }
+  return { appleMusicUrl: null, artworkUrl: null };
 }
 
 export async function fetchArtwork(artist: string, album: string): Promise<ArtworkResponse> {

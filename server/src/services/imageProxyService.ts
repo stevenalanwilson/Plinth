@@ -25,7 +25,7 @@ export async function fetchImageBytes(url: string): Promise<ImageResult> {
 
   const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`Image fetch failed with status ${res.status}`);
 
   const contentLength = res.headers.get('content-length');

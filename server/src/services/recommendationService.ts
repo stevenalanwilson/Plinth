@@ -67,7 +67,7 @@ function buildPrompt(request: RecommendationRequest): string {
 
   const avoidStr =
     request.alreadySuggested.length > 0
-      ? `\n\nIMPORTANT — do NOT recommend any of these (previously suggested): ${request.alreadySuggested.slice(0, 120).join(', ')}`
+      ? `\n\nIMPORTANT — do NOT recommend any of these previously suggested albums (format is "Artist – Album"): ${request.alreadySuggested.slice(0, 120).join(', ')}`
       : '';
 
   return `Recommend ONE album for someone with the following preferences: ${summary}.
@@ -134,17 +134,18 @@ function parseRecommendationJson(raw: string): RecommendationResponse {
   };
 }
 
-export async function getRecommendation(
-  request: RecommendationRequest,
-): Promise<RecommendationResponse> {
-  const client = getAnthropicClient();
+function isDuplicate(rec: RecommendationResponse, alreadySuggested: readonly string[]): boolean {
+  const key = `${rec.artist} – ${rec.album}`.toLowerCase();
+  return alreadySuggested.some((s) => s.toLowerCase() === key);
+}
 
+async function callClaude(client: Anthropic, prompt: string): Promise<RecommendationResponse> {
   const message = await client.messages.create(
     {
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 800,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: buildPrompt(request) }],
+      messages: [{ role: 'user', content: prompt }],
     },
     { signal: AbortSignal.timeout(15_000) },
   );
@@ -155,4 +156,30 @@ export async function getRecommendation(
   }
 
   return parseRecommendationJson(textBlock.text);
+}
+
+const MAX_ATTEMPTS = 3;
+
+export async function getRecommendation(
+  request: RecommendationRequest,
+): Promise<RecommendationResponse> {
+  const client = getAnthropicClient();
+
+  // Accumulate duplicates returned across attempts so each retry prompt is stricter.
+  const seen = [...request.alreadySuggested];
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const prompt = buildPrompt({ ...request, alreadySuggested: seen });
+    const rec = await callClaude(client, prompt);
+
+    if (!isDuplicate(rec, request.alreadySuggested)) {
+      return rec;
+    }
+
+    // Add the duplicate to seen so the next attempt explicitly avoids it too.
+    seen.push(`${rec.artist} – ${rec.album}`);
+  }
+
+  // All attempts returned duplicates — return the last one rather than failing the request.
+  return callClaude(client, buildPrompt({ ...request, alreadySuggested: seen }));
 }
