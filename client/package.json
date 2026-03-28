@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint src --ext .ts,.tsx",
+    "lint": "eslint src --ext .ts,.tsx --resolve-plugins-relative-to .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
