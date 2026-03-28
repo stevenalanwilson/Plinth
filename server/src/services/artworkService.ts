@@ -120,11 +120,13 @@ async function fetchItunesData(
   album: string,
   budgetSignal?: AbortSignal,
 ): Promise<ItunesData> {
-  // Retry once on transient failure before giving up
+  // Retry once on transient failure before giving up.
+  // AbortErrors are rethrown immediately — retrying a cancelled request is pointless.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       return await fetchItunesDataOnce(artist, album, budgetSignal);
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') throw err;
       // fall through to retry
     }
   }

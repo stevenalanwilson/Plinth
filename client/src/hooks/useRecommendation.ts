@@ -34,9 +34,9 @@ function loadHistoryFromStorage(): HistoryEntry[] {
       .map((entry) => ({
         ...entry,
         id: entry.id ?? crypto.randomUUID(),
-        // Entries without a createdAt pre-date this field; treat as epoch so they age out
-        // on the next load rather than being kept indefinitely.
-        createdAt: entry.createdAt ?? new Date(0).toISOString(),
+        // Entries without a createdAt pre-date this field; treat as now so existing
+        // history is preserved rather than immediately pruned.
+        createdAt: entry.createdAt ?? new Date().toISOString(),
       }))
       .filter((entry) => new Date(entry.createdAt).getTime() > cutoff);
   } catch {
@@ -92,13 +92,25 @@ export function useRecommendation(): UseRecommendationReturn {
   }, [history]);
 
   const artworkRetryCountRef = useRef(0);
+  // Tracks the IDs of null-artwork entries from the previous effect run. When new IDs
+  // appear (a fresh recommendation with missing artwork), the backoff counter resets so
+  // the new entry gets its own full set of retry attempts.
+  const artworkRetrySeenIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     const nullEntries = history.filter((e) => e.artworkResponse.artworkUrl === null);
     if (nullEntries.length === 0) {
       artworkRetryCountRef.current = 0;
+      artworkRetrySeenIdsRef.current = new Set();
       return;
     }
+
+    // If any entry IDs are new since the last run, reset the backoff so they get fresh retries.
+    const hasNewEntries = nullEntries.some((e) => !artworkRetrySeenIdsRef.current.has(e.id));
+    if (hasNewEntries) {
+      artworkRetryCountRef.current = 0;
+    }
+    artworkRetrySeenIdsRef.current = new Set(nullEntries.map((e) => e.id));
 
     // Cap retries with exponential backoff to avoid hammering the endpoint when
     // MusicBrainz / Cover Art Archive is down. Max 4 attempts: 0s, 2s, 4s, 8s.
