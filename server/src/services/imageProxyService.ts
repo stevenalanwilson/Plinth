@@ -44,7 +44,7 @@ export async function fetchImageBytes(url: string): Promise<ImageResult> {
   const chunks: Buffer[] = [];
   let totalBytes = 0;
 
-  while (true) {
+  for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     totalBytes += value.byteLength;

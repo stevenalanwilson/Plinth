@@ -140,8 +140,8 @@ export async function fetchArtwork(artist: string, album: string): Promise<Artwo
     // MusicBrainz enforces a 1 req/sec rate limit; this delay keeps us compliant
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const escapedAlbum = album.replace(/[+\-&|!(){}\[\]^"~*?:\\]/g, '\\$&');
-    const escapedArtist = artist.replace(/[+\-&|!(){}\[\]^"~*?:\\]/g, '\\$&');
+    const escapedAlbum = album.replace(/[+\-&|!(){}[\]^"~*?:\\]/g, '\\$&');
+    const escapedArtist = artist.replace(/[+\-&|!(){}[\]^"~*?:\\]/g, '\\$&');
     const query = encodeURIComponent(`release:${escapedAlbum} AND artist:${escapedArtist}`);
     const mbUrl = `https://musicbrainz.org/ws/2/release-group?query=${query}&limit=5&fmt=json`;
 

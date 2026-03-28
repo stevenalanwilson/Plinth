@@ -122,13 +122,12 @@ export function useRecommendation(): UseRecommendationReturn {
     artworkRetryCountRef.current += 1;
 
     let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout>;
 
     // Re-fetch artwork sequentially for any history entries missing it.
     // Runs on mount (stale cache) and whenever a new entry is added (fresh recommendation
     // that came back without artwork — e.g. MusicBrainz was temporarily unavailable).
     // Sequential execution respects the 1s delay in artworkService.
-    timeoutId = setTimeout(async () => {
+    const timeoutId = setTimeout(async () => {
       for (const entry of nullEntries) {
         if (cancelled) break;
 
