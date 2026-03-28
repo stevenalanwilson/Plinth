@@ -31,7 +31,7 @@ export default function App(): React.ReactElement {
             lineHeight: 1.1,
           }}
         >
-          Album Recommender
+          Plinth
         </h1>
         <p
           style={{
@@ -42,7 +42,7 @@ export default function App(): React.ReactElement {
             textTransform: 'uppercase',
           }}
         >
-          Powered by Claude AI
+          Music to work too
         </p>
       </header>
 

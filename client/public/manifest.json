@@ -1,6 +1,6 @@
 {
-  "name": "Album Recommender",
-  "short_name": "Album Rec",
+  "name": "Plinth",
+  "short_name": "Plinth",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0e0e0f",
