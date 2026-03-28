@@ -3,27 +3,35 @@ import { RecommendationRequest, RecommendationResponse, ArtworkResponse } from '
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 const REQUEST_TIMEOUT_MS = 30_000;
 
-async function fetchWithTimeout(input: string, init?: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+async function fetchWithTimeout(
+  input: string,
+  init?: RequestInit,
+  externalSignal?: AbortSignal,
+): Promise<Response> {
+  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const signals = externalSignal ? [timeoutSignal, externalSignal] : [timeoutSignal];
+  const signal = signals.length === 1 ? signals[0] : AbortSignal.any(signals);
   try {
-    return await fetch(input, { ...init, signal: controller.signal });
+    return await fetch(input, { ...init, signal });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
+      if (externalSignal?.aborted) throw err; // propagate cancellation as-is
       throw new Error('Request timed out. Please try again.');
     }
     throw err;
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  const res = await fetchWithTimeout(
+    `${API_BASE}${path}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    signal,
+  );
 
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -47,8 +55,9 @@ async function get<T>(path: string, params: Record<string, string>): Promise<T> 
 
 export function fetchRecommendation(
   request: RecommendationRequest,
+  signal?: AbortSignal,
 ): Promise<RecommendationResponse> {
-  return post<RecommendationResponse>('/api/recommend', request);
+  return post<RecommendationResponse>('/api/recommend', request, signal);
 }
 
 export function fetchArtwork(artist: string, album: string): Promise<ArtworkResponse> {

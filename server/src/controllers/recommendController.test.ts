@@ -194,7 +194,9 @@ describe('handleRecommend', () => {
       await handleRecommend(makeReq(validBody), res);
 
       expect(status).toHaveBeenCalledWith(500);
-      expect(json).toHaveBeenCalledWith({ error: 'Claude API failed' });
+      expect(json).toHaveBeenCalledWith({
+        error: 'Failed to get recommendation. Please try again.',
+      });
     });
 
     it('returns a generic message when the error is not an Error instance', async () => {
@@ -204,7 +206,9 @@ describe('handleRecommend', () => {
       await handleRecommend(makeReq(validBody), res);
 
       expect(status).toHaveBeenCalledWith(500);
-      expect(json).toHaveBeenCalledWith({ error: 'Internal server error' });
+      expect(json).toHaveBeenCalledWith({
+        error: 'Failed to get recommendation. Please try again.',
+      });
     });
   });
 });

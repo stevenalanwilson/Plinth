@@ -58,15 +58,15 @@ describe('fetchImageBytes', () => {
     ).rejects.toThrow('Image fetch failed with status 503');
   });
 
-  it('falls back to image/jpeg when content-type header is absent', async () => {
-    const fakeBuffer = Buffer.from('data');
+  it('throws when the response content-type is not an image', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      arrayBuffer: async () => fakeBuffer.buffer,
-      headers: { get: () => null },
+      headers: { get: () => 'text/html' },
+      body: null,
     });
 
-    const result = await fetchImageBytes('https://archive.org/download/mbid/img.jpg');
-    expect(result.contentType).toBe('image/jpeg');
+    await expect(fetchImageBytes('https://archive.org/download/mbid/img.jpg')).rejects.toThrow(
+      'Unexpected content-type',
+    );
   });
 });

@@ -28,6 +28,11 @@ export async function fetchImageBytes(url: string): Promise<ImageResult> {
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`Image fetch failed with status ${res.status}`);
 
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.startsWith('image/')) {
+    throw new Error(`Unexpected content-type from image URL: ${contentType || '(none)'}`);
+  }
+
   const contentLength = res.headers.get('content-length');
   if (contentLength && parseInt(contentLength, 10) > MAX_BYTES) {
     throw new Error('Image exceeds maximum allowed size');
@@ -51,7 +56,6 @@ export async function fetchImageBytes(url: string): Promise<ImageResult> {
   }
 
   const buffer = Buffer.concat(chunks);
-  const contentType = res.headers.get('content-type') ?? 'image/jpeg';
 
   return { buffer, contentType };
 }

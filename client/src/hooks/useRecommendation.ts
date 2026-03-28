@@ -78,17 +78,32 @@ export function useRecommendation(): UseRecommendationReturn {
     saveHistoryToStorage(history);
   }, [history]);
 
+  const artworkRetryCountRef = useRef(0);
+
   useEffect(() => {
     const nullEntries = history.filter((e) => e.artworkResponse.artworkUrl === null);
-    if (nullEntries.length === 0) return;
+    if (nullEntries.length === 0) {
+      artworkRetryCountRef.current = 0;
+      return;
+    }
+
+    // Cap retries with exponential backoff to avoid hammering the endpoint when
+    // MusicBrainz / Cover Art Archive is down. Max 4 attempts: 0s, 2s, 4s, 8s.
+    const MAX_RETRIES = 4;
+    if (artworkRetryCountRef.current >= MAX_RETRIES) return;
+
+    const attempt = artworkRetryCountRef.current;
+    const delayMs = attempt === 0 ? 0 : Math.pow(2, attempt) * 1000;
+    artworkRetryCountRef.current += 1;
 
     let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     // Re-fetch artwork sequentially for any history entries missing it.
     // Runs on mount (stale cache) and whenever a new entry is added (fresh recommendation
     // that came back without artwork — e.g. MusicBrainz was temporarily unavailable).
     // Sequential execution respects the 1s delay in artworkService.
-    (async () => {
+    timeoutId = setTimeout(async () => {
       for (const entry of nullEntries) {
         if (cancelled) break;
 
@@ -112,10 +127,11 @@ export function useRecommendation(): UseRecommendationReturn {
           });
         }
       }
-    })();
+    }, delayMs);
 
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
     };
   }, [history.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -140,7 +156,15 @@ export function useRecommendation(): UseRecommendationReturn {
     setPreferences(prefs);
   }, []);
 
+  // Tracks the in-flight request so a second click cancels the first.
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const fetchRecommendation = useCallback(async (): Promise<void> => {
+    // Cancel any in-flight request before starting a new one.
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsLoading(true);
     setError(null);
 
@@ -149,12 +173,17 @@ export function useRecommendation(): UseRecommendationReturn {
     );
 
     try {
-      const rec = await apiFetchRecommendation({
-        preferences,
-        alreadySuggested,
-      });
+      const rec = await apiFetchRecommendation(
+        {
+          preferences,
+          alreadySuggested,
+        },
+        controller.signal,
+      );
 
       const artwork = await fetchArtwork(rec.artist, rec.album);
+
+      if (controller.signal.aborted) return;
 
       setRecommendation(rec);
       setArtworkResponse(artwork);
@@ -166,9 +195,12 @@ export function useRecommendation(): UseRecommendationReturn {
       };
       setHistory((prev) => [newEntry, ...prev].slice(0, 50));
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
-      setIsLoading(false);
+      if (!controller.signal.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [preferences]);
 
