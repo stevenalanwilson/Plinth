@@ -58,8 +58,9 @@ body {
 .era-button { transition: filter 0.15s ease; }
 .era-button:hover { filter: brightness(1.6); }
 
-.service-link { transition: filter 0.15s ease; }
-.service-link:hover { filter: brightness(2.5); }
+.service-link { transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+.service-link:hover { background-color: rgba(255, 255, 255, 0.05); }
+.service-link-primary:hover { background-color: rgba(200, 169, 110, 0.1); }
 
 /* ─── Responsive layout ──────────────────────────────── */
 
