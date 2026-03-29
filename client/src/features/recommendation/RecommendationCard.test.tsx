@@ -9,11 +9,12 @@ const mockRec = {
   reason: 'A perfect album for your taste.',
 };
 
-const mockArtwork = { artworkUrl: null, year: '1998', appleMusicUrl: null };
+const mockArtwork = { artworkUrl: null, year: '1998', appleMusicUrl: null, spotifyUrl: null };
 const mockArtworkWithLink = {
   artworkUrl: null,
   year: '1998',
   appleMusicUrl: 'https://music.apple.com/gb/album/mezzanine/123456',
+  spotifyUrl: null,
 };
 
 describe('RecommendationCard', () => {

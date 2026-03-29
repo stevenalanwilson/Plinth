@@ -24,11 +24,6 @@ function HistoryItem({ entry, onRemove }: HistoryItemProps): React.ReactElement 
   const [isHovered, setIsHovered] = useState(false);
   const [imgErrored, setImgErrored] = useState(false);
 
-  const appleMusicUrl =
-    entry.artworkResponse.appleMusicUrl ??
-    buildAppleMusicSearchUrl(entry.recommendation.artist, entry.recommendation.album);
-  const spotifyUrl = buildSpotifySearchUrl(entry.recommendation.artist, entry.recommendation.album);
-
   return (
     <div
       onPointerEnter={() => setIsHovered(true)}
@@ -94,9 +89,16 @@ function HistoryItem({ entry, onRemove }: HistoryItemProps): React.ReactElement 
           }}
         >
           <ServiceLinks
-            appleMusicUrl={appleMusicUrl}
-            appleMusicLabel="Apple Music"
-            spotifyUrl={spotifyUrl}
+            appleMusicDirectUrl={entry.artworkResponse.appleMusicUrl}
+            appleMusicSearchUrl={buildAppleMusicSearchUrl(
+              entry.recommendation.artist,
+              entry.recommendation.album,
+            )}
+            spotifyDirectUrl={entry.artworkResponse.spotifyUrl}
+            spotifySearchUrl={buildSpotifySearchUrl(
+              entry.recommendation.artist,
+              entry.recommendation.album,
+            )}
             compact
           />
           <button

@@ -46,6 +46,106 @@ interface ItunesData {
   artworkUrl: string | null;
 }
 
+interface SpotifyTokenResponse {
+  access_token: string;
+  expires_in: number;
+}
+
+interface SpotifyAlbum {
+  name: string;
+  artists: Array<{ name: string }>;
+  external_urls: { spotify: string };
+}
+
+interface SpotifySearchResult {
+  albums: { items: SpotifyAlbum[] };
+}
+
+interface SpotifyData {
+  spotifyUrl: string | null;
+}
+
+let cachedSpotifyToken: { value: string; expiresAt: number } | null = null;
+
+export function _resetSpotifyTokenForTesting(): void {
+  cachedSpotifyToken = null;
+}
+
+async function fetchSpotifyToken(budgetSignal?: AbortSignal): Promise<string | null> {
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  const now = Date.now();
+  if (cachedSpotifyToken && cachedSpotifyToken.expiresAt > now) {
+    return cachedSpotifyToken.value;
+  }
+
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const res = await fetchWithTimeout(
+    'https://accounts.spotify.com/api/token',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials',
+    },
+    budgetSignal,
+  );
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as SpotifyTokenResponse;
+  // Cache with a 60-second safety margin before expiry
+  cachedSpotifyToken = { value: data.access_token, expiresAt: now + (data.expires_in - 60) * 1000 };
+  return data.access_token;
+}
+
+async function fetchSpotifyData(
+  artist: string,
+  album: string,
+  budgetSignal?: AbortSignal,
+): Promise<SpotifyData> {
+  try {
+    const token = await fetchSpotifyToken(budgetSignal);
+    if (!token) return { spotifyUrl: null };
+
+    const q = encodeURIComponent(`${artist} ${album}`);
+    const res = await fetchWithTimeout(
+      `https://api.spotify.com/v1/search?q=${q}&type=album&limit=5`,
+      { headers: { Authorization: `Bearer ${token}` } },
+      budgetSignal,
+    );
+    if (!res.ok) return { spotifyUrl: null };
+
+    const data = (await res.json()) as SpotifySearchResult;
+    const items = data.albums?.items ?? [];
+    if (items.length === 0) return { spotifyUrl: null };
+
+    const albumLower = album.toLowerCase();
+    const artistLower = artist.toLowerCase();
+
+    const scored = items.map((item) => {
+      let score = 0;
+      if (item.name.toLowerCase() === albumLower) score += 3;
+      else if (item.name.toLowerCase().includes(albumLower)) score += 1;
+      const itemArtist = item.artists[0]?.name.toLowerCase() ?? '';
+      if (itemArtist === artistLower) score += 2;
+      else if (itemArtist.includes(artistLower) || artistLower.includes(itemArtist)) score += 1;
+      return { item, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    const best = scored[0];
+    if (best.score === 0) return { spotifyUrl: null };
+
+    return { spotifyUrl: best.item.external_urls.spotify ?? null };
+  } catch {
+    return { spotifyUrl: null };
+  }
+}
+
 async function fetchWithTimeout(
   url: string,
   options?: RequestInit,
@@ -186,23 +286,31 @@ export async function fetchArtwork(artist: string, album: string): Promise<Artwo
       }
     }
 
-    const itunesData = await fetchItunesData(artist, album, budgetSignal);
+    const [itunesData, spotifyData] = await Promise.all([
+      fetchItunesData(artist, album, budgetSignal),
+      fetchSpotifyData(artist, album, budgetSignal),
+    ]);
 
     return {
       artworkUrl: artworkUrl ?? itunesData.artworkUrl,
       year,
       appleMusicUrl: itunesData.appleMusicUrl,
+      spotifyUrl: spotifyData.spotifyUrl,
     };
   } catch {
-    // MusicBrainz/CAA failed — still try iTunes for artwork and Apple Music URL
-    const itunesData = await fetchItunesData(artist, album, budgetSignal).catch(() => ({
-      appleMusicUrl: null,
-      artworkUrl: null,
-    }));
+    // MusicBrainz/CAA failed — still try iTunes and Spotify
+    const [itunesData, spotifyData] = await Promise.all([
+      fetchItunesData(artist, album, budgetSignal).catch(() => ({
+        appleMusicUrl: null,
+        artworkUrl: null,
+      })),
+      fetchSpotifyData(artist, album, budgetSignal),
+    ]);
     return {
       artworkUrl: itunesData.artworkUrl,
       year: null,
       appleMusicUrl: itunesData.appleMusicUrl,
+      spotifyUrl: spotifyData.spotifyUrl,
     };
   }
 }

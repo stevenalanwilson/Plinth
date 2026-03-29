@@ -122,13 +122,6 @@ export function RecommendationCard({
 
   const year =
     recommendation.year.length > 0 ? recommendation.year : (artworkResponse?.year ?? '—');
-  const appleMusicUrl =
-    artworkResponse?.appleMusicUrl ??
-    buildAppleMusicSearchUrl(recommendation.artist, recommendation.album);
-  const appleMusicLabel = artworkResponse?.appleMusicUrl
-    ? 'Open in Apple Music'
-    : 'Search in Apple Music';
-  const spotifyUrl = buildSpotifySearchUrl(recommendation.artist, recommendation.album);
 
   return (
     <div
@@ -217,9 +210,13 @@ export function RecommendationCard({
             {year}
           </div>
           <ServiceLinks
-            appleMusicUrl={appleMusicUrl}
-            appleMusicLabel={appleMusicLabel}
-            spotifyUrl={spotifyUrl}
+            appleMusicDirectUrl={artworkResponse?.appleMusicUrl ?? null}
+            appleMusicSearchUrl={buildAppleMusicSearchUrl(
+              recommendation.artist,
+              recommendation.album,
+            )}
+            spotifyDirectUrl={artworkResponse?.spotifyUrl ?? null}
+            spotifySearchUrl={buildSpotifySearchUrl(recommendation.artist, recommendation.album)}
           />
         </div>
       </div>

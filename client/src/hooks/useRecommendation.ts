@@ -27,7 +27,11 @@ function loadHistoryFromStorage(): HistoryEntry[] {
     if (!raw) return [];
     // Backfill id/createdAt for entries persisted before these fields were introduced.
     const parsed = JSON.parse(raw) as Array<
-      Omit<HistoryEntry, 'id' | 'createdAt'> & { id?: string; createdAt?: string }
+      Omit<HistoryEntry, 'id' | 'createdAt'> & {
+        id?: string;
+        createdAt?: string;
+        artworkResponse: HistoryEntry['artworkResponse'] & { spotifyUrl?: string | null };
+      }
     >;
     const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
     return parsed
@@ -37,6 +41,11 @@ function loadHistoryFromStorage(): HistoryEntry[] {
         // Entries without a createdAt pre-date this field; treat as now so existing
         // history is preserved rather than immediately pruned.
         createdAt: entry.createdAt ?? new Date().toISOString(),
+        artworkResponse: {
+          ...entry.artworkResponse,
+          // Entries persisted before spotifyUrl was introduced won't have this field.
+          spotifyUrl: entry.artworkResponse.spotifyUrl ?? null,
+        },
       }))
       .filter((entry) => new Date(entry.createdAt).getTime() > cutoff);
   } catch {

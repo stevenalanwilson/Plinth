@@ -1,16 +1,18 @@
 import React from 'react';
 
 interface ServiceLinksProps {
-  appleMusicUrl: string;
-  appleMusicLabel: string;
-  spotifyUrl: string;
+  appleMusicDirectUrl: string | null;
+  appleMusicSearchUrl: string;
+  spotifyDirectUrl: string | null;
+  spotifySearchUrl: string;
   compact?: boolean;
 }
 
 export function ServiceLinks({
-  appleMusicUrl,
-  appleMusicLabel,
-  spotifyUrl,
+  appleMusicDirectUrl,
+  appleMusicSearchUrl,
+  spotifyDirectUrl,
+  spotifySearchUrl,
   compact = false,
 }: ServiceLinksProps): React.ReactElement {
   const baseLinkStyle: React.CSSProperties = {
@@ -26,16 +28,26 @@ export function ServiceLinks({
     letterSpacing: compact ? '0.04em' : undefined,
   };
 
+  const appleMusicUrl = appleMusicDirectUrl ?? appleMusicSearchUrl;
+  const appleMusicLabel = appleMusicDirectUrl ? 'Open in Apple Music' : 'Search in Apple Music';
+  const appleMusicOpacity = appleMusicDirectUrl ? 1 : 0.55;
+
+  const spotifyUrl = spotifyDirectUrl ?? spotifySearchUrl;
+  const spotifyLabel = spotifyDirectUrl ? 'Open in Spotify' : 'Search in Spotify';
+  const spotifyOpacity = spotifyDirectUrl ? 1 : 0.55;
+
   const appleMusicStyle: React.CSSProperties = {
     ...baseLinkStyle,
-    color: compact ? 'var(--text)' : 'var(--text)',
-    border: `1px solid ${compact ? 'var(--border2)' : 'var(--border2)'}`,
+    color: 'var(--text)',
+    border: '1px solid var(--border2)',
+    opacity: appleMusicOpacity,
   };
 
   const spotifyStyle: React.CSSProperties = {
     ...baseLinkStyle,
     color: compact ? 'var(--text)' : 'var(--muted)',
     border: `1px solid ${compact ? 'var(--border2)' : 'var(--border)'}`,
+    opacity: spotifyOpacity,
   };
 
   return (
@@ -65,7 +77,7 @@ export function ServiceLinks({
             <line x1="8" y1="8" x2="11" y2="11" />
           </svg>
         )}
-        {appleMusicLabel}
+        {compact ? 'Apple Music' : appleMusicLabel}
       </a>
       <a
         href={spotifyUrl}
@@ -90,7 +102,7 @@ export function ServiceLinks({
             />
           </svg>
         )}
-        Search in Spotify
+        {spotifyLabel}
       </a>
     </div>
   );

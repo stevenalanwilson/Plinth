@@ -8,7 +8,7 @@ const entries: HistoryEntry[] = [
   {
     id: 'test-id-1',
     recommendation: { artist: 'Burial', album: 'Untrue', year: '2007', reason: 'Great album.' },
-    artworkResponse: { artworkUrl: null, year: '2007', appleMusicUrl: null },
+    artworkResponse: { artworkUrl: null, year: '2007', appleMusicUrl: null, spotifyUrl: null },
     createdAt: new Date().toISOString(),
   },
   {
@@ -23,6 +23,7 @@ const entries: HistoryEntry[] = [
       artworkUrl: 'https://example.com/art.jpg',
       year: '2010',
       appleMusicUrl: 'https://music.apple.com/gb/album/there-is-love-in-you/12345',
+      spotifyUrl: null,
     },
     createdAt: new Date().toISOString(),
   },
@@ -32,7 +33,7 @@ const entries: HistoryEntry[] = [
 const manyEntries: HistoryEntry[] = Array.from({ length: 10 }, (_, i) => ({
   id: `id-${i}`,
   recommendation: { artist: `Artist ${i}`, album: `Album ${i}`, year: '2020', reason: 'Good.' },
-  artworkResponse: { artworkUrl: null, year: '2020', appleMusicUrl: null },
+  artworkResponse: { artworkUrl: null, year: '2020', appleMusicUrl: null, spotifyUrl: null },
   createdAt: new Date().toISOString(),
 }));
 
