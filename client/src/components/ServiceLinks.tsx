@@ -4,6 +4,7 @@ interface ServiceLinksProps {
   appleMusicDirectUrl: string | null;
   appleMusicSearchUrl: string;
   spotifyUrl: string;
+  discogsUrl: string;
   compact?: boolean;
 }
 
@@ -11,6 +12,7 @@ export function ServiceLinks({
   appleMusicDirectUrl,
   appleMusicSearchUrl,
   spotifyUrl,
+  discogsUrl,
   compact = false,
 }: ServiceLinksProps): React.ReactElement {
   const baseLinkStyle: React.CSSProperties = {
@@ -38,6 +40,12 @@ export function ServiceLinks({
   };
 
   const spotifyStyle: React.CSSProperties = {
+    ...baseLinkStyle,
+    color: compact ? 'var(--text)' : 'var(--muted)',
+    border: `1px solid ${compact ? 'var(--border2)' : 'var(--border)'}`,
+  };
+
+  const discogsStyle: React.CSSProperties = {
     ...baseLinkStyle,
     color: compact ? 'var(--text)' : 'var(--muted)',
     border: `1px solid ${compact ? 'var(--border2)' : 'var(--border)'}`,
@@ -96,6 +104,28 @@ export function ServiceLinks({
           </svg>
         )}
         Search in Spotify
+      </a>
+      <a
+        href={discogsUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="service-link"
+        style={discogsStyle}
+      >
+        {!compact && (
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
+            <circle cx="6" cy="6" r="4.5" />
+            <circle cx="6" cy="6" r="1.5" />
+          </svg>
+        )}
+        Search in Discogs
       </a>
     </div>
   );

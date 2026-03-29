@@ -75,3 +75,7 @@ export function buildAppleMusicSearchUrl(artist: string, album: string): string 
 export function buildSpotifySearchUrl(artist: string, album: string): string {
   return `https://open.spotify.com/search/${encodeURIComponent(`${artist} ${album}`)}`;
 }
+
+export function buildDiscogsSearchUrl(artist: string, album: string): string {
+  return `https://www.discogs.com/search/?q=${encodeURIComponent(`${artist} ${album}`)}&type=release`;
+}

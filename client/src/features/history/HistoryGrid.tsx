@@ -4,6 +4,7 @@ import {
   getProxiedArtworkUrl,
   buildAppleMusicSearchUrl,
   buildSpotifySearchUrl,
+  buildDiscogsSearchUrl,
 } from '../../services/apiClient';
 import { ServiceLinks } from '../../components/ServiceLinks';
 
@@ -95,6 +96,10 @@ function HistoryItem({ entry, onRemove }: HistoryItemProps): React.ReactElement 
               entry.recommendation.album,
             )}
             spotifyUrl={buildSpotifySearchUrl(
+              entry.recommendation.artist,
+              entry.recommendation.album,
+            )}
+            discogsUrl={buildDiscogsSearchUrl(
               entry.recommendation.artist,
               entry.recommendation.album,
             )}

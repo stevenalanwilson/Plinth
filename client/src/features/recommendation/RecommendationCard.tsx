@@ -4,6 +4,7 @@ import {
   getProxiedArtworkUrl,
   buildAppleMusicSearchUrl,
   buildSpotifySearchUrl,
+  buildDiscogsSearchUrl,
 } from '../../services/apiClient';
 import { ServiceLinks } from '../../components/ServiceLinks';
 
@@ -216,6 +217,7 @@ export function RecommendationCard({
               recommendation.album,
             )}
             spotifyUrl={buildSpotifySearchUrl(recommendation.artist, recommendation.album)}
+            discogsUrl={buildDiscogsSearchUrl(recommendation.artist, recommendation.album)}
           />
         </div>
       </div>
