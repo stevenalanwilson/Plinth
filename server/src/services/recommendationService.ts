@@ -8,6 +8,8 @@ import {
 const SYSTEM_PROMPT =
   'You are a music expert with encyclopaedic knowledge of albums across all genres. ' +
   'You make thoughtful, specific, personalised recommendations. ' +
+  'Only recommend albums you have complete certainty exist as real, released recordings. ' +
+  'Never invent or fabricate an artist or album title — if you are not certain an album exists, choose a different one you are sure about. ' +
   'Respond only with valid JSON — no markdown, no prose, nothing else.';
 
 // Lazily initialised so the key is read at request time, not import time,
@@ -145,7 +147,7 @@ function isDuplicate(rec: RecommendationResponse, alreadySuggested: readonly str
 async function callClaude(client: Anthropic, prompt: string): Promise<RecommendationResponse> {
   const message = await client.messages.create(
     {
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-sonnet-4-6',
       max_tokens: 800,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
