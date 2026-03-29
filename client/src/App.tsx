@@ -69,6 +69,7 @@ export default function App(): React.ReactElement {
             ).map(({ type, label }) => (
               <button
                 key={type}
+                className="pivot-button"
                 type="button"
                 onClick={() => {
                   const pivot: PivotHint = {
@@ -85,10 +86,11 @@ export default function App(): React.ReactElement {
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
                   fontFamily: 'var(--mono)',
+                  fontWeight: 500,
                   borderRadius: 'var(--radius)',
-                  background: 'transparent',
-                  border: '1px solid var(--border)',
-                  color: 'var(--muted)',
+                  background: 'var(--accent2)',
+                  border: '1px solid var(--accent2)',
+                  color: '#0e0e0f',
                   cursor: 'pointer',
                 }}
               >

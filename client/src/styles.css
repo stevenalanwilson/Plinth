@@ -51,6 +51,9 @@ body {
 .app-cta-button { transition: filter 0.15s ease; }
 .app-cta-button:hover:not(:disabled) { filter: brightness(0.75); }
 
+.pivot-button { transition: filter 0.15s ease; }
+.pivot-button:hover { filter: brightness(1.15); }
+
 .pill-button { transition: filter 0.15s ease; }
 .pill-button:hover { filter: brightness(1.5); }
 .pill-button[aria-pressed="true"]:hover { filter: brightness(0.78); }

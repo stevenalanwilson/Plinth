@@ -7,7 +7,7 @@
 ## 🎯 Better Recommendations
 
 - [ ] **Genre/mood filtering** — Filter recommendations by energy level, decade, or genre cluster rather than a random spread
-- [ ] **"More like this" refinement** — After a recommendation is shown, allow pivoting ("more like this" / "something different") to steer the next suggestion
+- [x] **"More like this" refinement** — After a recommendation is shown, allow pivoting ("more like this" / "something different") to steer the next suggestion
 - [ ] **Exclude already-owned albums** — Cross-reference against the user's library so recommendations don't surface albums already owned
 - [ ] **Similar artist discovery** — Use MusicBrainz relationships to surface connected artists (collaborators, side projects, former members)
 
@@ -48,7 +48,7 @@
 
 ## ✅ Completed
 
-_Nothing here yet — ship something!_
+- **"More like this" refinement** — Pivot buttons after each recommendation steer the next suggestion via "more like this" or "something different", feeding the signal into the Claude prompt
 
 ---
 
