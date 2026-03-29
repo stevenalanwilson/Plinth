@@ -43,7 +43,7 @@ body {
 
 /* On touch-only devices, always show the history card overlay (no hover state available) */
 @media (hover: none) {
-  .history-overlay { opacity: 1 !important; }
+  .history-overlay { opacity: 1 !important; pointer-events: auto !important; }
 }
 
 /* ─── Button hover effects ───────────────────────────── */

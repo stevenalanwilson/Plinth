@@ -14,27 +14,40 @@ interface HistoryGridProps {
   history: HistoryEntry[];
   onClear: () => void;
   onRemove: (id: string) => void;
+  onSelect: (id: string) => void;
 }
 
 interface HistoryItemProps {
   entry: HistoryEntry;
   onRemove: (id: string) => void;
+  onSelect: (id: string) => void;
 }
 
-function HistoryItem({ entry, onRemove }: HistoryItemProps): React.ReactElement {
+function HistoryItem({ entry, onRemove, onSelect }: HistoryItemProps): React.ReactElement {
   const [isHovered, setIsHovered] = useState(false);
   const [imgErrored, setImgErrored] = useState(false);
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Load ${entry.recommendation.album} by ${entry.recommendation.artist}`}
       onPointerEnter={() => setIsHovered(true)}
       onPointerLeave={() => setIsHovered(false)}
+      onClick={() => onSelect(entry.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(entry.id);
+        }
+      }}
       style={{
         display: 'block',
         background: 'var(--surface)',
         border: `1px solid ${isHovered ? 'var(--border2)' : 'var(--border)'}`,
         borderRadius: 10,
         overflow: 'hidden',
+        cursor: 'pointer',
         transform: isHovered ? 'translateY(-3px)' : 'translateY(0)',
         transition: 'transform 0.2s, border-color 0.2s',
       }}
@@ -75,6 +88,7 @@ function HistoryItem({ entry, onRemove }: HistoryItemProps): React.ReactElement 
 
         <div
           className="history-overlay"
+          onClick={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
             inset: 0,
@@ -85,6 +99,7 @@ function HistoryItem({ entry, onRemove }: HistoryItemProps): React.ReactElement 
             justifyContent: 'center',
             gap: 8,
             opacity: isHovered ? 1 : 0,
+            pointerEvents: isHovered ? 'auto' : 'none',
             transition: 'opacity 0.2s',
             padding: '0 12px',
           }}
@@ -162,7 +177,12 @@ function HistoryItem({ entry, onRemove }: HistoryItemProps): React.ReactElement 
   );
 }
 
-export function HistoryGrid({ history, onClear, onRemove }: HistoryGridProps): React.ReactElement {
+export function HistoryGrid({
+  history,
+  onClear,
+  onRemove,
+  onSelect,
+}: HistoryGridProps): React.ReactElement {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const visible = isExpanded ? history : history.slice(0, VISIBLE_COUNT);
@@ -210,7 +230,7 @@ export function HistoryGrid({ history, onClear, onRemove }: HistoryGridProps): R
       </div>
       <div className="history-grid">
         {visible.map((entry) => (
-          <HistoryItem key={entry.id} entry={entry} onRemove={onRemove} />
+          <HistoryItem key={entry.id} entry={entry} onRemove={onRemove} onSelect={onSelect} />
         ))}
       </div>
       {hiddenCount > 0 && !isExpanded && (

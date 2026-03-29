@@ -75,6 +75,7 @@ interface UseRecommendationReturn {
   fetchRecommendation: (pivot?: PivotHint, seedArtist?: string) => Promise<void>;
   clearHistory: () => void;
   removeFromHistory: (id: string) => void;
+  selectFromHistory: (id: string) => void;
 }
 
 export function useRecommendation(): UseRecommendationReturn {
@@ -213,6 +214,29 @@ export function useRecommendation(): UseRecommendationReturn {
     });
   }, []);
 
+  const selectFromHistory = useCallback((id: string): void => {
+    const entry = historyRef.current.find((e) => e.id === id);
+    if (!entry || historyRef.current[0]?.id === id) return;
+
+    // Cancel any in-flight recommendation request
+    abortControllerRef.current?.abort();
+
+    setHistory((prev) => [entry, ...prev.filter((e) => e.id !== id)]);
+    setRecommendation(entry.recommendation);
+    setArtworkResponse(entry.artworkResponse);
+    setIsLoading(false);
+    setError(null);
+    setArtistRelations([]);
+    setIsLoadingRelations(true);
+
+    void fetchArtistRelations(entry.recommendation.artist)
+      .then((r) => setArtistRelations(r.relations))
+      .catch(() => {
+        /* non-critical */
+      })
+      .finally(() => setIsLoadingRelations(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const updatePreferences = useCallback((prefs: RecommendationPreferences): void => {
     setPreferences(prefs);
   }, []);
@@ -298,5 +322,6 @@ export function useRecommendation(): UseRecommendationReturn {
     fetchRecommendation,
     clearHistory,
     removeFromHistory,
+    selectFromHistory,
   };
 }

@@ -23,6 +23,7 @@ export default function App(): React.ReactElement {
     fetchRecommendation,
     clearHistory,
     removeFromHistory,
+    selectFromHistory,
   } = useRecommendation();
 
   return (
@@ -162,6 +163,7 @@ export default function App(): React.ReactElement {
                   history={history.slice(1)}
                   onClear={clearHistory}
                   onRemove={removeFromHistory}
+                  onSelect={selectFromHistory}
                 />
               </>
             )}
