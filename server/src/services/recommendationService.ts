@@ -90,7 +90,12 @@ export function buildPrompt(request: RecommendationRequest): string {
     seedStr = `\n\nThe user has discovered ${request.seedArtist} through an artist connection. Recommend a specific album by ${request.seedArtist} that fits their preferences. Do not suggest a different artist — the user specifically wants to explore ${request.seedArtist}'s catalogue.`;
   }
 
-  return `Recommend ONE album for someone with the following preferences: ${summary}.
+  let vibeStr = '';
+  if (request.vibeQuery) {
+    vibeStr = `\n\nThe user has described their vibe in their own words: "${request.vibeQuery}"\nTreat this as your primary creative brief — interpret it imaginatively. If it references a mashup of artists, styles, or moods, find a real album that captures that spirit.`;
+  }
+
+  return `Recommend ONE album for someone with the following preferences: ${summary}.${vibeStr}
 
 Pick something genuinely interesting — a deep cut or overlooked gem rather than an obvious classic. It must be a real, released album.${avoidStr}${pivotStr}${seedStr}
 

@@ -66,6 +66,8 @@ function saveHistoryToStorage(history: HistoryEntry[]): void {
 interface UseRecommendationReturn {
   preferences: RecommendationPreferences;
   updatePreferences: (prefs: RecommendationPreferences) => void;
+  vibeQuery: string;
+  updateVibeQuery: (query: string) => void;
   recommendation: RecommendationResponse | null;
   artworkResponse: ArtworkResponse | null;
   artistRelations: readonly ArtistRelation[];
@@ -82,6 +84,7 @@ interface UseRecommendationReturn {
 
 export function useRecommendation(): UseRecommendationReturn {
   const [preferences, setPreferences] = useState<RecommendationPreferences>(DEFAULT_PREFERENCES);
+  const [vibeQuery, setVibeQuery] = useState<string>('');
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(
     () => loadHistoryFromStorage()[0]?.recommendation ?? null,
   );
@@ -247,6 +250,10 @@ export function useRecommendation(): UseRecommendationReturn {
     setPreferences(prefs);
   }, []);
 
+  const updateVibeQuery = useCallback((query: string): void => {
+    setVibeQuery(query);
+  }, []);
+
   // Tracks the in-flight request so a second click cancels the first.
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -271,6 +278,7 @@ export function useRecommendation(): UseRecommendationReturn {
             alreadySuggested,
             pivot,
             seedArtist,
+            vibeQuery: vibeQuery.trim() || undefined,
           },
           controller.signal,
         );
@@ -312,12 +320,14 @@ export function useRecommendation(): UseRecommendationReturn {
         }
       }
     },
-    [preferences],
+    [preferences, vibeQuery],
   );
 
   return {
     preferences,
     updatePreferences,
+    vibeQuery,
+    updateVibeQuery,
     recommendation,
     artworkResponse,
     artistRelations,

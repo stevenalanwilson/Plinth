@@ -298,6 +298,45 @@ describe('genres and country parsing', () => {
   });
 });
 
+describe('buildPrompt vibeQuery', () => {
+  const baseRequest: RecommendationRequest = {
+    preferences: {
+      genres: [],
+      moods: [],
+      tempo: 5,
+      energy: 5,
+      density: 5,
+      era: 'any',
+      includeFamiliarArtists: true,
+      prioritiseObscure: false,
+      stayFocused: false,
+    },
+    alreadySuggested: [],
+  };
+
+  it('includes vibe query text in the prompt when set', () => {
+    const prompt = buildPrompt({
+      ...baseRequest,
+      vibeQuery: 'Blink-182 but with Morrissey on vocals',
+    });
+    expect(prompt).toContain('Blink-182 but with Morrissey on vocals');
+  });
+
+  it('includes "primary creative brief" language when vibeQuery is set', () => {
+    const prompt = buildPrompt({
+      ...baseRequest,
+      vibeQuery: 'Something like Bootsy Collins but on even better acid',
+    });
+    expect(prompt).toContain('primary creative brief');
+  });
+
+  it('does not include vibe language when vibeQuery is absent', () => {
+    const prompt = buildPrompt(baseRequest);
+    expect(prompt).not.toContain('primary creative brief');
+    expect(prompt).not.toContain('described their vibe');
+  });
+});
+
 describe('buildPrompt seedArtist', () => {
   const baseRequest: RecommendationRequest = {
     preferences: {

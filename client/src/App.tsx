@@ -29,6 +29,8 @@ export default function App(): React.ReactElement {
   const {
     preferences,
     updatePreferences,
+    vibeQuery,
+    updateVibeQuery,
     recommendation,
     artworkResponse,
     artistRelations,
@@ -208,6 +210,39 @@ export default function App(): React.ReactElement {
       ) : (
         <>
           <div className="app-sidebar">
+            <div style={{ marginBottom: 20 }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: 11,
+                  color: 'var(--muted)',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  marginBottom: 6,
+                }}
+              >
+                Describe your vibe
+              </label>
+              <textarea
+                value={vibeQuery}
+                onChange={(e) => updateVibeQuery(e.target.value)}
+                placeholder='"Blink-182 but with Morrissey on vocals"'
+                maxLength={300}
+                rows={2}
+                style={{
+                  width: '100%',
+                  background: 'var(--surface2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--text)',
+                  fontFamily: 'var(--mono)',
+                  fontSize: 12,
+                  padding: '8px 10px',
+                  resize: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
             <PreferencesPanel preferences={preferences} onChange={updatePreferences} />
           </div>
 

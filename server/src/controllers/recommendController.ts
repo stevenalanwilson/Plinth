@@ -83,12 +83,22 @@ export async function handleRecommend(req: Request, res: Response): Promise<void
     return;
   }
 
+  const { vibeQuery } = body;
+  if (
+    vibeQuery !== undefined &&
+    (typeof vibeQuery !== 'string' || vibeQuery.trim() === '' || vibeQuery.length > 300)
+  ) {
+    res.status(400).json({ error: 'vibeQuery must be a non-empty string (max 300 characters)' });
+    return;
+  }
+
   try {
     const recommendation = await getRecommendation({
       preferences: body.preferences,
       alreadySuggested: body.alreadySuggested,
       pivot: body.pivot,
       seedArtist,
+      vibeQuery,
     });
     res.json(recommendation);
   } catch (error) {

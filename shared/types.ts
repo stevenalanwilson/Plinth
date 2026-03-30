@@ -39,6 +39,7 @@ export interface RecommendationRequest {
   readonly alreadySuggested: readonly string[];
   readonly pivot?: PivotHint;
   readonly seedArtist?: string;
+  readonly vibeQuery?: string;
 }
 
 export interface RecommendationResponse {
