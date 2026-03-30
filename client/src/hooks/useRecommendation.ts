@@ -12,6 +12,7 @@ import {
   fetchArtwork,
   fetchArtistRelations,
 } from '../services/apiClient';
+import { mergeHistory } from '../services/libraryExport';
 
 const HISTORY_STORAGE_KEY = 'album-recommender-history';
 // Kept only for the one-time cleanup below — do not read from this key.
@@ -76,6 +77,7 @@ interface UseRecommendationReturn {
   clearHistory: () => void;
   removeFromHistory: (id: string) => void;
   selectFromHistory: (id: string) => void;
+  importHistory: (entries: HistoryEntry[]) => void;
 }
 
 export function useRecommendation(): UseRecommendationReturn {
@@ -214,6 +216,10 @@ export function useRecommendation(): UseRecommendationReturn {
     });
   }, []);
 
+  const importHistory = useCallback((entries: HistoryEntry[]): void => {
+    setHistory((prev) => mergeHistory(prev, entries));
+  }, []);
+
   const selectFromHistory = useCallback((id: string): void => {
     const entry = historyRef.current.find((e) => e.id === id);
     if (!entry || historyRef.current[0]?.id === id) return;
@@ -323,5 +329,6 @@ export function useRecommendation(): UseRecommendationReturn {
     clearHistory,
     removeFromHistory,
     selectFromHistory,
+    importHistory,
   };
 }

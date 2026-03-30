@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PivotHint } from '@shared/types';
+import { downloadLibrary, parseLibraryFile } from './services/libraryExport';
 import { useRecommendation } from './hooks/useRecommendation';
 import { PreferencesPanel } from './features/preferences/PreferencesPanel';
 import { RecommendationCard } from './features/recommendation/RecommendationCard';
@@ -10,6 +11,21 @@ type Page = 'home' | 'insights';
 
 export default function App(): React.ReactElement {
   const [page, setPage] = useState<Page>('home');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    function handleClickOutside(e: MouseEvent): void {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isMenuOpen]);
   const {
     preferences,
     updatePreferences,
@@ -24,7 +40,21 @@ export default function App(): React.ReactElement {
     clearHistory,
     removeFromHistory,
     selectFromHistory,
+    importHistory,
   } = useRecommendation();
+
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError(null);
+    // Reset input so the same file can be re-selected if needed
+    e.target.value = '';
+    void parseLibraryFile(file)
+      .then((entries) => importHistory(entries))
+      .catch((err: unknown) => {
+        setImportError(err instanceof Error ? err.message : 'Failed to import file.');
+      });
+  }
 
   return (
     <div className="app-layout">
@@ -52,21 +82,123 @@ export default function App(): React.ReactElement {
         >
           Music to work too
         </p>
-        <nav style={{ display: 'flex', gap: 20, marginTop: 16 }}>
-          {(['home', 'insights'] as const).map((p) => (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 16,
+          }}
+        >
+          <nav>
             <button
-              key={p}
               type="button"
               className="nav-tab"
-              data-active={page === p}
-              onClick={() => setPage(p)}
+              data-active={page === 'home'}
+              onClick={() => setPage('home')}
             >
-              {p === 'home'
-                ? 'Discover'
-                : `Insights${history.length > 0 ? ` (${history.length})` : ''}`}
+              Discover
             </button>
-          ))}
-        </nav>
+          </nav>
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className="nav-tab"
+              aria-haspopup="true"
+              aria-expanded={isMenuOpen}
+              aria-label="Open menu"
+              onClick={() => setIsMenuOpen((o) => !o)}
+            >
+              ···
+            </button>
+            {isMenuOpen && (
+              <div className="dropdown-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="dropdown-item"
+                  onClick={() => {
+                    setPage('insights');
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  {`Insights${history.length > 0 ? ` (${history.length})` : ''}`}
+                </button>
+                <hr className="dropdown-divider" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="dropdown-item"
+                  onClick={() => {
+                    fileInputRef.current?.click();
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  Import
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="dropdown-item"
+                  disabled={history.length === 0}
+                  onClick={() => {
+                    downloadLibrary(history);
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  Export
+                </button>
+                <hr className="dropdown-divider" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="dropdown-item dropdown-item-danger"
+                  disabled={history.length === 0}
+                  onClick={() => {
+                    clearHistory();
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  Clear Library
+                </button>
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={handleImportFile}
+            />
+          </div>
+        </div>
+        {importError !== null && (
+          <p
+            style={{
+              marginTop: 8,
+              fontSize: 11,
+              color: 'var(--danger)',
+              fontFamily: 'var(--mono)',
+            }}
+          >
+            {importError}{' '}
+            <button
+              type="button"
+              onClick={() => setImportError(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--danger)',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontFamily: 'var(--mono)',
+                padding: 0,
+              }}
+            >
+              ✕
+            </button>
+          </p>
+        )}
       </header>
 
       {page === 'insights' ? (
@@ -161,7 +293,6 @@ export default function App(): React.ReactElement {
                 <div style={{ height: 1, background: 'var(--border)', margin: '40px 0' }} />
                 <HistoryGrid
                   history={history.slice(1)}
-                  onClear={clearHistory}
                   onRemove={removeFromHistory}
                   onSelect={selectFromHistory}
                 />

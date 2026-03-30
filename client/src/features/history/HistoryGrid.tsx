@@ -12,7 +12,6 @@ const VISIBLE_COUNT = 9;
 
 interface HistoryGridProps {
   history: HistoryEntry[];
-  onClear: () => void;
   onRemove: (id: string) => void;
   onSelect: (id: string) => void;
 }
@@ -177,12 +176,7 @@ function HistoryItem({ entry, onRemove, onSelect }: HistoryItemProps): React.Rea
   );
 }
 
-export function HistoryGrid({
-  history,
-  onClear,
-  onRemove,
-  onSelect,
-}: HistoryGridProps): React.ReactElement {
+export function HistoryGrid({ history, onRemove, onSelect }: HistoryGridProps): React.ReactElement {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const visible = isExpanded ? history : history.slice(0, VISIBLE_COUNT);
@@ -190,44 +184,17 @@ export function HistoryGrid({
 
   return (
     <section>
-      <div
+      <h3
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          fontSize: 11,
+          color: 'var(--muted)',
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
           marginBottom: 16,
         }}
       >
-        <h3
-          style={{
-            fontSize: 11,
-            color: 'var(--muted)',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-          }}
-        >
-          Previously suggested
-        </h3>
-        <button
-          type="button"
-          onClick={onClear}
-          aria-label="Clear history"
-          style={{
-            fontSize: 11,
-            color: 'var(--muted)',
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            background: 'none',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            padding: '4px 10px',
-            fontFamily: 'var(--mono)',
-            cursor: 'pointer',
-          }}
-        >
-          Clear
-        </button>
-      </div>
+        Previously suggested
+      </h3>
       <div className="history-grid">
         {visible.map((entry) => (
           <HistoryItem key={entry.id} entry={entry} onRemove={onRemove} onSelect={onSelect} />
