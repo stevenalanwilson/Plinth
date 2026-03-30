@@ -1,15 +1,45 @@
 # Plinth
 
-_Music to work too._
+_Music to work to._
 
-A fullstack web app that recommends albums based on your taste preferences. Powered by Claude AI, MusicBrainz, and the iTunes Search API.
+Plinth is a fullstack web app that recommends albums based on your taste preferences. Describe what you want to hear — by genre, mood, tempo, era, or energy — and Claude finds something worth listening to. Each recommendation comes with album artwork, streaming links, and a network of connected artists to explore further.
 
-## How it works
+Powered by Claude AI, MusicBrainz, and the iTunes Search API.
 
-1. Set your preferences — genres, mood, tempo, energy, density, era, and discovery settings
-2. Hit **Find me something to listen to** — the app calls Claude (server-side, your key stays private), fetches artwork and an Apple Music link, and displays the recommendation
+---
 
-History is persisted in `localStorage` so previous suggestions survive page reloads.
+## Features
+
+### Recommendations
+
+- **Preference-driven suggestions** — Set genres, moods, tempo, energy, density, and era. Claude uses these signals to recommend albums that fit.
+- **Pivot controls** — After each recommendation, choose _More like this_ or _Something different_ to steer the next suggestion without adjusting preferences manually.
+- **Seed by artist** — Click any connected artist chip to ask Claude to recommend from that artist's catalogue specifically.
+
+### Connected Artists
+
+Each recommendation surfaces a network of related artists via MusicBrainz — collaborators, side projects, former members, and recording co-credits. Clicking a chip seeds the next recommendation.
+
+### History
+
+- Recommendations are saved in `localStorage` and survive page reloads.
+- Click any previously suggested album in the history grid to restore it as the current recommendation.
+- History is capped at 50 entries and entries older than 90 days are pruned automatically.
+
+### Library Export & Import
+
+- **Export** — Download your recommendation history as a versioned JSON file (`plinth-library-YYYY-MM-DD.json`).
+- **Import** — Load a library file from another session or a friend. Duplicate albums are deduplicated automatically; existing entries take precedence.
+
+### Insights
+
+A dedicated page breaking down your recommendation history:
+
+- Summary stats — total albums, unique artists, decades spanned, countries explored
+- Monthly activity chart
+- Decade, genre, and country breakdowns
+- Top artists by recommendation count
+- Gap observations (e.g. genres or decades underrepresented in your history)
 
 ---
 
@@ -33,13 +63,14 @@ All preferences are optional — the app works with any combination.
 
 ## Stack
 
-| Layer       | Tech                                              |
-| ----------- | ------------------------------------------------- |
-| Frontend    | React 18, TypeScript, Vite                        |
-| Backend     | Node.js, TypeScript, Express                      |
-| AI          | Anthropic Claude (Haiku 4.5)                      |
-| Artwork     | MusicBrainz + Cover Art Archive (iTunes fallback) |
-| Music links | iTunes Search API (Apple Music), Spotify search   |
+| Layer             | Tech                                              |
+| ----------------- | ------------------------------------------------- |
+| Frontend          | React 18, TypeScript, Vite                        |
+| Backend           | Node.js, TypeScript, Express                      |
+| AI                | Anthropic Claude (Haiku 4.5)                      |
+| Artwork           | MusicBrainz + Cover Art Archive (iTunes fallback) |
+| Music links       | iTunes Search API (Apple Music), Spotify, Discogs |
+| Connected artists | MusicBrainz relationships + recording co-credits  |
 
 ---
 
@@ -67,7 +98,7 @@ cd client && npm install && cd ..
 cp .env.example .env
 ```
 
-Edit `.env` and fill in your keys. See [Environment variables](#environment-variables) below for where to get each one.
+Edit `.env` and fill in your keys. See [Environment variables](#environment-variables) below.
 
 ### 3. Run
 
@@ -100,9 +131,7 @@ Then open [http://localhost:5173](http://localhost:5173).
 | `CORS_ORIGIN`       |          | `http://localhost:5173` | Allowed client origin                               |
 | `VITE_API_URL`      |          | `''` (same origin)      | Client → server base URL (local dev without Docker) |
 
-### Getting your API key
-
-**Anthropic API key** (required)
+**Getting your Anthropic API key**
 
 1. Go to [console.anthropic.com](https://console.anthropic.com/)
 2. Sign in or create an account
@@ -140,14 +169,14 @@ Tests live alongside source files (`foo.ts` → `foo.test.ts`).
 /
 ├── client/          # React frontend (Vite)
 │   └── src/
-│       ├── features/        # PreferencesPanel, RecommendationCard, HistoryGrid
-│       ├── hooks/           # useRecommendation — all state lives here
-│       ├── services/        # apiClient
+│       ├── features/        # PreferencesPanel, RecommendationCard, HistoryGrid, InsightsPage
+│       ├── hooks/           # useRecommendation — all state and history logic
+│       ├── services/        # apiClient, libraryExport
 │       └── types/
 ├── server/          # Express backend
 │   └── src/
 │       ├── controllers/     # Thin HTTP handlers
-│       ├── services/        # recommendationService, artworkService
+│       ├── services/        # recommendationService, artworkService, artistRelationsService
 │       └── routes/
 ├── shared/          # Types shared between client and server
 └── docker-compose.yml
