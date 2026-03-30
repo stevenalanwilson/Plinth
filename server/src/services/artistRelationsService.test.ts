@@ -13,21 +13,27 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function artistSearchResponse(artists: Array<{ id: string; name: string; score?: number }>) {
+function artistSearchResponse(
+  artists: Array<{ id: string; name: string; score?: number }>,
+): Promise<{ ok: boolean; json: () => Promise<{ artists: typeof artists }> }> {
   return Promise.resolve({
     ok: true,
     json: () => Promise.resolve({ artists }),
   });
 }
 
-function artistDetailResponse(relations: Array<Record<string, unknown>>) {
+function artistDetailResponse(
+  relations: Array<Record<string, unknown>>,
+): Promise<{ ok: boolean; json: () => Promise<{ relations: typeof relations }> }> {
   return Promise.resolve({
     ok: true,
     json: () => Promise.resolve({ relations }),
   });
 }
 
-function recordingBrowseResponse(recordings: Array<Record<string, unknown>>) {
+function recordingBrowseResponse(
+  recordings: Array<Record<string, unknown>>,
+): Promise<{ ok: boolean; json: () => Promise<{ recordings: typeof recordings }> }> {
   return Promise.resolve({
     ok: true,
     json: () => Promise.resolve({ recordings }),
