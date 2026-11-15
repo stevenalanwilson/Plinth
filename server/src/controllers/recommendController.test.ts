@@ -186,6 +186,67 @@ describe('handleRecommend', () => {
     });
   });
 
+  describe('oversized text fields', () => {
+    const tooLongName = 'x'.repeat(501);
+    const pivot = { type: 'more-like-this', artist: 'Massive Attack', album: 'Mezzanine' };
+
+    it('returns 400 when seedArtist is too long', async () => {
+      const { res, status } = makeRes();
+
+      await handleRecommend(makeReq({ ...validBody, seedArtist: tooLongName }), res);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(mockGetRecommendation).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 when pivot artist is too long', async () => {
+      const { res, status } = makeRes();
+
+      await handleRecommend(
+        makeReq({ ...validBody, pivot: { ...pivot, artist: tooLongName } }),
+        res,
+      );
+
+      expect(status).toHaveBeenCalledWith(400);
+    });
+
+    it('returns 400 when pivot album is too long', async () => {
+      const { res, status } = makeRes();
+
+      await handleRecommend(
+        makeReq({ ...validBody, pivot: { ...pivot, album: tooLongName } }),
+        res,
+      );
+
+      expect(status).toHaveBeenCalledWith(400);
+    });
+
+    it('returns 400 when an alreadySuggested entry is too long', async () => {
+      const { res, status } = makeRes();
+      const body = { ...validBody, alreadySuggested: [`${tooLongName} – ${tooLongName}`] };
+
+      await handleRecommend(makeReq(body), res);
+
+      expect(status).toHaveBeenCalledWith(400);
+    });
+
+    it('accepts very long but real album titles', async () => {
+      // Some real titles run to hundreds of characters; the cap must not reject them.
+      mockGetRecommendation.mockResolvedValue(mockRecommendation);
+      const { res, json } = makeRes();
+      const longAlbum = 'y'.repeat(500);
+      const body = {
+        ...validBody,
+        pivot: { ...pivot, album: longAlbum },
+        alreadySuggested: [`${'x'.repeat(500)} – ${longAlbum}`],
+      };
+
+      await handleRecommend(makeReq(body), res);
+
+      expect(json).toHaveBeenCalledWith(mockRecommendation);
+    });
+  });
+
   describe('service errors', () => {
     it('returns 500 when getRecommendation throws', async () => {
       mockGetRecommendation.mockRejectedValue(new Error('Claude API failed'));
