@@ -2,12 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Request, Response } from 'express';
 import { RecommendationPreferences } from '@shared/types';
 
-vi.mock('../services/recommendationService', () => ({
+vi.mock('../services/recommendationService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/recommendationService')>()),
   getRecommendation: vi.fn(),
 }));
 
 import { handleRecommend } from './recommendController';
-import { getRecommendation } from '../services/recommendationService';
+import {
+  getRecommendation,
+  UnverifiedRecommendationError,
+} from '../services/recommendationService';
 
 const mockGetRecommendation = vi.mocked(getRecommendation);
 
@@ -257,6 +261,18 @@ describe('handleRecommend', () => {
       expect(status).toHaveBeenCalledWith(502);
       expect(json).toHaveBeenCalledWith({
         error: 'Failed to get recommendation. Please try again.',
+      });
+    });
+
+    it('says so when no pick could be verified', async () => {
+      mockGetRecommendation.mockRejectedValue(new UnverifiedRecommendationError());
+      const { res, status, json } = makeRes();
+
+      await handleRecommend(makeReq(validBody), res);
+
+      expect(status).toHaveBeenCalledWith(502);
+      expect(json).toHaveBeenCalledWith({
+        error: "Couldn't find a pick we could verify. Please try again.",
       });
     });
 

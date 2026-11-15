@@ -11,11 +11,23 @@ vi.mock('@anthropic-ai/sdk', () => {
   };
 });
 
+vi.mock('./albumMatchService', () => ({ findAlbum: vi.fn() }));
+vi.mock('../logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
 import Anthropic from '@anthropic-ai/sdk';
-import { getRecommendation, buildPrompt } from './recommendationService';
+import {
+  getRecommendation,
+  buildPrompt,
+  UnverifiedRecommendationError,
+} from './recommendationService';
+import { AlbumQuery, findAlbum } from './albumMatchService';
+import { logger } from '../logger';
 import { RecommendationRequest, RecommendationPreferences } from '@shared/types';
 
 const mockCreate = vi.fn();
+const mockFindAlbum = vi.mocked(findAlbum);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -23,6 +35,16 @@ beforeEach(() => {
     messages: { create: mockCreate },
   }));
   process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+  // By default every pick exists, under the spelling Claude used.
+  mockFindAlbum.mockImplementation(async (query: AlbumQuery) => ({
+    status: 'matched',
+    match: {
+      releaseGroupId: 'rg-1',
+      artist: query.artist,
+      album: query.album,
+      year: query.year ?? null,
+    },
+  }));
 });
 
 // Intentionally non-default values so tests verify that preferences are reflected in the prompt.
@@ -210,6 +232,128 @@ describe('getRecommendation', () => {
     const callArgs = mockCreate.mock.calls[0][0];
     const prompt = callArgs.messages[0].content as string;
     expect(prompt).not.toContain('do NOT recommend');
+  });
+});
+
+function claudeReply(artist: string, album: string): Record<string, unknown> {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          artist,
+          album,
+          year: '1980',
+          reason: 'Fits.',
+          genres: [],
+          country: 'UK',
+        }),
+      },
+    ],
+  };
+}
+
+function promptOfCall(index: number): string {
+  return mockCreate.mock.calls[index][0].messages[0].content as string;
+}
+
+describe('getRecommendation album check', () => {
+  it('returns the MusicBrainz spelling, year and release group of a matched pick', async () => {
+    mockCreate.mockResolvedValue(claudeReply('Sound', 'jeopardy'));
+    mockFindAlbum.mockResolvedValue({
+      status: 'matched',
+      match: {
+        releaseGroupId: 'rg-jeopardy',
+        artist: 'The Sound',
+        album: 'Jeopardy',
+        year: '1980',
+      },
+    });
+
+    const result = await getRecommendation(validRequest);
+
+    expect(mockFindAlbum).toHaveBeenCalledWith({
+      artist: 'Sound',
+      album: 'jeopardy',
+      year: '1980',
+    });
+    expect(result).toMatchObject({
+      artist: 'The Sound',
+      album: 'Jeopardy',
+      year: '1980',
+      releaseGroupId: 'rg-jeopardy',
+    });
+  });
+
+  it('asks again when a pick is not found, telling Claude which album to avoid', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('The Sound', 'Midnight Pylons'))
+      .mockResolvedValueOnce(claudeReply('The Sound', 'Jeopardy'));
+    mockFindAlbum.mockResolvedValueOnce({ status: 'not_found' });
+
+    const result = await getRecommendation(validRequest);
+
+    expect(result.album).toBe('Jeopardy');
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(promptOfCall(1)).toContain('could not be found in MusicBrainz');
+    expect(promptOfCall(1)).toContain('The Sound – Midnight Pylons');
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'not_found', attempt: 1, album: 'Midnight Pylons' }),
+      'recommendation regenerated',
+    );
+  });
+
+  it('returns the pick unchecked when MusicBrainz is unavailable', async () => {
+    mockCreate.mockResolvedValue(claudeReply('The Sound', 'Jeopardy'));
+    mockFindAlbum.mockResolvedValue({ status: 'lookup_failed' });
+
+    const result = await getRecommendation(validRequest);
+
+    expect(result.album).toBe('Jeopardy');
+    expect(result.releaseGroupId).toBeUndefined();
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after three picks that cannot be found', async () => {
+    mockCreate.mockResolvedValue(claudeReply('Nobody', 'Nothing'));
+    mockFindAlbum.mockResolvedValue({ status: 'not_found' });
+
+    await expect(getRecommendation(validRequest)).rejects.toBeInstanceOf(
+      UnverifiedRecommendationError,
+    );
+    expect(mockCreate).toHaveBeenCalledTimes(3);
+  });
+
+  it('asks again for a duplicate without looking it up', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('Massive Attack', 'Mezzanine'))
+      .mockResolvedValueOnce(claudeReply('Burial', 'Untrue'));
+
+    const result = await getRecommendation({
+      ...validRequest,
+      alreadySuggested: ['Massive Attack – Mezzanine'],
+    });
+
+    expect(result.album).toBe('Untrue');
+    expect(mockFindAlbum).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'duplicate', attempt: 1 }),
+      'recommendation regenerated',
+    );
+  });
+
+  it('falls back to a duplicate when no new pick can be verified', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('Massive Attack', 'Mezzanine'))
+      .mockResolvedValue(claudeReply('Nobody', 'Nothing'));
+    mockFindAlbum.mockResolvedValue({ status: 'not_found' });
+
+    const result = await getRecommendation({
+      ...validRequest,
+      alreadySuggested: ['Massive Attack – Mezzanine'],
+    });
+
+    expect(result.album).toBe('Mezzanine');
   });
 });
 

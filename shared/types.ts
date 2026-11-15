@@ -49,6 +49,8 @@ export interface RecommendationResponse {
   readonly reason: string;
   readonly genres?: readonly string[];
   readonly country?: string;
+  /** MusicBrainz release group the pick was matched to; absent if it couldn't be checked. */
+  readonly releaseGroupId?: string;
 }
 
 export interface ArtworkResponse {
