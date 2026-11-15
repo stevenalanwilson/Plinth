@@ -131,6 +131,8 @@ Then open [http://localhost:5173](http://localhost:5173).
 | `CORS_ORIGIN`         |          | `http://localhost:5173` | Allowed client origin                               |
 | `MUSICBRAINZ_CONTACT` |          | —                       | Contact sent in the MusicBrainz User-Agent          |
 | `VITE_API_URL`        |          | `''` (same origin)      | Client → server base URL (local dev without Docker) |
+| `VITE_MONZO_URL`      |          | —                       | Monzo.me payment link shown in the footer           |
+| `VITE_FEEDBACK_EMAIL` |          | —                       | Email address for the feedback link in the footer   |
 
 **Getting your Anthropic API key**
 

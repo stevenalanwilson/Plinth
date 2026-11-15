@@ -325,6 +325,57 @@ export default function App(): React.ReactElement {
           </div>
         </>
       )}
+
+      <footer className="app-footer">
+        {import.meta.env.VITE_MONZO_URL && (
+          <a
+            href={import.meta.env.VITE_MONZO_URL as string}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="footer-link"
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+            Support Plinth
+          </a>
+        )}
+        {import.meta.env.VITE_FEEDBACK_EMAIL && (
+          <button
+            type="button"
+            className="footer-link"
+            onClick={() => {
+              window.location.href = `mailto:${import.meta.env.VITE_FEEDBACK_EMAIL as string}`;
+            }}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+            </svg>
+            Get in touch
+          </button>
+        )}
+      </footer>
     </div>
   );
 }

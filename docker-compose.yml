@@ -31,6 +31,8 @@ services:
       - '5173:5173'
     environment:
       - API_PROXY_TARGET=http://server:3001
+      - VITE_MONZO_URL=${VITE_MONZO_URL}
+      - VITE_FEEDBACK_EMAIL=${VITE_FEEDBACK_EMAIL}
     volumes:
       - ./client/src:/app/src
       - ./shared:/shared
