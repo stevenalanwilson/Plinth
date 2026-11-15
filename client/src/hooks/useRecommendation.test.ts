@@ -84,12 +84,27 @@ describe('useRecommendation', () => {
     expect(result.current.artworkResponse?.artworkUrl).toBeNull();
 
     await waitFor(() =>
-      expect(mockFetchArtwork).toHaveBeenCalledWith('Massive Attack', 'Mezzanine'),
+      expect(mockFetchArtwork).toHaveBeenCalledWith('Massive Attack', 'Mezzanine', undefined),
     );
     await act(async () => resolveArtwork(artwork));
 
     expect(result.current.artworkResponse).toEqual(artwork);
     expect(result.current.history[0].artworkResponse).toEqual(artwork);
+  });
+
+  it('looks artwork up by release group when the pick was matched', async () => {
+    mockFetchRecommendation.mockResolvedValue({
+      ...recommendation,
+      releaseGroupId: 'rg-mezzanine',
+    });
+    mockFetchArtwork.mockResolvedValue(artwork);
+    const { result } = renderHook(() => useRecommendation());
+
+    await act(() => result.current.fetchRecommendation());
+
+    await waitFor(() =>
+      expect(mockFetchArtwork).toHaveBeenCalledWith('Massive Attack', 'Mezzanine', 'rg-mezzanine'),
+    );
   });
 
   it('fetches artwork for a new recommendation when history is already full', async () => {
@@ -102,6 +117,6 @@ describe('useRecommendation', () => {
 
     expect(result.current.history).toHaveLength(50);
     await waitFor(() => expect(result.current.artworkResponse).toEqual(artwork));
-    expect(mockFetchArtwork).toHaveBeenCalledWith('Massive Attack', 'Mezzanine');
+    expect(mockFetchArtwork).toHaveBeenCalledWith('Massive Attack', 'Mezzanine', undefined);
   });
 });

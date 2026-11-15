@@ -175,7 +175,11 @@ export function useRecommendation(): UseRecommendationReturn {
 
         let artwork: ArtworkResponse;
         try {
-          artwork = await fetchArtwork(entry.recommendation.artist, entry.recommendation.album);
+          artwork = await fetchArtwork(
+            entry.recommendation.artist,
+            entry.recommendation.album,
+            entry.recommendation.releaseGroupId,
+          );
         } catch {
           // Most likely rate-limited or offline; the remaining entries would fail the same way,
           // so stop and let the next backoff attempt pick them up.
