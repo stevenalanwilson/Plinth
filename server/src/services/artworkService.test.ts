@@ -1,186 +1,175 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchArtwork } from './artworkService';
 
+vi.mock('./albumMatchService', () => ({ findAlbum: vi.fn() }));
+vi.mock('../logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+import { fetchArtwork } from './artworkService';
+import { findAlbum } from './albumMatchService';
+import { logger } from '../logger';
+
+const mockFindAlbum = vi.mocked(findAlbum);
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
+const MEZZANINE_MATCH = {
+  status: 'matched',
+  match: {
+    releaseGroupId: 'abc-123',
+    artist: 'Massive Attack',
+    album: 'Mezzanine',
+    year: '1998',
+  },
+} as const;
+
+const coverArtResponse = {
+  ok: true,
+  json: async (): Promise<unknown> => ({
+    images: [
+      {
+        front: true,
+        image: 'https://coverartarchive.org/image.jpg',
+        thumbnails: { '500': 'https://coverartarchive.org/image-500.jpg' },
+      },
+    ],
+  }),
+};
+
+function itunesResponse(results: ReadonlyArray<Record<string, string>>): Record<string, unknown> {
+  return { ok: true, json: async () => ({ results }) };
+}
+
+const appleMusicLink = 'https://music.apple.com/gb/album/mezzanine/123456';
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mockFetch.mockReset();
 });
 
 describe('fetchArtwork', () => {
-  it('returns artworkUrl and year on successful lookup', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          'release-groups': [
-            {
-              id: 'abc-123',
-              title: 'Mezzanine',
-              'first-release-date': '1998-04-20',
-              'artist-credit': [{ name: 'Massive Attack' }],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          images: [
-            {
-              front: true,
-              image: 'https://coverartarchive.org/image.jpg',
-              thumbnails: { '500': 'https://coverartarchive.org/image-500.jpg' },
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({ ok: false });
+  it('uses Cover Art Archive artwork for a confident match', async () => {
+    mockFindAlbum.mockResolvedValue(MEZZANINE_MATCH);
+    mockFetch.mockResolvedValueOnce(coverArtResponse).mockResolvedValueOnce({ ok: false });
 
     const result = await fetchArtwork('Massive Attack', 'Mezzanine');
 
-    expect(result.year).toBe('1998');
-    expect(result.artworkUrl).toBe('https://coverartarchive.org/image-500.jpg');
-    expect(result.appleMusicUrl).toBeNull();
+    expect(mockFetch.mock.calls[0][0]).toBe('https://coverartarchive.org/release-group/abc-123');
+    expect(result).toEqual({
+      artworkUrl: 'https://coverartarchive.org/image-500.jpg',
+      year: '1998',
+      appleMusicUrl: null,
+    });
   });
 
-  it('returns null values when MusicBrainz returns no results', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ 'release-groups': [] }),
-    });
+  it('skips Cover Art Archive when there is no confident match', async () => {
+    mockFindAlbum.mockResolvedValue({ status: 'not_found' });
+    mockFetch.mockResolvedValueOnce(itunesResponse([]));
 
     const result = await fetchArtwork('Unknown Artist', 'Unknown Album');
 
-    expect(result.artworkUrl).toBeNull();
-    expect(result.year).toBeNull();
-    expect(result.appleMusicUrl).toBeNull();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toContain('itunes.apple.com');
+    expect(result).toEqual({ artworkUrl: null, year: null, appleMusicUrl: null });
   });
 
-  it('returns null values when MusicBrainz request fails', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
-
-    const result = await fetchArtwork('Artist', 'Album');
-
-    expect(result.artworkUrl).toBeNull();
-    expect(result.year).toBeNull();
-    expect(result.appleMusicUrl).toBeNull();
-  });
-
-  it('returns year but null artwork when Cover Art Archive has no images', async () => {
+  it('falls back to iTunes artwork when Cover Art Archive has none', async () => {
+    mockFindAlbum.mockResolvedValue(MEZZANINE_MATCH);
     mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          'release-groups': [
-            {
-              id: 'xyz-456',
-              title: 'Some Album',
-              'first-release-date': '2005-01-01',
-              'artist-credit': [{ name: 'Some Artist' }],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ images: [] }),
-      })
-      .mockResolvedValueOnce({ ok: false });
-
-    const result = await fetchArtwork('Some Artist', 'Some Album');
-
-    expect(result.year).toBe('2005');
-    expect(result.artworkUrl).toBeNull();
-  });
-
-  it('prioritises exact title match over partial match', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          'release-groups': [
-            {
-              id: 'partial-1',
-              title: 'Blue Lines Deluxe',
-              'first-release-date': '2012-01-01',
-              'artist-credit': [{ name: 'Massive Attack' }],
-            },
-            {
-              id: 'exact-2',
-              title: 'Blue Lines',
-              'first-release-date': '1991-04-08',
-              'artist-credit': [{ name: 'Massive Attack' }],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: false });
-
-    const result = await fetchArtwork('Massive Attack', 'Blue Lines');
-
-    // Should pick the exact match (id: exact-2, year 1991)
-    expect(result.year).toBe('1991');
-  });
-
-  it('returns appleMusicUrl when iTunes lookup succeeds', async () => {
-    const appleMusicLink = 'https://music.apple.com/gb/album/mezzanine/123456';
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          'release-groups': [
-            {
-              id: 'abc-123',
-              title: 'Mezzanine',
-              'first-release-date': '1998-04-20',
-              'artist-credit': [{ name: 'Massive Attack' }],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          results: [
-            {
-              collectionName: 'Mezzanine',
-              artistName: 'Massive Attack',
-              collectionViewUrl: appleMusicLink,
-            },
-          ],
-        }),
-      });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ images: [] }) })
+      .mockResolvedValueOnce(
+        itunesResponse([
+          {
+            collectionName: 'Mezzanine (Remastered)',
+            artistName: 'Massive Attack',
+            collectionViewUrl: appleMusicLink,
+            artworkUrl100: 'https://is1.mzstatic.com/image/100x100bb.jpg',
+          },
+        ]),
+      );
 
     const result = await fetchArtwork('Massive Attack', 'Mezzanine');
 
+    expect(result).toEqual({
+      artworkUrl: 'https://is1.mzstatic.com/image/500x500bb.jpg',
+      year: '1998',
+      appleMusicUrl: appleMusicLink,
+    });
+  });
+
+  it('still uses an exact iTunes match when MusicBrainz is unavailable', async () => {
+    mockFindAlbum.mockResolvedValue({ status: 'lookup_failed' });
+    mockFetch.mockResolvedValueOnce(
+      itunesResponse([
+        {
+          collectionName: 'Mezzanine',
+          artistName: 'Massive Attack',
+          collectionViewUrl: appleMusicLink,
+          artworkUrl100: 'https://is1.mzstatic.com/image/100x100bb.jpg',
+        },
+      ]),
+    );
+
+    const result = await fetchArtwork('Massive Attack', 'Mezzanine');
+
+    expect(result.artworkUrl).toBe('https://is1.mzstatic.com/image/500x500bb.jpg');
+    expect(result.year).toBeNull();
+  });
+
+  it('ignores iTunes results that are not the requested album', async () => {
+    mockFindAlbum.mockResolvedValue({ status: 'lookup_failed' });
+    mockFetch.mockResolvedValueOnce(
+      itunesResponse([
+        {
+          collectionName: 'Jeopardy! (Cover Version) - Single',
+          artistName: 'Geek Music',
+          collectionViewUrl: 'https://music.apple.com/gb/album/jeopardy/1',
+          artworkUrl100: 'https://is1.mzstatic.com/tv-theme/100x100bb.jpg',
+        },
+      ]),
+    );
+
+    const result = await fetchArtwork('The Sound', 'Jeopardy');
+
+    expect(result).toEqual({ artworkUrl: null, year: null, appleMusicUrl: null });
+  });
+
+  it('returns the Apple Music link even when Cover Art Archive has artwork', async () => {
+    mockFindAlbum.mockResolvedValue(MEZZANINE_MATCH);
+    mockFetch.mockResolvedValueOnce(coverArtResponse).mockResolvedValueOnce(
+      itunesResponse([
+        {
+          collectionName: 'Mezzanine',
+          artistName: 'Massive Attack',
+          collectionViewUrl: appleMusicLink,
+        },
+      ]),
+    );
+
+    const result = await fetchArtwork('Massive Attack', 'Mezzanine');
+
+    expect(result.artworkUrl).toBe('https://coverartarchive.org/image-500.jpg');
     expect(result.appleMusicUrl).toBe(appleMusicLink);
   });
 
-  it('returns null appleMusicUrl when iTunes lookup fails', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          'release-groups': [
-            {
-              id: 'abc-123',
-              title: 'Mezzanine',
-              'first-release-date': '1998-04-20',
-              'artist-credit': [{ name: 'Massive Attack' }],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: false, status: 503 });
+  it('survives Cover Art Archive and iTunes both failing', async () => {
+    mockFindAlbum.mockResolvedValue(MEZZANINE_MATCH);
+    mockFetch.mockRejectedValue(new Error('network down'));
 
     const result = await fetchArtwork('Massive Attack', 'Mezzanine');
 
-    expect(result.appleMusicUrl).toBeNull();
-    expect(result.year).toBe('1998');
+    expect(result).toEqual({ artworkUrl: null, year: '1998', appleMusicUrl: null });
+  });
+
+  it('logs where the artwork came from', async () => {
+    mockFindAlbum.mockResolvedValue(MEZZANINE_MATCH);
+    mockFetch.mockResolvedValueOnce(coverArtResponse).mockResolvedValueOnce({ ok: false });
+
+    await fetchArtwork('Massive Attack', 'Mezzanine');
+
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'cover-art-archive', releaseGroupId: 'abc-123' }),
+      'artwork source',
+    );
   });
 });
