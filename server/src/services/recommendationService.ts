@@ -5,6 +5,7 @@ import {
 } from '@shared/types';
 import { completeJson } from '../repositories/claudeClient';
 import { logger } from '../logger';
+import { normaliseName } from '../utils/musicNames';
 import { AlbumMatch, findAlbum } from './albumMatchService';
 
 const SYSTEM_PROMPT =
@@ -159,8 +160,10 @@ function albumKey(rec: RecommendationResponse): string {
 }
 
 function isDuplicate(rec: RecommendationResponse, alreadySuggested: readonly string[]): boolean {
-  const key = albumKey(rec).toLowerCase();
-  return alreadySuggested.some((s) => s.toLowerCase() === key);
+  // History holds MusicBrainz spellings ("Gil Scott‐Heron") while Claude writes its own
+  // ("Gil Scott-Heron"), so compare normalised names rather than raw strings.
+  const key = normaliseName(albumKey(rec));
+  return alreadySuggested.some((s) => normaliseName(s) === key);
 }
 
 function withMatch(rec: RecommendationResponse, match: AlbumMatch): RecommendationResponse {
