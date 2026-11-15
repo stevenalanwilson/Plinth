@@ -11,7 +11,12 @@ vi.mock('../logger', () => ({
 
 import { musicBrainzFetch } from '../repositories/musicBrainzClient';
 import { logger } from '../logger';
-import { findAlbum, ReleaseGroupCandidate, selectAlbumMatch } from './albumMatchService';
+import {
+  findAlbum,
+  findArtistAlbums,
+  ReleaseGroupCandidate,
+  selectAlbumMatch,
+} from './albumMatchService';
 
 const mockMusicBrainzFetch = vi.mocked(musicBrainzFetch);
 
@@ -177,5 +182,55 @@ describe('findAlbum', () => {
     mockMusicBrainzFetch.mockRejectedValue(new Error('timed out'));
 
     await expect(findAlbum(query)).resolves.toEqual({ status: 'lookup_failed' });
+  });
+});
+
+describe('findArtistAlbums', () => {
+  function jsonResponse(body: unknown): Response {
+    return { ok: true, json: async (): Promise<unknown> => body } as Response;
+  }
+
+  it('finds the artist and fetches their albums', async () => {
+    mockMusicBrainzFetch
+      .mockResolvedValueOnce(jsonResponse({ artists: [{ id: 'artist-1', name: 'The Sound' }] }))
+      .mockResolvedValueOnce(
+        jsonResponse({ 'release-group-count': 1, 'release-groups': [jeopardy] }),
+      );
+
+    const lookup = await findArtistAlbums('the sound');
+
+    expect(lookup).toEqual({ status: 'found', artist: 'The Sound', albums: [jeopardy] });
+    expect(mockMusicBrainzFetch.mock.calls[1][0]).toContain(
+      'release-group?artist=artist-1&type=album',
+    );
+  });
+
+  it('pages through a large catalogue', async () => {
+    const page = Array.from({ length: 100 }, (_, index) => ({ ...jeopardy, id: `rg-${index}` }));
+    mockMusicBrainzFetch
+      .mockResolvedValueOnce(jsonResponse({ artists: [{ id: 'artist-1', name: 'The Sound' }] }))
+      .mockResolvedValueOnce(jsonResponse({ 'release-group-count': 150, 'release-groups': page }))
+      .mockResolvedValueOnce(
+        jsonResponse({ 'release-group-count': 150, 'release-groups': page.slice(0, 50) }),
+      );
+
+    const lookup = await findArtistAlbums('The Sound');
+
+    expect(lookup.status === 'found' && lookup.albums).toHaveLength(150);
+    expect(mockMusicBrainzFetch.mock.calls[2][0]).toContain('offset=100');
+  });
+
+  it('reports not_found when no artist has a matching name', async () => {
+    mockMusicBrainzFetch.mockResolvedValueOnce(
+      jsonResponse({ artists: [{ id: 'artist-2', name: 'Soundgarden' }] }),
+    );
+
+    await expect(findArtistAlbums('The Sound')).resolves.toEqual({ status: 'not_found' });
+  });
+
+  it('reports lookup_failed when MusicBrainz errors', async () => {
+    mockMusicBrainzFetch.mockResolvedValueOnce({ ok: false, status: 503 } as Response);
+
+    await expect(findArtistAlbums('The Sound')).resolves.toEqual({ status: 'lookup_failed' });
   });
 });

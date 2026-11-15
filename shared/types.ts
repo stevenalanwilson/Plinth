@@ -63,6 +63,8 @@ export interface EssentialAlbum {
   readonly album: string;
   readonly year: string;
   readonly reason: string;
+  /** MusicBrainz release group the album was matched to; absent if it couldn't be checked. */
+  readonly releaseGroupId?: string;
 }
 
 export interface ArtistEssentialsRequest {
