@@ -68,10 +68,36 @@ export function toArtistEssentials(parsed: unknown): ArtistEssentialsResponse {
   return { artist: data.artist, albums };
 }
 
+// Structured outputs support only a subset of JSON Schema, so the 5-8 album bound stays
+// out of the schema: the prompt asks for it and toArtistEssentials enforces it.
+const ESSENTIALS_SCHEMA = {
+  type: 'object',
+  properties: {
+    artist: { type: 'string' },
+    albums: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          album: { type: 'string' },
+          year: { type: 'string' },
+          reason: { type: 'string' },
+        },
+        required: ['album', 'year', 'reason'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['artist', 'albums'],
+  additionalProperties: false,
+} as const;
+
 export async function getArtistEssentials(
   request: ArtistEssentialsRequest,
 ): Promise<ArtistEssentialsResponse> {
   const parsed = await completeJson({
+    label: 'artist-essentials',
+    schema: ESSENTIALS_SCHEMA,
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(request.artist),
     maxTokens: 2000,

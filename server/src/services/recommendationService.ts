@@ -145,8 +145,24 @@ function isDuplicate(rec: RecommendationResponse, alreadySuggested: readonly str
   return alreadySuggested.some((s) => s.toLowerCase() === key);
 }
 
+const RECOMMENDATION_SCHEMA = {
+  type: 'object',
+  properties: {
+    artist: { type: 'string' },
+    album: { type: 'string' },
+    year: { type: 'string' },
+    reason: { type: 'string' },
+    genres: { type: 'array', items: { type: 'string' } },
+    country: { type: 'string' },
+  },
+  required: ['artist', 'album', 'year', 'reason', 'genres', 'country'],
+  additionalProperties: false,
+} as const;
+
 async function requestRecommendation(prompt: string): Promise<RecommendationResponse> {
   const parsed = await completeJson({
+    label: 'recommendation',
+    schema: RECOMMENDATION_SCHEMA,
     system: SYSTEM_PROMPT,
     prompt,
     maxTokens: 800,

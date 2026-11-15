@@ -70,13 +70,20 @@ describe('getRecommendation', () => {
     });
   });
 
-  it('strips markdown code fences from response', async () => {
+  it('asks for structured output matching the recommendation fields', async () => {
     mockCreate.mockResolvedValue({
-      content: [{ type: 'text', text: '```json\n' + validJsonResponse + '\n```' }],
+      content: [{ type: 'text', text: validJsonResponse }],
     });
 
-    const result = await getRecommendation(validRequest);
-    expect(result.album).toBe('Mezzanine');
+    await getRecommendation(validRequest);
+
+    const params = mockCreate.mock.calls[0][0] as {
+      output_config: { format: { type: string; schema: { required: string[] } } };
+    };
+    expect(params.output_config.format.type).toBe('json_schema');
+    expect(params.output_config.format.schema.required).toEqual(
+      expect.arrayContaining(['artist', 'album', 'year', 'reason']),
+    );
   });
 
   it('throws when ANTHROPIC_API_KEY is not set', async () => {
@@ -99,7 +106,7 @@ describe('getRecommendation', () => {
     });
 
     await expect(getRecommendation(validRequest)).rejects.toThrow(
-      'Could not parse JSON from Claude response',
+      'Claude response was not valid JSON',
     );
   });
 
