@@ -1,21 +1,12 @@
 import { ArtworkResponse } from '@shared/types';
-import { escapeLucene, musicBrainzFetch } from '../repositories/musicBrainzClient';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+import { artistsMatch, titlesMatch } from '../utils/musicNames';
+import { logger } from '../logger';
+import { findAlbum } from './albumMatchService';
 
 // Total time budget for the full artwork lookup (MusicBrainz + CAA + iTunes).
 // Ensures the request never hangs indefinitely even if individual timeouts are each hit.
 const REQUEST_BUDGET_MS = 30_000;
-
-interface MusicBrainzReleaseGroup {
-  id: string;
-  title: string;
-  'first-release-date'?: string;
-  'artist-credit'?: Array<{ name: string }>;
-}
-
-interface MusicBrainzSearchResult {
-  'release-groups': MusicBrainzReleaseGroup[];
-}
 
 interface CoverArtImage {
   front?: boolean;
@@ -47,19 +38,24 @@ interface ItunesData {
   artworkUrl: string | null;
 }
 
-function scoreMatch(group: MusicBrainzReleaseGroup, album: string, artist: string): number {
-  let score = 0;
-  const albumLower = album.toLowerCase();
-  const artistLower = artist.toLowerCase();
+const NO_ITUNES_DATA: ItunesData = { appleMusicUrl: null, artworkUrl: null };
 
-  if (group.title?.toLowerCase() === albumLower) score += 3;
-  else if (group.title?.toLowerCase().includes(albumLower)) score += 1;
+async function fetchCoverArt(
+  releaseGroupId: string,
+  budgetSignal: AbortSignal,
+): Promise<string | null> {
+  const res = await fetchWithTimeout(
+    `https://coverartarchive.org/release-group/${releaseGroupId}`,
+    budgetSignal,
+  );
+  if (!res.ok) return null;
 
-  const credit = group['artist-credit']?.[0]?.name?.toLowerCase() ?? '';
-  if (credit === artistLower) score += 2;
-  else if (credit.includes(artistLower) || artistLower.includes(credit)) score += 1;
-
-  return score;
+  const data = (await res.json()) as CoverArtResult;
+  const front = data.images?.find((image) => image.front) ?? data.images?.[0];
+  if (!front) return null;
+  return (
+    front.thumbnails?.['500'] ?? front.thumbnails?.['250'] ?? front.thumbnails?.small ?? front.image
+  );
 }
 
 async function fetchItunesDataOnce(
@@ -72,36 +68,20 @@ async function fetchItunesDataOnce(
     `https://itunes.apple.com/search?term=${term}&media=music&entity=album&limit=5`,
     budgetSignal,
   );
-  if (!res.ok) return { appleMusicUrl: null, artworkUrl: null };
+  if (!res.ok) return NO_ITUNES_DATA;
 
   const data = (await res.json()) as ItunesSearchResult;
-  if (!data.results || data.results.length === 0) return { appleMusicUrl: null, artworkUrl: null };
-
-  const albumLower = album.toLowerCase();
-  const artistLower = artist.toLowerCase();
-
-  const scored = data.results.map((result) => {
-    let score = 0;
-    if (result.collectionName.toLowerCase() === albumLower) score += 3;
-    else if (result.collectionName.toLowerCase().includes(albumLower)) score += 1;
-    if (result.artistName.toLowerCase() === artistLower) score += 2;
-    else if (
-      result.artistName.toLowerCase().includes(artistLower) ||
-      artistLower.includes(result.artistName.toLowerCase())
-    )
-      score += 1;
-    return { result, score };
-  });
-
-  scored.sort((a, b) => b.score - a.score);
-  const best = scored[0].result;
+  // Only an exact match will do: the closest result for an album iTunes doesn't carry can be
+  // anything, e.g. Jeopardy! TV theme singles for The Sound's "Jeopardy".
+  const match = data.results?.find(
+    (result) =>
+      titlesMatch(album, result.collectionName) && artistsMatch(artist, result.artistName),
+  );
+  if (!match) return NO_ITUNES_DATA;
 
   // artworkUrl100 is 100×100; replace to get 500×500
-  const artworkUrl = best.artworkUrl100
-    ? best.artworkUrl100.replace('100x100bb', '500x500bb')
-    : null;
-
-  return { appleMusicUrl: best.collectionViewUrl ?? null, artworkUrl };
+  const artworkUrl = match.artworkUrl100?.replace('100x100bb', '500x500bb') ?? null;
+  return { appleMusicUrl: match.collectionViewUrl ?? null, artworkUrl };
 }
 
 async function fetchItunesData(
@@ -110,81 +90,51 @@ async function fetchItunesData(
   budgetSignal: AbortSignal,
 ): Promise<ItunesData> {
   // Retry once on transient failure before giving up.
-  // AbortErrors are rethrown immediately — retrying a cancelled request is pointless.
+  // AbortErrors end the lookup immediately — retrying a cancelled request is pointless.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       return await fetchItunesDataOnce(artist, album, budgetSignal);
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') throw err;
-      // fall through to retry
+      if (err instanceof Error && err.name === 'AbortError') return NO_ITUNES_DATA;
     }
   }
-  return { appleMusicUrl: null, artworkUrl: null };
+  return NO_ITUNES_DATA;
 }
 
+function artworkSource(coverArtUrl: string | null, itunesArtworkUrl: string | null): string {
+  if (coverArtUrl) return 'cover-art-archive';
+  if (itunesArtworkUrl) return 'itunes';
+  return 'none';
+}
+
+/**
+ * Finds artwork only for a confident match. No artwork is better than the wrong artwork:
+ * the client shows a placeholder sleeve instead.
+ */
 export async function fetchArtwork(artist: string, album: string): Promise<ArtworkResponse> {
   const budgetSignal = AbortSignal.timeout(REQUEST_BUDGET_MS);
 
-  try {
-    const query = encodeURIComponent(
-      `release:${escapeLucene(album)} AND artist:${escapeLucene(artist)}`,
-    );
-    const mbRes = await musicBrainzFetch(
-      `release-group?query=${query}&limit=5&fmt=json`,
-      budgetSignal,
-    );
+  const lookup = await findAlbum({ artist, album }, budgetSignal);
+  const match = lookup.status === 'matched' ? lookup.match : null;
 
-    if (!mbRes.ok) throw new Error(`MusicBrainz returned ${mbRes.status}`);
+  const coverArtUrl = match
+    ? await fetchCoverArt(match.releaseGroupId, budgetSignal).catch(() => null)
+    : null;
+  const itunesData = await fetchItunesData(artist, album, budgetSignal);
 
-    const mbData = (await mbRes.json()) as MusicBrainzSearchResult;
-    const groups = mbData['release-groups'];
+  logger.info(
+    {
+      artist,
+      album,
+      releaseGroupId: match?.releaseGroupId ?? null,
+      source: artworkSource(coverArtUrl, itunesData.artworkUrl),
+    },
+    'artwork source',
+  );
 
-    if (!groups || groups.length === 0) throw new Error('No MusicBrainz results');
-
-    const sorted = [...groups].sort(
-      (a, b) => scoreMatch(b, album, artist) - scoreMatch(a, album, artist),
-    );
-    const best = sorted[0];
-
-    const year = best['first-release-date']?.substring(0, 4) ?? null;
-    const mbid = best.id;
-
-    let artworkUrl: string | null = null;
-    const caRes = await fetchWithTimeout(
-      `https://coverartarchive.org/release-group/${mbid}`,
-      budgetSignal,
-    );
-
-    if (caRes.ok) {
-      const caData = (await caRes.json()) as CoverArtResult;
-      const front = caData.images?.find((i) => i.front) ?? caData.images?.[0];
-      if (front) {
-        artworkUrl =
-          front.thumbnails?.['500'] ??
-          front.thumbnails?.['250'] ??
-          front.thumbnails?.small ??
-          front.image ??
-          null;
-      }
-    }
-
-    const itunesData = await fetchItunesData(artist, album, budgetSignal);
-
-    return {
-      artworkUrl: artworkUrl ?? itunesData.artworkUrl,
-      year,
-      appleMusicUrl: itunesData.appleMusicUrl,
-    };
-  } catch {
-    // MusicBrainz/CAA failed — still try iTunes for artwork and Apple Music URL
-    const itunesData = await fetchItunesData(artist, album, budgetSignal).catch(() => ({
-      appleMusicUrl: null,
-      artworkUrl: null,
-    }));
-    return {
-      artworkUrl: itunesData.artworkUrl,
-      year: null,
-      appleMusicUrl: itunesData.appleMusicUrl,
-    };
-  }
+  return {
+    artworkUrl: coverArtUrl ?? itunesData.artworkUrl,
+    year: match?.year ?? null,
+    appleMusicUrl: itunesData.appleMusicUrl,
+  };
 }
