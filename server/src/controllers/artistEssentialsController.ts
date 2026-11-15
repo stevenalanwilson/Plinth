@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
-import { getArtistEssentials } from '../services/artistEssentialsService';
+import {
+  getArtistEssentials,
+  UnverifiedEssentialsError,
+} from '../services/artistEssentialsService';
 import { logger } from '../logger';
 
 export async function handleArtistEssentials(req: Request, res: Response): Promise<void> {
@@ -21,6 +24,11 @@ export async function handleArtistEssentials(req: Request, res: Response): Promi
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     logger.error({ error: message }, 'artist essentials request failed');
-    res.status(502).json({ error: 'Failed to get artist essentials. Please try again.' });
+    res.status(502).json({
+      error:
+        error instanceof UnverifiedEssentialsError
+          ? "Couldn't find albums we could verify for that artist. Check the name and try again."
+          : 'Failed to get artist essentials. Please try again.',
+    });
   }
 }

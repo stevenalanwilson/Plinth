@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Request, Response } from 'express';
 
-vi.mock('../services/artistEssentialsService', () => ({
+vi.mock('../services/artistEssentialsService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/artistEssentialsService')>()),
   getArtistEssentials: vi.fn(),
 }));
 
 import { handleArtistEssentials } from './artistEssentialsController';
-import { getArtistEssentials } from '../services/artistEssentialsService';
+import {
+  getArtistEssentials,
+  UnverifiedEssentialsError,
+} from '../services/artistEssentialsService';
 
 const mockGetArtistEssentials = vi.mocked(getArtistEssentials);
 
@@ -109,6 +113,19 @@ describe('handleArtistEssentials', () => {
       expect(status).toHaveBeenCalledWith(502);
       expect(json).toHaveBeenCalledWith({
         error: 'Failed to get artist essentials. Please try again.',
+      });
+    });
+
+    it('says so when no albums could be verified', async () => {
+      mockGetArtistEssentials.mockRejectedValue(new UnverifiedEssentialsError());
+      const { res, status, json } = makeRes();
+
+      await handleArtistEssentials(makeReq({ artist: 'Talk Talk' }), res);
+
+      expect(status).toHaveBeenCalledWith(502);
+      expect(json).toHaveBeenCalledWith({
+        error:
+          "Couldn't find albums we could verify for that artist. Check the name and try again.",
       });
     });
 
