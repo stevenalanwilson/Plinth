@@ -1,9 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
 import {
   RecommendationRequest,
   RecommendationResponse,
   RecommendationPreferences,
 } from '@shared/types';
+import { completeJson } from '../repositories/claudeClient';
 
 const SYSTEM_PROMPT =
   'You are a music expert with encyclopaedic knowledge of albums across all genres. ' +
@@ -11,19 +11,6 @@ const SYSTEM_PROMPT =
   'Only recommend albums you have complete certainty exist as real, released recordings. ' +
   'Never invent or fabricate an artist or album title — if you are not certain an album exists, choose a different one you are sure about. ' +
   'Respond only with valid JSON — no markdown, no prose, nothing else.';
-
-// Lazily initialised so the key is read at request time, not import time,
-// which means a missing key throws a clear error rather than crashing on startup.
-let anthropicClient: Anthropic | null = null;
-
-function getAnthropicClient(): Anthropic {
-  if (!anthropicClient) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured');
-    anthropicClient = new Anthropic({ apiKey });
-  }
-  return anthropicClient;
-}
 
 function thresholdLabel(value: number, low: string, mid: string, high: string): string {
   if (value <= 3) return low;
@@ -110,22 +97,7 @@ Respond with ONLY this JSON:
 }`;
 }
 
-function parseRecommendationJson(raw: string): RecommendationResponse {
-  const cleaned = raw
-    .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```\s*$/, '')
-    .trim();
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('Could not parse recommendation JSON');
-    parsed = JSON.parse(match[0]);
-  }
-
+function toRecommendation(parsed: unknown): RecommendationResponse {
   if (
     typeof parsed !== 'object' ||
     parsed === null ||
@@ -173,23 +145,14 @@ function isDuplicate(rec: RecommendationResponse, alreadySuggested: readonly str
   return alreadySuggested.some((s) => s.toLowerCase() === key);
 }
 
-async function callClaude(client: Anthropic, prompt: string): Promise<RecommendationResponse> {
-  const message = await client.messages.create(
-    {
-      model: 'claude-sonnet-4-6',
-      max_tokens: 800,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: prompt }],
-    },
-    { signal: AbortSignal.timeout(15_000) },
-  );
-
-  const textBlock = message.content.find((block) => block.type === 'text');
-  if (!textBlock || textBlock.type !== 'text') {
-    throw new Error('No text content in API response');
-  }
-
-  return parseRecommendationJson(textBlock.text);
+async function requestRecommendation(prompt: string): Promise<RecommendationResponse> {
+  const parsed = await completeJson({
+    system: SYSTEM_PROMPT,
+    prompt,
+    maxTokens: 800,
+    timeoutMs: 15_000,
+  });
+  return toRecommendation(parsed);
 }
 
 const MAX_ATTEMPTS = 3;
@@ -197,15 +160,13 @@ const MAX_ATTEMPTS = 3;
 export async function getRecommendation(
   request: RecommendationRequest,
 ): Promise<RecommendationResponse> {
-  const client = getAnthropicClient();
-
   // Accumulate duplicates returned across attempts so each retry prompt is stricter.
   const seen = [...request.alreadySuggested];
   let lastRec: RecommendationResponse | null = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const prompt = buildPrompt({ ...request, alreadySuggested: seen });
-    lastRec = await callClaude(client, prompt);
+    lastRec = await requestRecommendation(prompt);
 
     if (!isDuplicate(lastRec, request.alreadySuggested)) {
       return lastRec;
