@@ -4,6 +4,8 @@ import {
   RecommendationPreferences,
 } from '@shared/types';
 import { completeJson } from '../repositories/claudeClient';
+import { logger } from '../logger';
+import { AlbumMatch, findAlbum } from './albumMatchService';
 
 const SYSTEM_PROMPT =
   'You are a music expert with encyclopaedic knowledge of albums across all genres. ' +
@@ -51,15 +53,27 @@ function buildPreferencesSummary(preferences: RecommendationPreferences): string
   return parts.join('; ');
 }
 
-export function buildPrompt(request: RecommendationRequest): string {
+function formatAlbumList(albums: readonly string[]): string {
+  return albums
+    .map((s) => s.replace(/[\r\n]/g, ' '))
+    .slice(0, 120)
+    .join(', ');
+}
+
+export function buildPrompt(
+  request: RecommendationRequest,
+  notFound: readonly string[] = [],
+): string {
   const summary = buildPreferencesSummary(request.preferences);
 
   const avoidStr =
     request.alreadySuggested.length > 0
-      ? `\n\nIMPORTANT — do NOT recommend any of these previously suggested albums (format is "Artist – Album"): ${request.alreadySuggested
-          .map((s) => s.replace(/[\r\n]/g, ' '))
-          .slice(0, 120)
-          .join(', ')}`
+      ? `\n\nIMPORTANT — do NOT recommend any of these previously suggested albums (format is "Artist – Album"): ${formatAlbumList(request.alreadySuggested)}`
+      : '';
+
+  const notFoundStr =
+    notFound.length > 0
+      ? `\n\nThese albums could not be found in MusicBrainz, so they may not exist — do NOT recommend them: ${formatAlbumList(notFound)}`
       : '';
 
   let pivotStr = '';
@@ -84,7 +98,7 @@ export function buildPrompt(request: RecommendationRequest): string {
 
   return `Recommend ONE album for someone with the following preferences: ${summary}.${vibeStr}
 
-Pick something genuinely interesting — a deep cut or overlooked gem rather than an obvious classic. It must be a real, released album.${avoidStr}${pivotStr}${seedStr}
+Pick something genuinely interesting — a deep cut or overlooked gem rather than an obvious classic. It must be a real, released album.${avoidStr}${notFoundStr}${pivotStr}${seedStr}
 
 Respond with ONLY this JSON:
 {
@@ -140,9 +154,31 @@ function toRecommendation(parsed: unknown): RecommendationResponse {
   };
 }
 
+function albumKey(rec: RecommendationResponse): string {
+  return `${rec.artist} – ${rec.album}`;
+}
+
 function isDuplicate(rec: RecommendationResponse, alreadySuggested: readonly string[]): boolean {
-  const key = `${rec.artist} – ${rec.album}`.toLowerCase();
+  const key = albumKey(rec).toLowerCase();
   return alreadySuggested.some((s) => s.toLowerCase() === key);
+}
+
+function withMatch(rec: RecommendationResponse, match: AlbumMatch): RecommendationResponse {
+  // MusicBrainz spellings are canonical, and its first-release year beats Claude's guess.
+  return {
+    ...rec,
+    artist: match.artist,
+    album: match.album,
+    year: match.year ?? rec.year,
+    releaseGroupId: match.releaseGroupId,
+  };
+}
+
+export class UnverifiedRecommendationError extends Error {
+  constructor() {
+    super('No recommendation could be verified in MusicBrainz');
+    this.name = 'UnverifiedRecommendationError';
+  }
 }
 
 const RECOMMENDATION_SCHEMA = {
@@ -173,25 +209,47 @@ async function requestRecommendation(prompt: string): Promise<RecommendationResp
 
 const MAX_ATTEMPTS = 3;
 
+/**
+ * Asks Claude for a pick and checks it exists in MusicBrainz, asking again (up to
+ * MAX_ATTEMPTS calls) when the pick is a duplicate or can't be found.
+ */
 export async function getRecommendation(
   request: RecommendationRequest,
 ): Promise<RecommendationResponse> {
-  // Accumulate duplicates returned across attempts so each retry prompt is stricter.
+  // Accumulate rejected picks across attempts so each retry prompt is stricter.
   const seen = [...request.alreadySuggested];
-  let lastRec: RecommendationResponse | null = null;
+  const notFound: string[] = [];
+  let lastDuplicate: RecommendationResponse | null = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const prompt = buildPrompt({ ...request, alreadySuggested: seen });
-    lastRec = await requestRecommendation(prompt);
+    const rec = await requestRecommendation(
+      buildPrompt({ ...request, alreadySuggested: seen }, notFound),
+    );
 
-    if (!isDuplicate(lastRec, request.alreadySuggested)) {
-      return lastRec;
+    if (isDuplicate(rec, request.alreadySuggested)) {
+      logger.info(
+        { reason: 'duplicate', attempt, artist: rec.artist, album: rec.album },
+        'recommendation regenerated',
+      );
+      lastDuplicate = rec;
+      seen.push(albumKey(rec));
+      continue;
     }
 
-    // Add the duplicate to seen so the next attempt explicitly avoids it too.
-    seen.push(`${lastRec.artist} – ${lastRec.album}`);
+    const lookup = await findAlbum({ artist: rec.artist, album: rec.album, year: rec.year });
+    if (lookup.status === 'matched') return withMatch(rec, lookup.match);
+    // Better an unchecked pick than no pick at all while MusicBrainz is down.
+    if (lookup.status === 'lookup_failed') return rec;
+
+    logger.info(
+      { reason: 'not_found', attempt, artist: rec.artist, album: rec.album },
+      'recommendation regenerated',
+    );
+    notFound.push(albumKey(rec));
   }
 
-  // All attempts returned duplicates — return the last result rather than making another call.
-  return lastRec!;
+  // A duplicate passed this check when it was first suggested, so it is still worth showing.
+  if (lastDuplicate) return lastDuplicate;
+  logger.warn({ notFound }, 'no verified recommendation');
+  throw new UnverifiedRecommendationError();
 }
