@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { RecommendationCard } from './RecommendationCard';
 
+// Placeholder sleeves repeat the album and artist, so text queries skip them.
+const NOT_IN_SLEEVE = { ignore: '[role="img"] *, script, style' };
+
 const mockRec = {
   artist: 'Massive Attack',
   album: 'Mezzanine',
@@ -74,10 +77,27 @@ describe('RecommendationCard', () => {
         onSeedArtist={vi.fn()}
       />,
     );
-    expect(screen.getByText('Mezzanine')).toBeInTheDocument();
-    expect(screen.getByText('Massive Attack')).toBeInTheDocument();
+    expect(screen.getByText('Mezzanine', NOT_IN_SLEEVE)).toBeInTheDocument();
+    expect(screen.getByText('Massive Attack', NOT_IN_SLEEVE)).toBeInTheDocument();
     expect(screen.getByText('1998')).toBeInTheDocument();
     expect(screen.getByText('A perfect album for your taste.')).toBeInTheDocument();
+  });
+
+  it('shows a placeholder sleeve instead of artwork when there is none', () => {
+    render(
+      <RecommendationCard
+        recommendation={mockRec}
+        artworkResponse={mockArtwork}
+        artistRelations={[]}
+        isLoadingRelations={false}
+        isLoading={false}
+        error={null}
+        onSeedArtist={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole('img', { name: 'Mezzanine by Massive Attack, no artwork available' }),
+    ).toBeInTheDocument();
   });
 
   it('renders the Apple Music search link when no direct URL is available', () => {

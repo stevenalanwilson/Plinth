@@ -7,6 +7,7 @@ import {
   buildDiscogsSearchUrl,
 } from '../../services/apiClient';
 import { ServiceLinks } from '../../components/ServiceLinks';
+import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
 
 const VISIBLE_COUNT = 9;
 
@@ -69,20 +70,11 @@ function HistoryItem({ entry, onRemove, onSelect }: HistoryItemProps): React.Rea
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         ) : (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontFamily: 'var(--serif)',
-              fontSize: 28,
-              color: 'var(--muted)',
-            }}
-          >
-            ♪
-          </div>
+          <PlaceholderSleeve
+            artist={entry.recommendation.artist}
+            album={entry.recommendation.album}
+            compact
+          />
         )}
 
         <div

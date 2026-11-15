@@ -66,8 +66,16 @@ export function fetchRecommendation(
   return post<RecommendationResponse>('/api/recommend', request, signal);
 }
 
-export function fetchArtwork(artist: string, album: string): Promise<ArtworkResponse> {
-  return get<ArtworkResponse>('/api/artwork', { artist, album });
+export function fetchArtwork(
+  artist: string,
+  album: string,
+  releaseGroupId?: string,
+): Promise<ArtworkResponse> {
+  return get<ArtworkResponse>('/api/artwork', {
+    artist,
+    album,
+    ...(releaseGroupId ? { releaseGroupId } : {}),
+  });
 }
 
 export function fetchArtistRelations(artist: string): Promise<ArtistRelationsResponse> {
