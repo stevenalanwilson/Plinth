@@ -52,12 +52,31 @@ export function escapeLucene(value: string): string {
   return value.replace(/[+\-&|!(){}[\]^"~*?:\\/]/g, '\\$&');
 }
 
+// MusicBrainz answers 503 when it is throttling us or simply busy, even at a polite rate,
+// so a 503 is worth a couple of retries before callers treat it as "no results".
+const MAX_ATTEMPTS = 3;
+const MAX_RETRY_AFTER_MS = 5000;
+
+function retryDelayMs(res: Response, attempt: number): number {
+  const retryAfterSeconds = Number(res.headers.get('retry-after'));
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return Math.min(retryAfterSeconds * 1000, MAX_RETRY_AFTER_MS);
+  }
+  return attempt * MIN_REQUEST_INTERVAL_MS;
+}
+
 /** GET a MusicBrainz web-service path (e.g. `artist?query=...`), respecting the rate limit. */
 export async function musicBrainzFetch(path: string, budgetSignal: AbortSignal): Promise<Response> {
-  const delayMs = reserveSlot();
-  if (delayMs > 0) await sleep(delayMs, budgetSignal);
+  for (let attempt = 1; ; attempt++) {
+    const delayMs = reserveSlot();
+    if (delayMs > 0) await sleep(delayMs, budgetSignal);
 
-  return fetchWithTimeout(`${MUSICBRAINZ_BASE_URL}/${path}`, budgetSignal, {
-    headers: { 'User-Agent': userAgent() },
-  });
+    const res = await fetchWithTimeout(`${MUSICBRAINZ_BASE_URL}/${path}`, budgetSignal, {
+      headers: { 'User-Agent': userAgent() },
+    });
+    if (res.status !== 503 || attempt === MAX_ATTEMPTS) return res;
+
+    await res.body?.cancel();
+    await sleep(retryDelayMs(res, attempt), budgetSignal);
+  }
 }
