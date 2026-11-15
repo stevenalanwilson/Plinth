@@ -1,49 +1,49 @@
 # Plinth
 
-_Music to work to._
+_Whole records, picked for you._
 
-Plinth is a fullstack web app that recommends albums based on your taste preferences. Describe what you want to hear — by genre, mood, tempo, era, or energy — and Claude finds something worth listening to. Each recommendation comes with album artwork, streaming links, and a network of connected artists to explore further.
+Plinth recommends albums for people who still listen to whole records. Tell it what you're in the mood for — a genre, a feeling, a tempo, an era — and it picks one album worth your evening, with the cover, a short reason it fits, and links to listen or find a copy.
 
-Powered by Claude AI, MusicBrainz, and the iTunes Search API.
+Powered by Claude, MusicBrainz and the iTunes Search API.
+
+> **Where it's going:** shareable album pages, a crate that learns your taste, a vinyl layer for collectors, and apps for the phone. See the [roadmap](docs/ROADMAP.md).
 
 ---
 
-## Features
+## What it does
 
 ### Recommendations
 
-- **Preference-driven suggestions** — Set genres, moods, tempo, energy, density, and era. Claude uses these signals to recommend albums that fit.
-- **Pivot controls** — After each recommendation, choose _More like this_ or _Something different_ to steer the next suggestion without adjusting preferences manually.
-- **Seed by artist** — Click any connected artist chip to ask Claude to recommend from that artist's catalogue specifically.
+- **One album at a time** — Set genres, moods, tempo, energy, density and era, or just describe a vibe in your own words. Claude picks a full album that fits and says why.
+- **Steer the next pick** — After each recommendation, choose _More like this_ or _Something different_ without touching the controls.
+- **Follow the connections** — Each pick shows related artists (collaborators, side projects, former members, recording co-credits) from MusicBrainz. Click one to get a pick from that artist's catalogue.
 
-### Connected Artists
+### Picks you can trust
 
-Each recommendation surfaces a network of related artists via MusicBrainz — collaborators, side projects, former members, and recording co-credits. Clicking a chip seeds the next recommendation.
+Language models sometimes invent albums and mix up covers, so every pick is checked before you see it:
 
-### History
+- **It has to exist.** Each recommendation is matched to a real album on MusicBrainz. If it isn't found, Plinth asks Claude for another.
+- **The cover has to be right.** Artwork comes only from a confident match, and Plinth shows a styled placeholder sleeve instead of a wrong image.
+- **No repeats.** Albums you've already been shown aren't suggested again.
 
-- Recommendations are saved in `localStorage` and survive page reloads.
-- Click any previously suggested album in the history grid to restore it as the current recommendation.
-- History is capped at 50 entries and entries older than 90 days are pruned automatically.
+### Artist Essentials
 
-### Library Export & Import
+Name an artist and get the albums to start with, each with a reason. Every album is checked against that artist's real catalogue.
 
-- **Export** — Download your recommendation history as a versioned JSON file (`plinth-library-YYYY-MM-DD.json`).
-- **Import** — Load a library file from another session or a friend. Duplicate albums are deduplicated automatically; existing entries take precedence.
+### Your history
+
+- Recommendations are saved in your browser and survive page reloads.
+- Click any earlier pick to bring it back, along with its connected artists.
+- History keeps the latest 50 entries, and entries older than 90 days are removed.
+- **Export** your history as a JSON file and **import** it on another browser or from a friend. Duplicates are skipped and existing entries win.
 
 ### Insights
 
-A dedicated page breaking down your recommendation history:
+A page that breaks down what you've been recommended: total albums, unique artists, decades spanned, countries explored, a monthly activity chart, decade, genre and country breakdowns, top artists, and gaps (genres or decades you haven't explored).
 
-- Summary stats — total albums, unique artists, decades spanned, countries explored
-- Monthly activity chart
-- Decade, genre, and country breakdowns
-- Top artists by recommendation count
-- Gap observations (e.g. genres or decades underrepresented in your history)
+### Preferences
 
----
-
-## Preferences
+All of these are optional, and any combination works.
 
 | Preference                   | What it does                                                                                                                              |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -57,22 +57,33 @@ A dedicated page breaking down your recommendation history:
 | **Prioritise obscure picks** | Favour underground and lesser-known releases                                                                                              |
 | **Stay focused**             | Keep recommendations close to your stated preferences                                                                                     |
 
-All preferences are optional — the app works with any combination.
-
 ---
+
+# For developers
 
 ## Stack
 
-| Layer             | Tech                                              |
-| ----------------- | ------------------------------------------------- |
-| Frontend          | React 18, TypeScript, Vite                        |
-| Backend           | Node.js, TypeScript, Express                      |
-| AI                | Anthropic Claude (Sonnet 4.6)                     |
-| Artwork           | MusicBrainz + Cover Art Archive (iTunes fallback) |
-| Music links       | iTunes Search API (Apple Music), Spotify, Discogs |
-| Connected artists | MusicBrainz relationships + recording co-credits  |
+| Layer             | Tech                                                                       |
+| ----------------- | -------------------------------------------------------------------------- |
+| Frontend          | React 18, TypeScript, Vite                                                 |
+| Backend           | Node.js, TypeScript, Express                                               |
+| AI                | Anthropic Claude (Sonnet 4.6) — see [the model decision](docs/adr)         |
+| Album matching    | MusicBrainz release-group search, restricted to primary type "Album"       |
+| Artwork           | Cover Art Archive by release group; iTunes only for an exact match         |
+| Music links       | iTunes Search API (Apple Music), Spotify, Discogs                          |
+| Connected artists | MusicBrainz relationships + recording co-credits                           |
+| Tests             | Vitest, React Testing Library                                              |
+| Tooling           | ESLint, Prettier, Husky + lint-staged, Conventional Commits                |
+| Hosting           | Docker; the production image serves the API and the built client (Railway) |
 
----
+## How a recommendation is made
+
+1. The client sends your preferences and the albums already suggested to `POST /api/recommend`.
+2. The server asks Claude for a pick, then looks it up on MusicBrainz (one request per second, shared across all callers, with retries when MusicBrainz is busy).
+3. A pick that isn't found, or is a duplicate, is regenerated, up to three attempts. If MusicBrainz is down, the pick is returned unchecked rather than failing.
+4. The client then fetches the cover (`GET /api/artwork`, using the matched release group) and connected artists (`GET /api/artist-rels`). Covers are served through `/api/image`, which only fetches from trusted hosts.
+
+Structured logs (pino) record matches, regenerations and artwork sources, so you can see how often each happens.
 
 ## Setup
 
@@ -120,19 +131,17 @@ cd client && npm run dev
 
 Then open [http://localhost:5173](http://localhost:5173).
 
----
-
 ## Environment variables
 
-| Variable              | Required | Default                 | Description                                         |
-| --------------------- | -------- | ----------------------- | --------------------------------------------------- |
-| `ANTHROPIC_API_KEY`   | ✅       | —                       | Anthropic API key — powers album recommendations    |
-| `PORT`                |          | `3001`                  | Server port                                         |
-| `CORS_ORIGIN`         |          | `http://localhost:5173` | Allowed client origin                               |
-| `MUSICBRAINZ_CONTACT` |          | —                       | Contact sent in the MusicBrainz User-Agent          |
-| `VITE_API_URL`        |          | `''` (same origin)      | Client → server base URL (local dev without Docker) |
-| `VITE_MONZO_URL`      |          | —                       | Monzo.me payment link shown in the footer           |
-| `VITE_FEEDBACK_EMAIL` |          | —                       | Email address for the feedback link in the footer   |
+| Variable              | Required | Default                 | Description                                                              |
+| --------------------- | -------- | ----------------------- | ------------------------------------------------------------------------ |
+| `ANTHROPIC_API_KEY`   | ✅       | —                       | Anthropic API key — powers album recommendations                         |
+| `PORT`                |          | `3001`                  | Server port                                                              |
+| `CORS_ORIGIN`         |          | `http://localhost:5173` | Allowed client origin                                                    |
+| `MUSICBRAINZ_CONTACT` |          | —                       | Email or URL sent in the MusicBrainz User-Agent, as their etiquette asks |
+| `VITE_API_URL`        |          | `''` (same origin)      | Client → server base URL (local dev without Docker)                      |
+| `VITE_MONZO_URL`      |          | —                       | Monzo.me payment link shown in the footer                                |
+| `VITE_FEEDBACK_EMAIL` |          | —                       | Email address for the feedback link in the footer                        |
 
 **Getting your Anthropic API key**
 
@@ -140,8 +149,6 @@ Then open [http://localhost:5173](http://localhost:5173).
 2. Sign in or create an account
 3. Navigate to **API Keys** and click **Create Key**
 4. Copy the key into `ANTHROPIC_API_KEY`
-
----
 
 ## Development
 
@@ -162,9 +169,9 @@ npm run typecheck
 npm run format
 ```
 
-Tests live alongside source files (`foo.ts` → `foo.test.ts`).
+Tests live alongside source files (`foo.ts` → `foo.test.ts`). A pre-commit hook runs Prettier, ESLint, a type check and the tests related to staged files, and CI runs lint, type check and the full test suite on pull requests.
 
----
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/), with the roadmap item where there is one, e.g. `feat(share): add OG tags (P1.2)`.
 
 ## Project structure
 
@@ -172,15 +179,19 @@ Tests live alongside source files (`foo.ts` → `foo.test.ts`).
 /
 ├── client/          # React frontend (Vite)
 │   └── src/
-│       ├── features/        # PreferencesPanel, RecommendationCard, HistoryGrid, InsightsPage
+│       ├── components/      # Shared UI: PlaceholderSleeve, ServiceLinks
+│       ├── features/        # preferences, recommendation, history, essentials, stats
 │       ├── hooks/           # useRecommendation — all state and history logic
 │       ├── services/        # apiClient, libraryExport
 │       └── types/
 ├── server/          # Express backend
 │   └── src/
 │       ├── controllers/     # Thin HTTP handlers
-│       ├── services/        # recommendationService, artworkService, artistRelationsService
+│       ├── services/        # recommendation, albumMatch, artwork, artistEssentials, artistRelations
+│       ├── repositories/    # Claude and MusicBrainz clients
+│       ├── utils/           # Name matching, timeouts
 │       └── routes/
 ├── shared/          # Types shared between client and server
+├── docs/            # ROADMAP.md and architecture decision records
 └── docker-compose.yml
 ```
