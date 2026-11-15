@@ -305,3 +305,89 @@ body::before {
   z-index: 0;
   opacity: 0.4;
 }
+
+/* ─── Artist Essentials ───────────────────────────────── */
+
+.essentials-panel {
+  max-width: 680px;
+  padding: 0 4px;
+}
+
+.essentials-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.essentials-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 10px 14px;
+  min-width: 0;
+}
+
+.essentials-input:disabled { opacity: 0.5; }
+
+.essentials-input::placeholder { color: var(--muted); }
+
+.essentials-submit {
+  white-space: nowrap;
+  padding: 10px 18px;
+  font-size: 12px;
+}
+
+.essentials-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.essentials-album-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  animation: fadeUp 0.25s ease both;
+}
+
+.essentials-album-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.essentials-album-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.essentials-album-reason {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.essentials-link {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.essentials-link:hover { color: var(--text); border-color: var(--border2); }

@@ -6,8 +6,9 @@ import { PreferencesPanel, sectionLabelStyle } from './features/preferences/Pref
 import { RecommendationCard } from './features/recommendation/RecommendationCard';
 import { HistoryGrid } from './features/history/HistoryGrid';
 import { InsightsPage } from './features/stats/InsightsPage';
+import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPanel';
 
-type Page = 'home' | 'insights';
+type Page = 'home' | 'insights' | 'essentials';
 
 export default function App(): React.ReactElement {
   const [page, setPage] = useState<Page>('home');
@@ -92,7 +93,7 @@ export default function App(): React.ReactElement {
             marginTop: 16,
           }}
         >
-          <nav>
+          <nav style={{ display: 'flex', gap: 16 }}>
             <button
               type="button"
               className="nav-tab"
@@ -100,6 +101,14 @@ export default function App(): React.ReactElement {
               onClick={() => setPage('home')}
             >
               Discover
+            </button>
+            <button
+              type="button"
+              className="nav-tab"
+              data-active={page === 'essentials'}
+              onClick={() => setPage('essentials')}
+            >
+              Artist Essentials
             </button>
           </nav>
           <div ref={menuRef} style={{ position: 'relative' }}>
@@ -206,6 +215,15 @@ export default function App(): React.ReactElement {
       {page === 'insights' ? (
         <div className="app-full">
           <InsightsPage history={history} />
+        </div>
+      ) : page === 'essentials' ? (
+        <div className="app-full">
+          <ArtistEssentialsPanel
+            onSeedArtist={(artist) => {
+              setPage('home');
+              void fetchRecommendation(undefined, artist);
+            }}
+          />
         </div>
       ) : (
         <>

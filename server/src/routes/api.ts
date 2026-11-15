@@ -4,6 +4,7 @@ import { handleRecommend } from '../controllers/recommendController';
 import { handleArtwork } from '../controllers/artworkController';
 import { handleArtistRelations } from '../controllers/artistRelationsController';
 import { handleImage } from '../controllers/imageController';
+import { handleArtistEssentials } from '../controllers/artistEssentialsController';
 
 export const apiRouter = Router();
 
@@ -39,11 +40,20 @@ const artistRelsLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
+const artistEssentialsLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' },
+});
+
 apiRouter.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
 
 apiRouter.post('/recommend', recommendLimiter, handleRecommend);
+apiRouter.post('/artist-essentials', artistEssentialsLimiter, handleArtistEssentials);
 apiRouter.get('/artwork', artworkLimiter, handleArtwork);
 apiRouter.get('/artist-rels', artistRelsLimiter, handleArtistRelations);
 apiRouter.get('/image', imageLimiter, handleImage);
