@@ -86,6 +86,63 @@ describe('musicBrainzFetch', () => {
     await first;
   });
 
+  function makeStatus(status: number, retryAfter: string | null = null): Partial<Response> {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      headers: {
+        get: (key: string) => (key === 'retry-after' ? retryAfter : null),
+      } as unknown as Headers,
+    };
+  }
+
+  it('retries when MusicBrainz is busy (503)', async () => {
+    mockFetch.mockResolvedValueOnce(makeStatus(503)).mockResolvedValueOnce(makeStatus(200));
+
+    const request = musicBrainzFetch('artist?query=a', new AbortController().signal);
+    await vi.runAllTimersAsync();
+    const res = await request;
+
+    expect(res.status).toBe(200);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('honours Retry-After before retrying', async () => {
+    const sentAt: number[] = [];
+    mockFetch.mockImplementation(() => {
+      sentAt.push(Date.now());
+      return Promise.resolve(sentAt.length === 1 ? makeStatus(503, '3') : makeStatus(200));
+    });
+
+    const request = musicBrainzFetch('artist?query=a', new AbortController().signal);
+    await vi.runAllTimersAsync();
+    await request;
+
+    expect(sentAt[1] - sentAt[0]).toBeGreaterThanOrEqual(3000);
+  });
+
+  it('returns the last 503 after running out of attempts', async () => {
+    mockFetch.mockResolvedValue(makeStatus(503));
+
+    const request = musicBrainzFetch('artist?query=a', new AbortController().signal);
+    await vi.runAllTimersAsync();
+    const res = await request;
+
+    expect(res.status).toBe(503);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry other errors', async () => {
+    mockFetch.mockResolvedValue(makeStatus(404));
+
+    const request = musicBrainzFetch('artist?query=a', new AbortController().signal);
+    await vi.runAllTimersAsync();
+    const res = await request;
+
+    expect(res.status).toBe(404);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('identifies the app with the configured contact', async () => {
     process.env.MUSICBRAINZ_CONTACT = 'me@example.org';
 
