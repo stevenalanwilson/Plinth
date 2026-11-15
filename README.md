@@ -124,12 +124,15 @@ Then open [http://localhost:5173](http://localhost:5173).
 
 ## Environment variables
 
-| Variable            | Required | Default                 | Description                                         |
-| ------------------- | -------- | ----------------------- | --------------------------------------------------- |
-| `ANTHROPIC_API_KEY` | ✅       | —                       | Anthropic API key — powers album recommendations    |
-| `PORT`              |          | `3001`                  | Server port                                         |
-| `CORS_ORIGIN`       |          | `http://localhost:5173` | Allowed client origin                               |
-| `VITE_API_URL`      |          | `''` (same origin)      | Client → server base URL (local dev without Docker) |
+| Variable              | Required | Default                 | Description                                         |
+| --------------------- | -------- | ----------------------- | --------------------------------------------------- |
+| `ANTHROPIC_API_KEY`   | ✅       | —                       | Anthropic API key — powers album recommendations    |
+| `PORT`                |          | `3001`                  | Server port                                         |
+| `CORS_ORIGIN`         |          | `http://localhost:5173` | Allowed client origin                               |
+| `MUSICBRAINZ_CONTACT` |          | —                       | Contact sent in the MusicBrainz User-Agent          |
+| `VITE_API_URL`        |          | `''` (same origin)      | Client → server base URL (local dev without Docker) |
+| `VITE_MONZO_URL`      |          | —                       | Monzo.me payment link shown in the footer           |
+| `VITE_FEEDBACK_EMAIL` |          | —                       | Email address for the feedback link in the footer   |
 
 **Getting your Anthropic API key**
 

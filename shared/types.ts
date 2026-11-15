@@ -56,3 +56,18 @@ export interface ArtworkResponse {
   readonly year: string | null;
   readonly appleMusicUrl: string | null;
 }
+
+export interface EssentialAlbum {
+  readonly album: string;
+  readonly year: string;
+  readonly reason: string;
+}
+
+export interface ArtistEssentialsRequest {
+  readonly artist: string;
+}
+
+export interface ArtistEssentialsResponse {
+  readonly artist: string;
+  readonly albums: readonly EssentialAlbum[];
+}

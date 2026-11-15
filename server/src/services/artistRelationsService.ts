@@ -1,6 +1,6 @@
 import { ArtistRelationsResponse } from '@shared/types';
+import { escapeLucene, musicBrainzFetch } from '../repositories/musicBrainzClient';
 
-const FETCH_TIMEOUT_MS = 8000;
 const REQUEST_BUDGET_MS = 20_000;
 const MAX_RELATIONS = 8;
 
@@ -53,32 +53,13 @@ interface MusicBrainzRecordingBrowseResult {
   recordings?: MusicBrainzRecording[];
 }
 
-async function fetchWithTimeout(url: string, budgetSignal: AbortSignal): Promise<Response> {
-  const signal = AbortSignal.any([AbortSignal.timeout(FETCH_TIMEOUT_MS), budgetSignal]);
-  return fetch(url, {
-    signal,
-    headers: { 'User-Agent': 'AlbumRecommender/1.0 (contact@example.com)' },
-  });
-}
-
-// Same special-character escaping used by artworkService for Lucene queries.
-function escapeLucene(value: string): string {
-  return value.replace(/[+\-&|!(){}[\]^"~*?:\\/]/g, '\\$&');
-}
-
 const MIN_MATCH_SCORE = 70;
 
 async function findArtistMbid(name: string, budgetSignal: AbortSignal): Promise<string | null> {
-  // MusicBrainz enforces 1 req/sec
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-
   // Use the artist: Lucene field so we match on the artist name specifically,
   // rather than doing a broad free-text search across all fields.
   const query = encodeURIComponent(`artist:"${escapeLucene(name)}"`);
-  const res = await fetchWithTimeout(
-    `https://musicbrainz.org/ws/2/artist?query=${query}&limit=5&fmt=json`,
-    budgetSignal,
-  );
+  const res = await musicBrainzFetch(`artist?query=${query}&limit=5&fmt=json`, budgetSignal);
 
   if (!res.ok) return null;
 
@@ -96,13 +77,7 @@ async function fetchRelationsForMbid(
   mbid: string,
   budgetSignal: AbortSignal,
 ): Promise<MusicBrainzRelation[]> {
-  // MusicBrainz enforces 1 req/sec
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-
-  const res = await fetchWithTimeout(
-    `https://musicbrainz.org/ws/2/artist/${mbid}?inc=artist-rels&fmt=json`,
-    budgetSignal,
-  );
+  const res = await musicBrainzFetch(`artist/${mbid}?inc=artist-rels&fmt=json`, budgetSignal);
 
   if (!res.ok) return [];
 
@@ -118,11 +93,8 @@ async function fetchRecordingCollaborators(
   artistNameLower: string,
   budgetSignal: AbortSignal,
 ): Promise<string[]> {
-  // MusicBrainz enforces 1 req/sec
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-
-  const res = await fetchWithTimeout(
-    `https://musicbrainz.org/ws/2/recording?artist=${mbid}&inc=artist-credits&fmt=json&limit=50`,
+  const res = await musicBrainzFetch(
+    `recording?artist=${mbid}&inc=artist-credits&fmt=json&limit=50`,
     budgetSignal,
   );
 

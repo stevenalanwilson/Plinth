@@ -31,6 +31,9 @@ export const DEFAULT_PREFERENCES: RecommendationPreferences = {
 };
 
 const HISTORY_MAX_AGE_DAYS = 90;
+const HISTORY_MAX_ENTRIES = 50;
+
+const EMPTY_ARTWORK: ArtworkResponse = { artworkUrl: null, year: null, appleMusicUrl: null };
 
 function loadHistoryFromStorage(): HistoryEntry[] {
   try {
@@ -162,15 +165,22 @@ export function useRecommendation(): UseRecommendationReturn {
 
     let cancelled = false;
 
-    // Re-fetch artwork sequentially for any history entries missing it.
-    // Runs on mount (stale cache) and whenever a new entry is added (fresh recommendation
-    // that came back without artwork — e.g. MusicBrainz was temporarily unavailable).
-    // Sequential execution respects the 1s delay in artworkService.
+    // This effect is the single place artwork gets fetched. New recommendations are added
+    // to history with empty artwork so they render immediately; this fills them in, and
+    // also retries entries persisted without artwork (e.g. MusicBrainz was down).
+    // Sequential so we don't flood the server's MusicBrainz throttle.
     const timeoutId = setTimeout(async () => {
       for (const entry of nullEntries) {
         if (cancelled) break;
 
-        const artwork = await fetchArtwork(entry.recommendation.artist, entry.recommendation.album);
+        let artwork: ArtworkResponse;
+        try {
+          artwork = await fetchArtwork(entry.recommendation.artist, entry.recommendation.album);
+        } catch {
+          // Most likely rate-limited or offline; the remaining entries would fail the same way,
+          // so stop and let the next backoff attempt pick them up.
+          break;
+        }
 
         if (cancelled) break;
 
@@ -196,7 +206,9 @@ export function useRecommendation(): UseRecommendationReturn {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [history.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    // history[0]?.id as well as length: once history is at its cap, a new recommendation
+    // replaces the oldest entry and the length stays the same.
+  }, [history.length, history[0]?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearHistory = useCallback((): void => {
     setHistory([]);
@@ -283,12 +295,12 @@ export function useRecommendation(): UseRecommendationReturn {
           controller.signal,
         );
 
-        const artwork = await fetchArtwork(rec.artist, rec.album);
-
         if (controller.signal.aborted) return;
 
+        // Artwork is filled in by the artwork effect once this entry lands in history, so a
+        // slow or failed artwork lookup never holds up or discards the recommendation.
         setRecommendation(rec);
-        setArtworkResponse(artwork);
+        setArtworkResponse(EMPTY_ARTWORK);
         setArtistRelations([]);
         setIsLoadingRelations(true);
 
@@ -307,10 +319,10 @@ export function useRecommendation(): UseRecommendationReturn {
         const newEntry: HistoryEntry = {
           id: crypto.randomUUID(),
           recommendation: rec,
-          artworkResponse: artwork,
+          artworkResponse: EMPTY_ARTWORK,
           createdAt: new Date().toISOString(),
         };
-        setHistory((prev) => [newEntry, ...prev].slice(0, 50));
+        setHistory((prev) => [newEntry, ...prev].slice(0, HISTORY_MAX_ENTRIES));
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
         setError(err instanceof Error ? err.message : 'Something went wrong.');

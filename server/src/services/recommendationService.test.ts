@@ -99,7 +99,7 @@ describe('getRecommendation', () => {
     });
 
     await expect(getRecommendation(validRequest)).rejects.toThrow(
-      'Could not parse recommendation JSON',
+      'Could not parse JSON from Claude response',
     );
   });
 

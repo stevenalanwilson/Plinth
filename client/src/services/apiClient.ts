@@ -3,6 +3,7 @@ import {
   RecommendationResponse,
   ArtworkResponse,
   ArtistRelationsResponse,
+  ArtistEssentialsResponse,
 } from '@shared/types';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
@@ -71,6 +72,13 @@ export function fetchArtwork(artist: string, album: string): Promise<ArtworkResp
 
 export function fetchArtistRelations(artist: string): Promise<ArtistRelationsResponse> {
   return get<ArtistRelationsResponse>('/api/artist-rels', { artist });
+}
+
+export function fetchArtistEssentials(
+  artist: string,
+  signal?: AbortSignal,
+): Promise<ArtistEssentialsResponse> {
+  return post<ArtistEssentialsResponse>('/api/artist-essentials', { artist }, signal);
 }
 
 export function getProxiedArtworkUrl(artworkUrl: string): string {
