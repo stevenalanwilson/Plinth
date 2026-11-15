@@ -1,6 +1,6 @@
 import { escapeLucene, musicBrainzFetch } from '../repositories/musicBrainzClient';
 import { logger } from '../logger';
-import { artistsMatch, titlesMatch } from '../utils/musicNames';
+import { artistsMatch, normaliseName, titlesMatch } from '../utils/musicNames';
 
 const LOOKUP_BUDGET_MS = 10_000;
 const SEARCH_LIMIT = 10;
@@ -56,6 +56,29 @@ function creditMatches(candidate: ReleaseGroupCandidate, artist: string): boolea
   );
 }
 
+/**
+ * The name to show for a matched album. A long classical credit lists every performer
+ * ("Arvo Pärt; Gidon Kremer, Keith Jarrett, …"), so unless the requested artist is the whole
+ * credit, show the credited artist they asked for.
+ */
+function displayArtist(candidate: ReleaseGroupCandidate, requested: string): string {
+  const fullCredit = creditedArtist(candidate);
+  if (normaliseName(fullCredit) === normaliseName(requested)) return fullCredit;
+  const matchingCredit = (candidate['artist-credit'] ?? []).find((credit) =>
+    artistsMatch(requested, credit.name),
+  );
+  return matchingCredit?.name ?? (fullCredit || requested);
+}
+
+function titleMatches(candidate: ReleaseGroupCandidate, album: string): boolean {
+  if (titlesMatch(album, candidate.title)) return true;
+  // Some titles lead with the artist, e.g. "Clifford Brown and Max Roach at Basin Street".
+  return (
+    normaliseName(candidate.title) ===
+    `${normaliseName(creditedArtist(candidate))} ${normaliseName(album)}`
+  );
+}
+
 function releaseYear(candidate: ReleaseGroupCandidate): string | null {
   return candidate['first-release-date']?.substring(0, 4) || null;
 }
@@ -78,7 +101,7 @@ export function selectAlbumMatch(
   const confident = candidates.filter(
     (candidate) =>
       candidate['primary-type'] === 'Album' &&
-      titlesMatch(query.album, candidate.title) &&
+      titleMatches(candidate, query.album) &&
       creditMatches(candidate, query.artist),
   );
 
@@ -92,7 +115,7 @@ export function selectAlbumMatch(
 
   return {
     releaseGroupId: best.id,
-    artist: creditedArtist(best) || query.artist,
+    artist: displayArtist(best, query.artist),
     album: best.title,
     year: releaseYear(best),
   };

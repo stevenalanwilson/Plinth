@@ -90,6 +90,33 @@ describe('selectAlbumMatch', () => {
     });
     expect(match?.artist).toBe('Brian Eno & David Byrne');
   });
+
+  it('shows the requested artist rather than a long classical credit', () => {
+    const tabulaRasa: ReleaseGroupCandidate = {
+      ...jeopardy,
+      title: 'Tabula Rasa',
+      'artist-credit': [
+        { name: 'Arvo Pärt', joinphrase: '; ' },
+        { name: 'Gidon Kremer', joinphrase: ', ' },
+        { name: 'Keith Jarrett' },
+      ],
+    };
+    const match = selectAlbumMatch([tabulaRasa], { artist: 'Arvo Pärt', album: 'Tabula Rasa' });
+    expect(match?.artist).toBe('Arvo Pärt');
+  });
+
+  it('matches a title that leads with the artist name', () => {
+    const basinStreet: ReleaseGroupCandidate = {
+      ...jeopardy,
+      title: 'Clifford Brown and Max Roach at Basin Street',
+      'artist-credit': [{ name: 'Clifford Brown', joinphrase: ' & ' }, { name: 'Max Roach' }],
+    };
+    const match = selectAlbumMatch([basinStreet], {
+      artist: 'Clifford Brown & Max Roach',
+      album: 'At Basin Street',
+    });
+    expect(match?.album).toBe('Clifford Brown and Max Roach at Basin Street');
+  });
 });
 
 describe('findAlbum', () => {

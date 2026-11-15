@@ -53,8 +53,9 @@ export function escapeLucene(value: string): string {
 }
 
 // MusicBrainz answers 503 when it is throttling us or simply busy, even at a polite rate,
-// so a 503 is worth a couple of retries before callers treat it as "no results".
-const MAX_ATTEMPTS = 3;
+// so a 503 is worth a few retries before callers treat it as "no results". Busy spells
+// usually clear within a second or two but can last several, hence four attempts.
+const MAX_ATTEMPTS = 4;
 const MAX_RETRY_AFTER_MS = 5000;
 
 function retryDelayMs(res: Response, attempt: number): number {
