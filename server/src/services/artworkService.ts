@@ -1,6 +1,7 @@
 import { ArtworkResponse } from '@shared/types';
+import { escapeLucene, musicBrainzFetch } from '../repositories/musicBrainzClient';
+import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 
-const FETCH_TIMEOUT_MS = 8000;
 // Total time budget for the full artwork lookup (MusicBrainz + CAA + iTunes).
 // Ensures the request never hangs indefinitely even if individual timeouts are each hit.
 const REQUEST_BUDGET_MS = 30_000;
@@ -46,17 +47,6 @@ interface ItunesData {
   artworkUrl: string | null;
 }
 
-async function fetchWithTimeout(
-  url: string,
-  options?: RequestInit,
-  budgetSignal?: AbortSignal,
-): Promise<Response> {
-  const signals: AbortSignal[] = [AbortSignal.timeout(FETCH_TIMEOUT_MS)];
-  if (budgetSignal) signals.push(budgetSignal);
-  const signal = signals.length === 1 ? signals[0] : AbortSignal.any(signals);
-  return fetch(url, { ...options, signal });
-}
-
 function scoreMatch(group: MusicBrainzReleaseGroup, album: string, artist: string): number {
   let score = 0;
   const albumLower = album.toLowerCase();
@@ -75,12 +65,11 @@ function scoreMatch(group: MusicBrainzReleaseGroup, album: string, artist: strin
 async function fetchItunesDataOnce(
   artist: string,
   album: string,
-  budgetSignal?: AbortSignal,
+  budgetSignal: AbortSignal,
 ): Promise<ItunesData> {
   const term = encodeURIComponent(`${artist} ${album}`);
   const res = await fetchWithTimeout(
     `https://itunes.apple.com/search?term=${term}&media=music&entity=album&limit=5`,
-    undefined,
     budgetSignal,
   );
   if (!res.ok) return { appleMusicUrl: null, artworkUrl: null };
@@ -118,7 +107,7 @@ async function fetchItunesDataOnce(
 async function fetchItunesData(
   artist: string,
   album: string,
-  budgetSignal?: AbortSignal,
+  budgetSignal: AbortSignal,
 ): Promise<ItunesData> {
   // Retry once on transient failure before giving up.
   // AbortErrors are rethrown immediately — retrying a cancelled request is pointless.
@@ -137,17 +126,11 @@ export async function fetchArtwork(artist: string, album: string): Promise<Artwo
   const budgetSignal = AbortSignal.timeout(REQUEST_BUDGET_MS);
 
   try {
-    // MusicBrainz enforces a 1 req/sec rate limit; this delay keeps us compliant
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const escapedAlbum = album.replace(/[+\-&|!(){}[\]^"~*?:\\]/g, '\\$&');
-    const escapedArtist = artist.replace(/[+\-&|!(){}[\]^"~*?:\\]/g, '\\$&');
-    const query = encodeURIComponent(`release:${escapedAlbum} AND artist:${escapedArtist}`);
-    const mbUrl = `https://musicbrainz.org/ws/2/release-group?query=${query}&limit=5&fmt=json`;
-
-    const mbRes = await fetchWithTimeout(
-      mbUrl,
-      { headers: { 'User-Agent': 'AlbumRecommender/1.0 (contact@example.com)' } },
+    const query = encodeURIComponent(
+      `release:${escapeLucene(album)} AND artist:${escapeLucene(artist)}`,
+    );
+    const mbRes = await musicBrainzFetch(
+      `release-group?query=${query}&limit=5&fmt=json`,
       budgetSignal,
     );
 
@@ -169,7 +152,6 @@ export async function fetchArtwork(artist: string, album: string): Promise<Artwo
     let artworkUrl: string | null = null;
     const caRes = await fetchWithTimeout(
       `https://coverartarchive.org/release-group/${mbid}`,
-      undefined,
       budgetSignal,
     );
 
