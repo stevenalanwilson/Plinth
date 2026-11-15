@@ -4,6 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { HistoryGrid } from './HistoryGrid';
 import { HistoryEntry } from '../../types/history';
 
+// Placeholder sleeves repeat the album and artist, so text queries skip them.
+const NOT_IN_SLEEVE = { ignore: '[role="img"] *, script, style' };
+
 const entries: HistoryEntry[] = [
   {
     id: 'test-id-1',
@@ -39,20 +42,27 @@ const manyEntries: HistoryEntry[] = Array.from({ length: 10 }, (_, i) => ({
 describe('HistoryGrid', () => {
   it('renders all history entries', () => {
     render(<HistoryGrid history={entries} onRemove={vi.fn()} onSelect={vi.fn()} />);
-    expect(screen.getByText('Untrue')).toBeInTheDocument();
-    expect(screen.getByText('There Is Love In You')).toBeInTheDocument();
+    expect(screen.getByText('Untrue', NOT_IN_SLEEVE)).toBeInTheDocument();
+    expect(screen.getByText('There Is Love In You', NOT_IN_SLEEVE)).toBeInTheDocument();
   });
 
   it('renders artist names', () => {
     render(<HistoryGrid history={entries} onRemove={vi.fn()} onSelect={vi.fn()} />);
-    expect(screen.getByText('Burial')).toBeInTheDocument();
-    expect(screen.getByText('Four Tet')).toBeInTheDocument();
+    expect(screen.getByText('Burial', NOT_IN_SLEEVE)).toBeInTheDocument();
+    expect(screen.getByText('Four Tet', NOT_IN_SLEEVE)).toBeInTheDocument();
   });
 
   it('renders artwork when artworkUrl is provided', () => {
     render(<HistoryGrid history={entries} onRemove={vi.fn()} onSelect={vi.fn()} />);
     const img = screen.getByAltText('There Is Love In You') as HTMLImageElement;
     expect(img).toBeInTheDocument();
+  });
+
+  it('shows a placeholder sleeve for entries without artwork', () => {
+    render(<HistoryGrid history={entries} onRemove={vi.fn()} onSelect={vi.fn()} />);
+    expect(
+      screen.getByRole('img', { name: 'Untrue by Burial, no artwork available' }),
+    ).toBeInTheDocument();
   });
 
   it('links directly to appleMusicUrl when available', () => {
@@ -131,7 +141,7 @@ describe('HistoryGrid', () => {
 
   it('shows only 9 items when history exceeds the visible count', () => {
     render(<HistoryGrid history={manyEntries} onRemove={vi.fn()} onSelect={vi.fn()} />);
-    expect(screen.getByText('Album 0')).toBeInTheDocument();
+    expect(screen.getByText('Album 0', NOT_IN_SLEEVE)).toBeInTheDocument();
     expect(screen.queryByText('Album 9')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /show 1 more/i })).toBeInTheDocument();
   });
@@ -139,7 +149,7 @@ describe('HistoryGrid', () => {
   it('expands to show all items when "Show more" is clicked', async () => {
     render(<HistoryGrid history={manyEntries} onRemove={vi.fn()} onSelect={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: /show 1 more/i }));
-    expect(screen.getByText('Album 9')).toBeInTheDocument();
+    expect(screen.getByText('Album 9', NOT_IN_SLEEVE)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /show less/i })).toBeInTheDocument();
   });
 
