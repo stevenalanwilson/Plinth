@@ -3,7 +3,11 @@ import { logger } from '../logger';
 import { artistsMatch, normaliseName, titlesMatch } from '../utils/musicNames';
 
 const LOOKUP_BUDGET_MS = 10_000;
+const ARTIST_LOOKUP_BUDGET_MS = 15_000;
 const SEARCH_LIMIT = 10;
+const BROWSE_PAGE_SIZE = 100;
+// Three pages covers all but the most prolific catalogues while keeping the lookup to a few seconds.
+const MAX_BROWSE_PAGES = 3;
 
 interface MusicBrainzArtistCredit {
   readonly name: string;
@@ -22,6 +26,14 @@ export interface ReleaseGroupCandidate {
 
 interface ReleaseGroupSearchResult {
   readonly 'release-groups'?: readonly ReleaseGroupCandidate[];
+}
+
+interface ReleaseGroupBrowseResult extends ReleaseGroupSearchResult {
+  readonly 'release-group-count'?: number;
+}
+
+interface ArtistSearchResult {
+  readonly artists?: readonly { readonly id: string; readonly name: string }[];
 }
 
 export interface AlbumQuery {
@@ -121,10 +133,13 @@ export function selectAlbumMatch(
   };
 }
 
+// Lower-cased so words in a title such as "AND" aren't read as search operators.
+function searchTerms(value: string): string {
+  return escapeLucene(value.toLowerCase());
+}
+
 function searchPath(query: AlbumQuery): string {
-  // Lower-cased so words in a title such as "AND" aren't read as search operators.
-  const terms = (value: string): string => escapeLucene(value.toLowerCase());
-  const lucene = `releasegroup:(${terms(query.album)}) AND artist:(${terms(query.artist)}) AND primarytype:album`;
+  const lucene = `releasegroup:(${searchTerms(query.album)}) AND artist:(${searchTerms(query.artist)}) AND primarytype:album`;
   return `release-group?query=${encodeURIComponent(lucene)}&limit=${SEARCH_LIMIT}&fmt=json`;
 }
 
@@ -165,6 +180,81 @@ export async function findAlbum(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.warn({ ...context, outcome: 'lookup_failed', error: message }, 'album match');
+    return { status: 'lookup_failed' };
+  }
+}
+
+export type ArtistAlbumsLookup =
+  | {
+      readonly status: 'found';
+      readonly artist: string;
+      readonly albums: readonly ReleaseGroupCandidate[];
+    }
+  | { readonly status: 'not_found' }
+  | { readonly status: 'lookup_failed' };
+
+async function browseAlbums(
+  artistId: string,
+  budgetSignal: AbortSignal,
+): Promise<ReleaseGroupCandidate[] | null> {
+  const albums: ReleaseGroupCandidate[] = [];
+  for (let page = 0; page < MAX_BROWSE_PAGES; page++) {
+    const res = await musicBrainzFetch(
+      `release-group?artist=${artistId}&type=album&inc=artist-credits&limit=${BROWSE_PAGE_SIZE}&offset=${page * BROWSE_PAGE_SIZE}&fmt=json`,
+      budgetSignal,
+    );
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as ReleaseGroupBrowseResult;
+    const batch = data['release-groups'] ?? [];
+    albums.push(...batch);
+    if (batch.length === 0 || albums.length >= (data['release-group-count'] ?? 0)) break;
+  }
+  return albums;
+}
+
+/**
+ * Finds the artist in MusicBrainz and fetches their albums, so a whole list of picks can be
+ * checked with a few requests instead of one search per album.
+ */
+export async function findArtistAlbums(
+  artist: string,
+  budgetSignal: AbortSignal = AbortSignal.timeout(ARTIST_LOOKUP_BUDGET_MS),
+): Promise<ArtistAlbumsLookup> {
+  try {
+    const searchRes = await musicBrainzFetch(
+      `artist?query=${encodeURIComponent(`artist:(${searchTerms(artist)})`)}&limit=5&fmt=json`,
+      budgetSignal,
+    );
+    if (!searchRes.ok) {
+      logger.warn({ artist, outcome: 'lookup_failed', status: searchRes.status }, 'artist albums');
+      return { status: 'lookup_failed' };
+    }
+
+    const candidates = ((await searchRes.json()) as ArtistSearchResult).artists ?? [];
+    const found = candidates.find((candidate) => artistsMatch(artist, candidate.name));
+    if (!found) {
+      logger.info(
+        { artist, outcome: 'not_found', closest: candidates[0]?.name ?? null },
+        'artist albums',
+      );
+      return { status: 'not_found' };
+    }
+
+    const albums = await browseAlbums(found.id, budgetSignal);
+    if (!albums) {
+      logger.warn({ artist, outcome: 'lookup_failed' }, 'artist albums');
+      return { status: 'lookup_failed' };
+    }
+
+    logger.info(
+      { artist, outcome: 'found', artistId: found.id, albumCount: albums.length },
+      'artist albums',
+    );
+    return { status: 'found', artist: found.name, albums };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn({ artist, outcome: 'lookup_failed', error: message }, 'artist albums');
     return { status: 'lookup_failed' };
   }
 }

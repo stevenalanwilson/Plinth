@@ -10,10 +10,50 @@ vi.mock('@anthropic-ai/sdk', () => {
   };
 });
 
+vi.mock('./albumMatchService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./albumMatchService')>()),
+  findArtistAlbums: vi.fn(),
+}));
+vi.mock('../logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
 import Anthropic from '@anthropic-ai/sdk';
-import { getArtistEssentials, buildPrompt, toArtistEssentials } from './artistEssentialsService';
+import {
+  getArtistEssentials,
+  buildPrompt,
+  toArtistEssentials,
+  UnverifiedEssentialsError,
+  verifyEssentials,
+} from './artistEssentialsService';
+import { findArtistAlbums, ReleaseGroupCandidate } from './albumMatchService';
 
 const mockCreate = vi.fn();
+const mockFindArtistAlbums = vi.mocked(findArtistAlbums);
+
+function catalogueAlbum(
+  title: string,
+  year: string,
+  secondaryTypes: readonly string[] = [],
+): ReleaseGroupCandidate {
+  return {
+    id: `rg-${title}`,
+    title,
+    'primary-type': 'Album',
+    'secondary-types': secondaryTypes,
+    'first-release-date': year,
+    'artist-credit': [{ name: 'Talk Talk' }],
+  };
+}
+
+const talkTalkCatalogue = [
+  catalogueAlbum('The Party’s Over', '1982'),
+  catalogueAlbum('It’s My Life', '1984'),
+  catalogueAlbum('The Colour of Spring', '1986'),
+  catalogueAlbum('Spirit of Eden', '1988'),
+  catalogueAlbum('Laughing Stock', '1991'),
+  catalogueAlbum('Natural History', '1990', ['Compilation']),
+];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -21,6 +61,11 @@ beforeEach(() => {
     messages: { create: mockCreate },
   }));
   process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+  mockFindArtistAlbums.mockResolvedValue({
+    status: 'found',
+    artist: 'Talk Talk',
+    albums: talkTalkCatalogue,
+  });
 });
 
 const validAlbums = [
@@ -122,5 +167,128 @@ describe('getArtistEssentials', () => {
     mockCreate.mockRejectedValue(new Error('Network error'));
 
     await expect(getArtistEssentials({ artist: 'Talk Talk' })).rejects.toThrow('Network error');
+  });
+});
+
+function claudeEssentials(artist: string, albums: readonly string[]): Record<string, unknown> {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          artist,
+          albums: albums.map((album) => ({ album, year: '1988', reason: 'Essential.' })),
+        }),
+      },
+    ],
+  };
+}
+
+describe('verifyEssentials', () => {
+  it('keeps catalogue albums in order with MusicBrainz spellings and years', () => {
+    const result = verifyEssentials(
+      toArtistEssentials(JSON.parse(validJsonResponse)),
+      'Talk Talk',
+      talkTalkCatalogue,
+    );
+
+    expect(result.essentials.albums.map((album) => album.album)).toEqual([
+      'Spirit of Eden',
+      'Laughing Stock',
+      'It’s My Life',
+      'The Colour of Spring',
+    ]);
+    expect(result.essentials.albums[2]).toMatchObject({
+      year: '1984',
+      releaseGroupId: 'rg-It’s My Life',
+    });
+    expect(result.notFound).toEqual(["It's My Life 2"]);
+  });
+
+  it('drops a second entry for the same album', () => {
+    const result = verifyEssentials(
+      { artist: 'Talk Talk', albums: [validAlbums[0], { ...validAlbums[0], year: '1989' }] },
+      'Talk Talk',
+      talkTalkCatalogue,
+    );
+
+    expect(result.essentials.albums).toHaveLength(1);
+  });
+});
+
+describe('getArtistEssentials album check', () => {
+  it('returns only albums found in MusicBrainz', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: validJsonResponse }] });
+
+    const result = await getArtistEssentials({ artist: 'talk talk' });
+
+    expect(result.artist).toBe('Talk Talk');
+    expect(result.albums.map((album) => album.album)).not.toContain("It's My Life 2");
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again with the real catalogue when fewer than three albums check out', async () => {
+    mockCreate
+      .mockResolvedValueOnce(
+        claudeEssentials('Talk Talk', ['Spirit of Eden', 'Made Up One', 'Made Up Two']),
+      )
+      .mockResolvedValueOnce(
+        claudeEssentials('Talk Talk', ['Spirit of Eden', 'Laughing Stock', 'The Colour of Spring']),
+      );
+
+    const result = await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(result.albums).toHaveLength(3);
+    const retryPrompt = mockCreate.mock.calls[1][0].messages[0].content as string;
+    expect(retryPrompt).toContain('Made Up One, Made Up Two');
+    expect(retryPrompt).toContain('Laughing Stock');
+    expect(retryPrompt).not.toContain('Natural History');
+  });
+
+  it('keeps the first answer if the retry checks out worse', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeEssentials('Talk Talk', ['Spirit of Eden', 'Laughing Stock']))
+      .mockResolvedValueOnce(claudeEssentials('Talk Talk', ['Made Up One']));
+
+    const result = await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(result.albums.map((album) => album.album)).toEqual(['Spirit of Eden', 'Laughing Stock']);
+  });
+
+  it('fails when no album can be verified', async () => {
+    mockCreate.mockResolvedValue(claudeEssentials('Talk Talk', ['Made Up One']));
+
+    await expect(getArtistEssentials({ artist: 'Talk Talk' })).rejects.toBeInstanceOf(
+      UnverifiedEssentialsError,
+    );
+  });
+
+  it('fails when the artist is not in MusicBrainz', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: validJsonResponse }] });
+    mockFindArtistAlbums.mockResolvedValue({ status: 'not_found' });
+
+    await expect(getArtistEssentials({ artist: 'Talk Talk' })).rejects.toBeInstanceOf(
+      UnverifiedEssentialsError,
+    );
+  });
+
+  it('retries the lookup with Claude’s spelling of a mistyped artist', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: validJsonResponse }] });
+    mockFindArtistAlbums.mockResolvedValueOnce({ status: 'not_found' });
+
+    const result = await getArtistEssentials({ artist: 'Tlak Talk' });
+
+    expect(mockFindArtistAlbums).toHaveBeenLastCalledWith('Talk Talk');
+    expect(result.albums.length).toBeGreaterThan(0);
+  });
+
+  it('returns the list unchecked when MusicBrainz is unavailable', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: validJsonResponse }] });
+    mockFindArtistAlbums.mockResolvedValue({ status: 'lookup_failed' });
+
+    const result = await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(result.albums).toHaveLength(5);
+    expect(result.albums[0].releaseGroupId).toBeUndefined();
   });
 });
