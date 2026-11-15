@@ -129,7 +129,7 @@ describe('musicBrainzFetch', () => {
     const res = await request;
 
     expect(res.status).toBe(503);
-    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 
   it('does not retry other errors', async () => {

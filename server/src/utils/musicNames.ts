@@ -13,6 +13,7 @@ const UNDECOMPOSED_LETTERS: Readonly<Record<string, string>> = {
   þ: 'th',
   ł: 'l',
   đ: 'd',
+  ı: 'i',
 };
 
 /**
@@ -26,7 +27,7 @@ export function normaliseName(value: string): string {
     .replace(EDITION_NOTE, ' ')
     .replace(REMASTER_SUFFIX, '')
     .toLowerCase()
-    .replace(/[æœøßðþłđ]/g, (letter) => UNDECOMPOSED_LETTERS[letter] ?? letter)
+    .replace(/[æœøßðþłđı]/g, (letter) => UNDECOMPOSED_LETTERS[letter] ?? letter)
     .replace(/['‘’]|(?<=\p{L})\.(?=\p{L})/gu, '')
     .replace(/&/g, ' and ')
     .replace(/[^\p{L}\p{N}]+/gu, ' ')

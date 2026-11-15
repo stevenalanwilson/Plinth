@@ -6,6 +6,7 @@ describe('normaliseName', () => {
     expect(normaliseName('Sigur Rós')).toBe('sigur ros');
     expect(normaliseName('Ágætis byrjun')).toBe('agaetis byrjun');
     expect(normaliseName('Mötley Crüe')).toBe('motley crue');
+    expect(normaliseName('Ege Bamyası')).toBe('ege bamyasi');
     expect(normaliseName("(What's the Story) Morning Glory?")).toBe(
       normaliseName('(Whats The Story) Morning Glory'),
     );
