@@ -1,0 +1,8 @@
+{
+  "*.ts": [
+    "prettier --write",
+    "eslint --max-warnings=0 --resolve-plugins-relative-to .",
+    "vitest related --run --passWithNoTests"
+  ],
+  "*.{js,cjs,json,md}": ["prettier --write"]
+}
