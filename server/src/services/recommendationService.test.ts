@@ -342,6 +342,19 @@ describe('getRecommendation album check', () => {
     );
   });
 
+  it('spots a duplicate spelled differently from the history entry', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('Gil Scott-Heron', 'Pieces Of A Man'))
+      .mockResolvedValueOnce(claudeReply('Burial', 'Untrue'));
+
+    const result = await getRecommendation({
+      ...validRequest,
+      alreadySuggested: ['Gil Scott‐Heron – Pieces of a Man'],
+    });
+
+    expect(result.album).toBe('Untrue');
+  });
+
   it('falls back to a duplicate when no new pick can be verified', async () => {
     mockCreate
       .mockResolvedValueOnce(claudeReply('Massive Attack', 'Mezzanine'))
