@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
-import { getRecommendation } from '../services/recommendationService';
+import {
+  getRecommendation,
+  UnverifiedRecommendationError,
+} from '../services/recommendationService';
 import {
   RecommendationRequest,
   RecommendationPreferences,
@@ -126,6 +129,11 @@ export async function handleRecommend(req: Request, res: Response): Promise<void
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     logger.error({ error: message }, 'recommendation request failed');
-    res.status(502).json({ error: 'Failed to get recommendation. Please try again.' });
+    res.status(502).json({
+      error:
+        error instanceof UnverifiedRecommendationError
+          ? "Couldn't find a pick we could verify. Please try again."
+          : 'Failed to get recommendation. Please try again.',
+    });
   }
 }
