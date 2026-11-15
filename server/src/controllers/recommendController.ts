@@ -12,9 +12,27 @@ import {
 import { logger } from '../logger';
 
 const VALID_ERAS = new Set<string>(ERA_VALUES);
+const MAX_ALREADY_SUGGESTED = 150;
+// Generous because real album titles can run to hundreds of characters; the point is to
+// stop a single request stuffing a paid-for prompt with arbitrary text.
+const MAX_NAME_LENGTH = 500;
+// History entries are formatted client-side as "Artist – Album".
+const MAX_SUGGESTION_LENGTH = MAX_NAME_LENGTH * 2 + ' – '.length;
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isName(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '' && value.length <= MAX_NAME_LENGTH;
+}
+
+function isValidAlreadySuggested(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= MAX_ALREADY_SUGGESTED &&
+    value.every((item) => typeof item === 'string' && item.length <= MAX_SUGGESTION_LENGTH)
+  );
 }
 
 function isSliderValue(value: unknown): value is number {
@@ -32,8 +50,8 @@ function isValidPivot(value: unknown): value is PivotHint | undefined {
   const p = value as Record<string, unknown>;
   return (
     (p.type === 'more-like-this' || p.type === 'something-different') &&
-    typeof p.artist === 'string' &&
-    typeof p.album === 'string'
+    isName(p.artist) &&
+    isName(p.album)
   );
 }
 
@@ -67,8 +85,10 @@ export async function handleRecommend(req: Request, res: Response): Promise<void
     return;
   }
 
-  if (!isStringArray(body.alreadySuggested) || body.alreadySuggested.length > 150) {
-    res.status(400).json({ error: 'alreadySuggested must be an array of strings (max 150)' });
+  if (!isValidAlreadySuggested(body.alreadySuggested)) {
+    res.status(400).json({
+      error: `alreadySuggested must be an array of at most ${MAX_ALREADY_SUGGESTED} strings of ${MAX_SUGGESTION_LENGTH} characters or fewer`,
+    });
     return;
   }
 
@@ -78,8 +98,10 @@ export async function handleRecommend(req: Request, res: Response): Promise<void
   }
 
   const { seedArtist } = body;
-  if (seedArtist !== undefined && (typeof seedArtist !== 'string' || seedArtist.trim() === '')) {
-    res.status(400).json({ error: 'seedArtist must be a non-empty string' });
+  if (seedArtist !== undefined && !isName(seedArtist)) {
+    res.status(400).json({
+      error: `seedArtist must be a non-empty string of ${MAX_NAME_LENGTH} characters or fewer`,
+    });
     return;
   }
 
