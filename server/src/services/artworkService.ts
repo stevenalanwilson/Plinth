@@ -109,16 +109,22 @@ function artworkSource(coverArtUrl: string | null, itunesArtworkUrl: string | nu
 
 /**
  * Finds artwork only for a confident match. No artwork is better than the wrong artwork:
- * the client shows a placeholder sleeve instead.
+ * the client shows a placeholder sleeve instead. A release group ID from an already-checked
+ * recommendation skips the MusicBrainz search.
  */
-export async function fetchArtwork(artist: string, album: string): Promise<ArtworkResponse> {
+export async function fetchArtwork(
+  artist: string,
+  album: string,
+  releaseGroupId?: string,
+): Promise<ArtworkResponse> {
   const budgetSignal = AbortSignal.timeout(REQUEST_BUDGET_MS);
 
-  const lookup = await findAlbum({ artist, album }, budgetSignal);
-  const match = lookup.status === 'matched' ? lookup.match : null;
+  const lookup = releaseGroupId ? null : await findAlbum({ artist, album }, budgetSignal);
+  const match = lookup?.status === 'matched' ? lookup.match : null;
+  const matchedGroupId = releaseGroupId ?? match?.releaseGroupId ?? null;
 
-  const coverArtUrl = match
-    ? await fetchCoverArt(match.releaseGroupId, budgetSignal).catch(() => null)
+  const coverArtUrl = matchedGroupId
+    ? await fetchCoverArt(matchedGroupId, budgetSignal).catch(() => null)
     : null;
   const itunesData = await fetchItunesData(artist, album, budgetSignal);
 
@@ -126,7 +132,7 @@ export async function fetchArtwork(artist: string, album: string): Promise<Artwo
     {
       artist,
       album,
-      releaseGroupId: match?.releaseGroupId ?? null,
+      releaseGroupId: matchedGroupId,
       source: artworkSource(coverArtUrl, itunesData.artworkUrl),
     },
     'artwork source',

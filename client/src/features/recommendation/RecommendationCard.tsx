@@ -7,6 +7,7 @@ import {
   buildDiscogsSearchUrl,
 } from '../../services/apiClient';
 import { ServiceLinks } from '../../components/ServiceLinks';
+import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
 
 interface RecommendationCardProps {
   recommendation: RecommendationResponse | null;
@@ -160,20 +161,7 @@ export function RecommendationCard({
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
           ) : (
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--muted)',
-                fontSize: 40,
-                fontFamily: 'var(--serif)',
-              }}
-            >
-              ♪
-            </div>
+            <PlaceholderSleeve artist={recommendation.artist} album={recommendation.album} />
           )}
         </div>
         <div

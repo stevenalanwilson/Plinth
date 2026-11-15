@@ -62,6 +62,16 @@ describe('fetchArtwork', () => {
     });
   });
 
+  it('uses a known release group ID without searching MusicBrainz', async () => {
+    mockFetch.mockResolvedValueOnce(coverArtResponse).mockResolvedValueOnce({ ok: false });
+
+    const result = await fetchArtwork('Massive Attack', 'Mezzanine', 'known-id');
+
+    expect(mockFindAlbum).not.toHaveBeenCalled();
+    expect(mockFetch.mock.calls[0][0]).toBe('https://coverartarchive.org/release-group/known-id');
+    expect(result.artworkUrl).toBe('https://coverartarchive.org/image-500.jpg');
+  });
+
   it('skips Cover Art Archive when there is no confident match', async () => {
     mockFindAlbum.mockResolvedValue({ status: 'not_found' });
     mockFetch.mockResolvedValueOnce(itunesResponse([]));
