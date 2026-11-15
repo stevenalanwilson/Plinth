@@ -83,7 +83,7 @@ export default function App(): React.ReactElement {
             textTransform: 'uppercase',
           }}
         >
-          Music to work too
+          Whole records, picked for you
         </p>
         <div
           style={{
