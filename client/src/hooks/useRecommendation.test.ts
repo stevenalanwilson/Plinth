@@ -5,15 +5,19 @@ import { HistoryEntry } from '../types/history';
 
 vi.mock('../services/apiClient', () => ({
   fetchRecommendation: vi.fn(),
-  fetchArtwork: vi.fn(),
+  fetchRecommendationArtwork: vi.fn(),
   fetchArtistRelations: vi.fn(),
 }));
 
-import { fetchRecommendation, fetchArtwork, fetchArtistRelations } from '../services/apiClient';
+import {
+  fetchRecommendation,
+  fetchRecommendationArtwork,
+  fetchArtistRelations,
+} from '../services/apiClient';
 import { useRecommendation } from './useRecommendation';
 
 const mockFetchRecommendation = vi.mocked(fetchRecommendation);
-const mockFetchArtwork = vi.mocked(fetchArtwork);
+const mockFetchArtwork = vi.mocked(fetchRecommendationArtwork);
 const mockFetchArtistRelations = vi.mocked(fetchArtistRelations);
 
 const recommendation: RecommendationResponse = {
@@ -83,28 +87,26 @@ describe('useRecommendation', () => {
     expect(result.current.recommendation).toEqual(recommendation);
     expect(result.current.artworkResponse?.artworkUrl).toBeNull();
 
-    await waitFor(() =>
-      expect(mockFetchArtwork).toHaveBeenCalledWith('Massive Attack', 'Mezzanine', undefined),
-    );
+    await waitFor(() => expect(mockFetchArtwork).toHaveBeenCalledWith(recommendation));
     await act(async () => resolveArtwork(artwork));
 
     expect(result.current.artworkResponse).toEqual(artwork);
     expect(result.current.history[0].artworkResponse).toEqual(artwork);
   });
 
-  it('looks artwork up by release group when the pick was matched', async () => {
-    mockFetchRecommendation.mockResolvedValue({
+  it('passes the whole pick, so artwork can be found by slug or release group', async () => {
+    const matched = {
       ...recommendation,
       releaseGroupId: 'rg-mezzanine',
-    });
+      slug: 'massive-attack-mezzanine',
+    };
+    mockFetchRecommendation.mockResolvedValue(matched);
     mockFetchArtwork.mockResolvedValue(artwork);
     const { result } = renderHook(() => useRecommendation());
 
     await act(() => result.current.fetchRecommendation());
 
-    await waitFor(() =>
-      expect(mockFetchArtwork).toHaveBeenCalledWith('Massive Attack', 'Mezzanine', 'rg-mezzanine'),
-    );
+    await waitFor(() => expect(mockFetchArtwork).toHaveBeenCalledWith(matched));
   });
 
   it('fetches artwork for a new recommendation when history is already full', async () => {
@@ -117,6 +119,6 @@ describe('useRecommendation', () => {
 
     expect(result.current.history).toHaveLength(50);
     await waitFor(() => expect(result.current.artworkResponse).toEqual(artwork));
-    expect(mockFetchArtwork).toHaveBeenCalledWith('Massive Attack', 'Mezzanine', undefined);
+    expect(mockFetchArtwork).toHaveBeenCalledWith(recommendation);
   });
 });
