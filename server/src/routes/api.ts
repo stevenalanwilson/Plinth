@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { handleRecommend } from '../controllers/recommendController';
 import { handleArtwork } from '../controllers/artworkController';
@@ -46,10 +46,6 @@ const artistEssentialsLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again in a minute.' },
-});
-
-apiRouter.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok' });
 });
 
 apiRouter.post('/recommend', recommendLimiter, handleRecommend);
