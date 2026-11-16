@@ -51,6 +51,10 @@ export interface RecommendationResponse {
   readonly country?: string;
   /** MusicBrainz release group the pick was matched to; absent if it couldn't be checked. */
   readonly releaseGroupId?: string;
+  /** One line about the album itself, not the listener, for its public page and link previews. */
+  readonly hook?: string;
+  /** The album's permalink, /album/{slug}; absent for picks that couldn't be checked or saved. */
+  readonly slug?: string;
 }
 
 export interface ArtworkResponse {

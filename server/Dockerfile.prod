@@ -56,5 +56,9 @@ COPY --from=client-builder /app/dist ./public
 # Remove dev dependencies to keep image lean
 RUN npm prune --omit=dev
 
+# The server refuses to start without DATABASE_URL in production, rather than silently keeping
+# permalinks in memory. Express also runs leaner in this mode.
+ENV NODE_ENV=production
+
 EXPOSE 3001
 CMD ["node", "dist/index.js"]

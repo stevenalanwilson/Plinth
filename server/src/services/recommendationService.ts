@@ -6,7 +6,9 @@ import {
 import { completeJson } from '../repositories/claudeClient';
 import { logger } from '../logger';
 import { normaliseName } from '../utils/musicNames';
+import { AlbumRepository } from '../repositories/albumRepository';
 import { AlbumMatch, findAlbum } from './albumMatchService';
+import { saveAlbum } from './albumService';
 
 const SYSTEM_PROMPT =
   'You are a music expert with encyclopaedic knowledge of albums across all genres. ' +
@@ -107,9 +109,19 @@ Respond with ONLY this JSON:
   "album": "Album Title",
   "year": "YYYY",
   "reason": "Two sentences on why this fits their preferences.",
+  "hook": "One line on what makes the album itself worth hearing, without mentioning the listener or their preferences.",
   "genres": ["Primary Genre", "Secondary Genre"],
   "country": "Country of Origin"
 }`;
+}
+
+// The hook appears in link previews, which truncate long text anyway, and the cap stops a vibe
+// query steering Claude into writing a paragraph onto a public page.
+const MAX_HOOK_LENGTH = 160;
+
+function capHook(hook: string): string {
+  if (hook.length <= MAX_HOOK_LENGTH) return hook;
+  return `${hook.slice(0, MAX_HOOK_LENGTH - 1).trimEnd()}…`;
 }
 
 function toRecommendation(parsed: unknown): RecommendationResponse {
@@ -144,6 +156,7 @@ function toRecommendation(parsed: unknown): RecommendationResponse {
     ? (rec.genres as unknown[]).filter((g): g is string => typeof g === 'string')
     : undefined;
   const country = typeof rec.country === 'string' ? rec.country : undefined;
+  const hook = typeof rec.hook === 'string' ? capHook(rec.hook.trim()) : undefined;
 
   return {
     artist: rec.artist,
@@ -152,6 +165,7 @@ function toRecommendation(parsed: unknown): RecommendationResponse {
     reason: rec.reason,
     ...(genres !== undefined && genres.length > 0 ? { genres } : {}),
     ...(country !== undefined ? { country } : {}),
+    ...(hook ? { hook } : {}),
   };
 }
 
@@ -166,7 +180,9 @@ function isDuplicate(rec: RecommendationResponse, alreadySuggested: readonly str
   return alreadySuggested.some((s) => normaliseName(s) === key);
 }
 
-function withMatch(rec: RecommendationResponse, match: AlbumMatch): RecommendationResponse {
+type MatchedRecommendation = RecommendationResponse & { readonly releaseGroupId: string };
+
+function withMatch(rec: RecommendationResponse, match: AlbumMatch): MatchedRecommendation {
   // MusicBrainz spellings are canonical, and its first-release year beats Claude's guess.
   return {
     ...rec,
@@ -175,6 +191,34 @@ function withMatch(rec: RecommendationResponse, match: AlbumMatch): Recommendati
     year: match.year ?? rec.year,
     releaseGroupId: match.releaseGroupId,
   };
+}
+
+/** Gives a confirmed pick its permalink. A failed save costs the pick its slug, never the pick. */
+async function withPermalink(
+  rec: MatchedRecommendation,
+  albums: AlbumRepository,
+): Promise<RecommendationResponse> {
+  try {
+    const slug = await saveAlbum(albums, {
+      releaseGroupId: rec.releaseGroupId,
+      artist: rec.artist,
+      album: rec.album,
+      year: rec.year,
+      hook: rec.hook ?? null,
+      genres: rec.genres ?? [],
+      country: rec.country ?? null,
+    });
+    return { ...rec, slug };
+  } catch (error) {
+    logger.warn(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        releaseGroupId: rec.releaseGroupId,
+      },
+      'album save failed',
+    );
+    return rec;
+  }
 }
 
 export class UnverifiedRecommendationError extends Error {
@@ -191,10 +235,11 @@ const RECOMMENDATION_SCHEMA = {
     album: { type: 'string' },
     year: { type: 'string' },
     reason: { type: 'string' },
+    hook: { type: 'string' },
     genres: { type: 'array', items: { type: 'string' } },
     country: { type: 'string' },
   },
-  required: ['artist', 'album', 'year', 'reason', 'genres', 'country'],
+  required: ['artist', 'album', 'year', 'reason', 'hook', 'genres', 'country'],
   additionalProperties: false,
 } as const;
 
@@ -214,10 +259,12 @@ const MAX_ATTEMPTS = 3;
 
 /**
  * Asks Claude for a pick and checks it exists in MusicBrainz, asking again (up to
- * MAX_ATTEMPTS calls) when the pick is a duplicate or can't be found.
+ * MAX_ATTEMPTS calls) when the pick is a duplicate or can't be found. A confirmed pick is
+ * saved to `albums` so it has a permalink.
  */
 export async function getRecommendation(
   request: RecommendationRequest,
+  albums: AlbumRepository,
 ): Promise<RecommendationResponse> {
   // Accumulate rejected picks across attempts so each retry prompt is stricter.
   const seen = [...request.alreadySuggested];
@@ -240,7 +287,7 @@ export async function getRecommendation(
     }
 
     const lookup = await findAlbum({ artist: rec.artist, album: rec.album, year: rec.year });
-    if (lookup.status === 'matched') return withMatch(rec, lookup.match);
+    if (lookup.status === 'matched') return withPermalink(withMatch(rec, lookup.match), albums);
     // Better an unchecked pick than no pick at all while MusicBrainz is down.
     if (lookup.status === 'lookup_failed') return rec;
 

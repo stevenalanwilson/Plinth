@@ -10,19 +10,60 @@ if (!process.env.ANTHROPIC_API_KEY) {
   process.exit(1);
 }
 
+import { Pool } from 'pg';
 import { logger } from './logger';
 import { createApp } from './app';
+import { createPool } from './db/pool';
+import { migrate } from './db/migrate';
+import { AlbumRepository } from './repositories/albumRepository';
+import { createPostgresAlbumRepository } from './repositories/postgresAlbumRepository';
+import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 
 const port = process.env.PORT ?? '3001';
 
-const server = createApp().listen(Number(port), () => {
-  logger.info({ port }, 'Server running');
-});
+interface Storage {
+  readonly albums: AlbumRepository;
+  readonly pool: Pool | null;
+}
 
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    logger.info('Server closed');
-    process.exit(0);
+async function connectStorage(): Promise<Storage> {
+  const databaseUrl = process.env.DATABASE_URL;
+
+  if (!databaseUrl) {
+    // Permalinks must outlive a restart in production, so running without a database is a
+    // misconfiguration there, not a fallback.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('DATABASE_URL is required in production');
+    }
+    logger.warn('DATABASE_URL is not set: albums are stored in memory and lost on restart');
+    return { albums: createInMemoryAlbumRepository(), pool: null };
+  }
+
+  const pool = createPool(databaseUrl);
+  const applied = await migrate(pool);
+  if (applied.length > 0) logger.info({ applied }, 'database migrations applied');
+  return { albums: createPostgresAlbumRepository(pool), pool };
+}
+
+async function start(): Promise<void> {
+  const { albums, pool } = await connectStorage();
+
+  const server = createApp({ albums }).listen(Number(port), () => {
+    logger.info({ port }, 'Server running');
   });
+
+  process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, shutting down gracefully');
+    server.close(() => {
+      void (pool?.end() ?? Promise.resolve()).finally(() => {
+        logger.info('Server closed');
+        process.exit(0);
+      });
+    });
+  });
+}
+
+start().catch((error: unknown) => {
+  logger.fatal({ error: error instanceof Error ? error.message : String(error) }, 'startup failed');
+  process.exit(1);
 });

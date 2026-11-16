@@ -13,16 +13,17 @@ vi.mock('./routes/api', async () => {
   router.get('/ping', (_req, res) => {
     res.json({ pong: true });
   });
-  return { apiRouter: router };
+  return { createApiRouter: (): typeof router => router };
 });
 
 import { createApp } from './app';
+import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 
 let server: Server;
 let baseUrl: string;
 
 beforeAll(async () => {
-  server = createApp().listen(0);
+  server = createApp({ albums: createInMemoryAlbumRepository() }).listen(0);
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });

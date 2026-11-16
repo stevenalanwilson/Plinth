@@ -72,6 +72,7 @@ All of these are optional, and any combination works.
 | Artwork           | Cover Art Archive by release group; iTunes only for an exact match         |
 | Music links       | iTunes Search API (Apple Music), Spotify, Discogs                          |
 | Connected artists | MusicBrainz relationships + recording co-credits                           |
+| Storage           | PostgreSQL (`pg`, plain SQL migrations in `server/migrations`)             |
 | Tests             | Vitest, React Testing Library                                              |
 | Tooling           | ESLint, Prettier, Husky + lint-staged, Conventional Commits                |
 | Hosting           | Docker; the production image serves the API and the built client (Railway) |
@@ -81,7 +82,8 @@ All of these are optional, and any combination works.
 1. The client sends your preferences and the albums already suggested to `POST /api/v1/recommend`.
 2. The server asks Claude for a pick, then looks it up on MusicBrainz (one request per second, shared across all callers, with retries when MusicBrainz is busy).
 3. A pick that isn't found, or is a duplicate, is regenerated, up to three attempts. If MusicBrainz is down, the pick is returned unchecked rather than failing.
-4. The client then fetches the cover (`GET /api/v1/artwork`, using the matched release group) and connected artists (`GET /api/v1/artist-rels`). Covers are served through `/api/v1/image`, which only fetches from trusted hosts.
+4. A confirmed pick is saved to the `albums` table with a permanent slug (e.g. `the-sound-jeopardy`) and a one-line `hook` that doesn't depend on your preferences. These will power shareable album pages. Unchecked picks get no slug.
+5. The client then fetches the cover (`GET /api/v1/artwork`, using the matched release group) and connected artists (`GET /api/v1/artist-rels`). Covers are served through `/api/v1/image`, which only fetches from trusted hosts.
 
 Structured logs (pino) record matches, regenerations and artwork sources, so you can see how often each happens.
 
@@ -131,19 +133,22 @@ cd server && npm run dev
 cd client && npm run dev
 ```
 
+Without `DATABASE_URL` the server keeps albums in memory, which is fine for most work. To use Postgres locally, run `docker compose up db` and set `DATABASE_URL` as shown in `.env.example`. Migrations run when the server starts.
+
 Then open [http://localhost:5173](http://localhost:5173).
 
 ## Environment variables
 
-| Variable              | Required | Default                 | Description                                                              |
-| --------------------- | -------- | ----------------------- | ------------------------------------------------------------------------ |
-| `ANTHROPIC_API_KEY`   | ✅       | —                       | Anthropic API key — powers album recommendations                         |
-| `PORT`                |          | `3001`                  | Server port                                                              |
-| `CORS_ORIGIN`         |          | `http://localhost:5173` | Allowed client origin                                                    |
-| `MUSICBRAINZ_CONTACT` |          | —                       | Email or URL sent in the MusicBrainz User-Agent, as their etiquette asks |
-| `VITE_API_URL`        |          | `''` (same origin)      | Client → server base URL (local dev without Docker)                      |
-| `VITE_MONZO_URL`      |          | —                       | Monzo.me payment link shown in the footer                                |
-| `VITE_FEEDBACK_EMAIL` |          | —                       | Email address for the feedback link in the footer                        |
+| Variable              | Required | Default                 | Description                                                                            |
+| --------------------- | -------- | ----------------------- | -------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`   | ✅       | —                       | Anthropic API key — powers album recommendations                                       |
+| `PORT`                |          | `3001`                  | Server port                                                                            |
+| `CORS_ORIGIN`         |          | `http://localhost:5173` | Allowed client origin                                                                  |
+| `DATABASE_URL`        | In prod  | — (in memory)           | Postgres connection for stored albums; the server won't start without it in production |
+| `MUSICBRAINZ_CONTACT` |          | —                       | Email or URL sent in the MusicBrainz User-Agent, as their etiquette asks               |
+| `VITE_API_URL`        |          | `''` (same origin)      | Client → server base URL (local dev without Docker)                                    |
+| `VITE_MONZO_URL`      |          | —                       | Monzo.me payment link shown in the footer                                              |
+| `VITE_FEEDBACK_EMAIL` |          | —                       | Email address for the feedback link in the footer                                      |
 
 **Getting your Anthropic API key**
 
@@ -171,6 +176,13 @@ npm run typecheck
 npm run format
 ```
 
+Database integration tests run only when `TEST_DATABASE_URL` is set; CI provides one. Each run uses a throwaway schema, so it can point at your local database:
+
+```bash
+docker compose up db
+TEST_DATABASE_URL=postgres://plinth:plinth@localhost:5432/plinth npm run test --prefix server
+```
+
 Tests live alongside source files (`foo.ts` → `foo.test.ts`). A pre-commit hook runs Prettier, ESLint, a type check and the tests related to staged files, and CI runs lint, type check and the full test suite on pull requests.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/), with the roadmap item where there is one, e.g. `feat(share): add OG tags (P1.2)`.
@@ -190,9 +202,11 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/), wit
 │   └── src/
 │       ├── controllers/     # Thin HTTP handlers
 │       ├── services/        # recommendation, albumMatch, artwork, artistEssentials, artistRelations
-│       ├── repositories/    # Claude and MusicBrainz clients
+│       ├── repositories/    # Claude and MusicBrainz clients, album storage
+│       ├── db/              # Connection pool and migrations runner
 │       ├── utils/           # Name matching, timeouts
 │       └── routes/
+│   └── migrations/  # Plain SQL, applied in filename order at startup
 ├── shared/          # Types shared between client and server
 ├── docs/            # ROADMAP.md and architecture decision records
 └── docker-compose.yml

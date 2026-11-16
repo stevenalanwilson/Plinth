@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { handleRecommend } from '../controllers/recommendController';
+import { createRecommendHandler } from '../controllers/recommendController';
 import { handleArtwork } from '../controllers/artworkController';
 import { handleArtistRelations } from '../controllers/artistRelationsController';
 import { handleImage } from '../controllers/imageController';
 import { handleArtistEssentials } from '../controllers/artistEssentialsController';
+import { AlbumRepository } from '../repositories/albumRepository';
 
-export const apiRouter = Router();
+export interface ApiDependencies {
+  readonly albums: AlbumRepository;
+}
 
 const recommendLimiter = rateLimit({
   windowMs: 60_000,
@@ -48,8 +51,12 @@ const artistEssentialsLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
-apiRouter.post('/recommend', recommendLimiter, handleRecommend);
-apiRouter.post('/artist-essentials', artistEssentialsLimiter, handleArtistEssentials);
-apiRouter.get('/artwork', artworkLimiter, handleArtwork);
-apiRouter.get('/artist-rels', artistRelsLimiter, handleArtistRelations);
-apiRouter.get('/image', imageLimiter, handleImage);
+export function createApiRouter({ albums }: ApiDependencies): Router {
+  const router = Router();
+  router.post('/recommend', recommendLimiter, createRecommendHandler(albums));
+  router.post('/artist-essentials', artistEssentialsLimiter, handleArtistEssentials);
+  router.get('/artwork', artworkLimiter, handleArtwork);
+  router.get('/artist-rels', artistRelsLimiter, handleArtistRelations);
+  router.get('/image', imageLimiter, handleImage);
+  return router;
+}

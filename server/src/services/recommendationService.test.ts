@@ -24,13 +24,25 @@ import {
 } from './recommendationService';
 import { AlbumQuery, findAlbum } from './albumMatchService';
 import { logger } from '../logger';
-import { RecommendationRequest, RecommendationPreferences } from '@shared/types';
+import {
+  RecommendationRequest,
+  RecommendationPreferences,
+  RecommendationResponse,
+} from '@shared/types';
+import { AlbumRepository } from '../repositories/albumRepository';
+import { createInMemoryAlbumRepository } from '../repositories/inMemoryAlbumRepository';
 
 const mockCreate = vi.fn();
 const mockFindAlbum = vi.mocked(findAlbum);
+let albums: AlbumRepository;
+
+function recommend(request: RecommendationRequest): Promise<RecommendationResponse> {
+  return getRecommendation(request, albums);
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
+  albums = createInMemoryAlbumRepository();
   (Anthropic as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
     messages: { create: mockCreate },
   }));
@@ -80,7 +92,7 @@ describe('getRecommendation', () => {
       content: [{ type: 'text', text: validJsonResponse }],
     });
 
-    const result = await getRecommendation(validRequest);
+    const result = await recommend(validRequest);
 
     expect(result).toMatchObject({
       artist: 'Massive Attack',
@@ -97,7 +109,7 @@ describe('getRecommendation', () => {
       content: [{ type: 'text', text: validJsonResponse }],
     });
 
-    await getRecommendation(validRequest);
+    await recommend(validRequest);
 
     const params = mockCreate.mock.calls[0][0] as {
       output_config: { format: { type: string; schema: { required: string[] } } };
@@ -119,7 +131,9 @@ describe('getRecommendation', () => {
     }));
 
     const { getRecommendation: isolated } = await import('./recommendationService');
-    await expect(isolated(validRequest)).rejects.toThrow('ANTHROPIC_API_KEY is not configured');
+    await expect(isolated(validRequest, albums)).rejects.toThrow(
+      'ANTHROPIC_API_KEY is not configured',
+    );
   });
 
   it('throws when response JSON is unparseable', async () => {
@@ -127,9 +141,7 @@ describe('getRecommendation', () => {
       content: [{ type: 'text', text: 'not json at all' }],
     });
 
-    await expect(getRecommendation(validRequest)).rejects.toThrow(
-      'Claude response was not valid JSON',
-    );
+    await expect(recommend(validRequest)).rejects.toThrow('Claude response was not valid JSON');
   });
 
   it('throws when response is missing required fields', async () => {
@@ -137,7 +149,7 @@ describe('getRecommendation', () => {
       content: [{ type: 'text', text: JSON.stringify({ artist: 'X' }) }],
     });
 
-    await expect(getRecommendation(validRequest)).rejects.toThrow('Incomplete recommendation data');
+    await expect(recommend(validRequest)).rejects.toThrow('Incomplete recommendation data');
   });
 
   it('includes genres in the prompt', async () => {
@@ -145,7 +157,7 @@ describe('getRecommendation', () => {
       content: [{ type: 'text', text: validJsonResponse }],
     });
 
-    await getRecommendation(validRequest);
+    await recommend(validRequest);
 
     const callArgs = mockCreate.mock.calls[0][0];
     const prompt = callArgs.messages[0].content as string;
@@ -158,7 +170,7 @@ describe('getRecommendation', () => {
       content: [{ type: 'text', text: validJsonResponse }],
     });
 
-    await getRecommendation(validRequest);
+    await recommend(validRequest);
 
     const callArgs = mockCreate.mock.calls[0][0];
     const prompt = callArgs.messages[0].content as string;
@@ -171,7 +183,7 @@ describe('getRecommendation', () => {
       content: [{ type: 'text', text: validJsonResponse }],
     });
 
-    await getRecommendation(validRequest);
+    await recommend(validRequest);
 
     const callArgs = mockCreate.mock.calls[0][0];
     const prompt = callArgs.messages[0].content as string;
@@ -184,7 +196,7 @@ describe('getRecommendation', () => {
     });
 
     // tempo: 3 → "slow"
-    await getRecommendation(validRequest);
+    await recommend(validRequest);
 
     const callArgs = mockCreate.mock.calls[0][0];
     const prompt = callArgs.messages[0].content as string;
@@ -196,7 +208,7 @@ describe('getRecommendation', () => {
       content: [{ type: 'text', text: validJsonResponse }],
     });
 
-    await getRecommendation({
+    await recommend({
       ...validRequest,
       preferences: { ...defaultPreferences, prioritiseObscure: true },
     });
@@ -211,7 +223,7 @@ describe('getRecommendation', () => {
       content: [{ type: 'text', text: validJsonResponse }],
     });
 
-    await getRecommendation({
+    await recommend({
       ...validRequest,
       alreadySuggested: ['Mezzanine'],
     });
@@ -227,7 +239,7 @@ describe('getRecommendation', () => {
       content: [{ type: 'text', text: validJsonResponse }],
     });
 
-    await getRecommendation(validRequest);
+    await recommend(validRequest);
 
     const callArgs = mockCreate.mock.calls[0][0];
     const prompt = callArgs.messages[0].content as string;
@@ -270,7 +282,7 @@ describe('getRecommendation album check', () => {
       },
     });
 
-    const result = await getRecommendation(validRequest);
+    const result = await recommend(validRequest);
 
     expect(mockFindAlbum).toHaveBeenCalledWith({
       artist: 'Sound',
@@ -291,7 +303,7 @@ describe('getRecommendation album check', () => {
       .mockResolvedValueOnce(claudeReply('The Sound', 'Jeopardy'));
     mockFindAlbum.mockResolvedValueOnce({ status: 'not_found' });
 
-    const result = await getRecommendation(validRequest);
+    const result = await recommend(validRequest);
 
     expect(result.album).toBe('Jeopardy');
     expect(mockCreate).toHaveBeenCalledTimes(2);
@@ -307,7 +319,7 @@ describe('getRecommendation album check', () => {
     mockCreate.mockResolvedValue(claudeReply('The Sound', 'Jeopardy'));
     mockFindAlbum.mockResolvedValue({ status: 'lookup_failed' });
 
-    const result = await getRecommendation(validRequest);
+    const result = await recommend(validRequest);
 
     expect(result.album).toBe('Jeopardy');
     expect(result.releaseGroupId).toBeUndefined();
@@ -318,9 +330,7 @@ describe('getRecommendation album check', () => {
     mockCreate.mockResolvedValue(claudeReply('Nobody', 'Nothing'));
     mockFindAlbum.mockResolvedValue({ status: 'not_found' });
 
-    await expect(getRecommendation(validRequest)).rejects.toBeInstanceOf(
-      UnverifiedRecommendationError,
-    );
+    await expect(recommend(validRequest)).rejects.toBeInstanceOf(UnverifiedRecommendationError);
     expect(mockCreate).toHaveBeenCalledTimes(3);
   });
 
@@ -329,7 +339,7 @@ describe('getRecommendation album check', () => {
       .mockResolvedValueOnce(claudeReply('Massive Attack', 'Mezzanine'))
       .mockResolvedValueOnce(claudeReply('Burial', 'Untrue'));
 
-    const result = await getRecommendation({
+    const result = await recommend({
       ...validRequest,
       alreadySuggested: ['Massive Attack – Mezzanine'],
     });
@@ -347,7 +357,7 @@ describe('getRecommendation album check', () => {
       .mockResolvedValueOnce(claudeReply('Gil Scott-Heron', 'Pieces Of A Man'))
       .mockResolvedValueOnce(claudeReply('Burial', 'Untrue'));
 
-    const result = await getRecommendation({
+    const result = await recommend({
       ...validRequest,
       alreadySuggested: ['Gil Scott‐Heron – Pieces of a Man'],
     });
@@ -361,12 +371,98 @@ describe('getRecommendation album check', () => {
       .mockResolvedValue(claudeReply('Nobody', 'Nothing'));
     mockFindAlbum.mockResolvedValue({ status: 'not_found' });
 
-    const result = await getRecommendation({
+    const result = await recommend({
       ...validRequest,
       alreadySuggested: ['Massive Attack – Mezzanine'],
     });
 
     expect(result.album).toBe('Mezzanine');
+  });
+});
+
+describe('getRecommendation permalinks', () => {
+  const withHook = (hook: unknown): string =>
+    JSON.stringify({ ...JSON.parse(validJsonResponse), hook });
+
+  it('saves a confirmed pick and returns its slug and hook', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: withHook('Bristol at its most claustrophobic.') }],
+    });
+
+    const result = await recommend(validRequest);
+
+    expect(result.slug).toBe('massive-attack-mezzanine');
+    expect(result.hook).toBe('Bristol at its most claustrophobic.');
+    expect(await albums.findBySlug('massive-attack-mezzanine')).toMatchObject({
+      releaseGroupId: 'rg-1',
+      artist: 'Massive Attack',
+      album: 'Mezzanine',
+      year: '1998',
+      hook: 'Bristol at its most claustrophobic.',
+      genres: ['Trip-hop', 'Electronic'],
+      country: 'United Kingdom',
+    });
+  });
+
+  it('gives an unchecked pick no slug, so it never gets a page', async () => {
+    mockFindAlbum.mockResolvedValue({ status: 'lookup_failed' });
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: withHook('A hook.') }] });
+
+    const result = await recommend(validRequest);
+
+    expect(result.slug).toBeUndefined();
+    expect(result.hook).toBe('A hook.');
+    expect(await albums.findBySlug('massive-attack-mezzanine')).toBeNull();
+  });
+
+  it('still returns the pick, without a slug, when saving fails', async () => {
+    albums = {
+      ...createInMemoryAlbumRepository(),
+      insert: vi.fn().mockRejectedValue(new Error('connection refused')),
+    };
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: withHook('A hook.') }] });
+
+    const result = await recommend(validRequest);
+
+    expect(result).toMatchObject({ artist: 'Massive Attack', album: 'Mezzanine' });
+    expect(result.slug).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'connection refused', releaseGroupId: 'rg-1' }),
+      'album save failed',
+    );
+  });
+
+  it('caps a long hook at 160 characters', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: withHook(`${'word '.repeat(60)}end`) }],
+    });
+
+    const result = await recommend(validRequest);
+
+    expect(result.hook?.length).toBeLessThanOrEqual(160);
+    expect(result.hook?.endsWith('…')).toBe(true);
+  });
+
+  it('treats a blank hook as missing', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: withHook('   ') }] });
+
+    const result = await recommend(validRequest);
+
+    expect(result.hook).toBeUndefined();
+    expect((await albums.findBySlug('massive-attack-mezzanine'))?.hook).toBeNull();
+  });
+
+  it('asks Claude for a hook that is about the album, not the listener', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: withHook('A hook.') }] });
+
+    await recommend(validRequest);
+
+    const params = mockCreate.mock.calls[0][0] as {
+      output_config: { format: { schema: { required: string[] } } };
+      messages: { content: string }[];
+    };
+    expect(params.output_config.format.schema.required).toContain('hook');
+    expect(params.messages[0].content).toMatch(/"hook":.*without mentioning the listener/);
   });
 });
 
@@ -417,7 +513,7 @@ describe('genres and country parsing', () => {
       content: [{ type: 'text', text: validJsonResponse }],
     });
 
-    const result = await getRecommendation(validRequest);
+    const result = await recommend(validRequest);
 
     expect(result.genres).toEqual(['Trip-hop', 'Electronic']);
     expect(result.country).toBe('United Kingdom');
@@ -433,7 +529,7 @@ describe('genres and country parsing', () => {
       ],
     });
 
-    const result = await getRecommendation(validRequest);
+    const result = await recommend(validRequest);
 
     expect(result.genres).toBeUndefined();
     expect(result.country).toBeUndefined();
@@ -456,7 +552,7 @@ describe('genres and country parsing', () => {
       ],
     });
 
-    const result = await getRecommendation(validRequest);
+    const result = await recommend(validRequest);
 
     expect(result.genres).toEqual(['Rock', 'Jazz']);
   });
