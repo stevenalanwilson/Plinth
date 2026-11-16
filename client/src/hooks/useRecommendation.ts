@@ -9,7 +9,7 @@ import {
 import { HistoryEntry } from '../types/history';
 import {
   fetchRecommendation as apiFetchRecommendation,
-  fetchArtwork,
+  fetchRecommendationArtwork,
   fetchArtistRelations,
 } from '../services/apiClient';
 import { mergeHistory } from '../services/libraryExport';
@@ -175,11 +175,7 @@ export function useRecommendation(): UseRecommendationReturn {
 
         let artwork: ArtworkResponse;
         try {
-          artwork = await fetchArtwork(
-            entry.recommendation.artist,
-            entry.recommendation.album,
-            entry.recommendation.releaseGroupId,
-          );
+          artwork = await fetchRecommendationArtwork(entry.recommendation);
         } catch {
           // Most likely rate-limited or offline; the remaining entries would fail the same way,
           // so stop and let the next backoff attempt pick them up.

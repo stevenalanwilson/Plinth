@@ -1,4 +1,4 @@
-import { AlbumRepository, NewAlbum, StoredAlbum } from './albumRepository';
+import { AlbumRepository, ArtworkLookup, NewAlbum, StoredAlbum } from './albumRepository';
 
 /** For tests and for local development without a database; everything is lost on restart. */
 export function createInMemoryAlbumRepository(): AlbumRepository {
@@ -22,9 +22,33 @@ export function createInMemoryAlbumRepository(): AlbumRepository {
         throw new Error(`Slug already in use: ${album.slug}`);
       }
 
-      const stored: StoredAlbum = { ...album, genres: [...album.genres], createdAt: new Date() };
+      const stored: StoredAlbum = {
+        ...album,
+        genres: [...album.genres],
+        artworkUrl: null,
+        appleMusicUrl: null,
+        artworkCheckedAt: null,
+        createdAt: new Date(),
+      };
       byReleaseGroupId.set(album.releaseGroupId, stored);
       return stored;
+    },
+
+    async updateArtwork(
+      releaseGroupId: string,
+      lookup: ArtworkLookup,
+    ): Promise<StoredAlbum | null> {
+      const existing = byReleaseGroupId.get(releaseGroupId);
+      if (!existing) return null;
+
+      const updated: StoredAlbum = {
+        ...existing,
+        artworkUrl: lookup.artworkUrl,
+        appleMusicUrl: lookup.appleMusicUrl,
+        artworkCheckedAt: lookup.checkedAt,
+      };
+      byReleaseGroupId.set(releaseGroupId, updated);
+      return updated;
     },
   };
 }

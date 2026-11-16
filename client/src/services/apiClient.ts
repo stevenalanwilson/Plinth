@@ -1,4 +1,5 @@
 import {
+  AlbumResponse,
   RecommendationRequest,
   RecommendationResponse,
   ArtworkResponse,
@@ -8,6 +9,22 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 const API_V1 = '/api/v1';
+
+/** A failed API call, with the HTTP status so callers can tell "not found" from "try later". */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function toApiError(res: Response): Promise<ApiError> {
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  return new ApiError(data.error ?? `Request failed with status ${res.status}`, res.status);
+}
 const REQUEST_TIMEOUT_MS = 30_000;
 
 async function fetchWithTimeout(
@@ -40,22 +57,16 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
     signal,
   );
 
-  if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `Request failed with status ${res.status}`);
-  }
+  if (!res.ok) throw await toApiError(res);
 
   return res.json() as Promise<T>;
 }
 
-async function get<T>(path: string, params: Record<string, string>): Promise<T> {
+async function get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const query = new URLSearchParams(params).toString();
-  const res = await fetchWithTimeout(`${API_BASE}${path}?${query}`);
+  const res = await fetchWithTimeout(`${API_BASE}${path}${query ? `?${query}` : ''}`);
 
-  if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `Request failed with status ${res.status}`);
-  }
+  if (!res.ok) throw await toApiError(res);
 
   return res.json() as Promise<T>;
 }
@@ -77,6 +88,35 @@ export function fetchArtwork(
     album,
     ...(releaseGroupId ? { releaseGroupId } : {}),
   });
+}
+
+export function fetchAlbum(slug: string): Promise<AlbumResponse> {
+  return get<AlbumResponse>(`${API_V1}/albums/${encodeURIComponent(slug)}`);
+}
+
+/**
+ * Artwork for a pick: from its stored album when it has a slug, otherwise looked up by name
+ * (and release group, when the pick was matched).
+ */
+export async function fetchRecommendationArtwork(
+  recommendation: RecommendationResponse,
+): Promise<ArtworkResponse> {
+  const { artist, album, releaseGroupId, slug } = recommendation;
+  if (slug) {
+    try {
+      const stored = await fetchAlbum(slug);
+      return {
+        artworkUrl: stored.artworkUrl,
+        year: stored.year,
+        appleMusicUrl: stored.appleMusicUrl,
+      };
+    } catch (error) {
+      // A slug only disappears where albums live in memory (local dev without a database), so
+      // fall back for that, but not for errors like rate limits that a retry would only repeat.
+      if (!(error instanceof ApiError && error.status === 404)) throw error;
+    }
+  }
+  return fetchArtwork(artist, album, releaseGroupId);
 }
 
 export function fetchArtistRelations(artist: string): Promise<ArtistRelationsResponse> {

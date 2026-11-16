@@ -9,7 +9,18 @@ export interface NewAlbum {
   readonly country: string | null;
 }
 
-export interface StoredAlbum extends NewAlbum {
+export interface AlbumArtwork {
+  readonly artworkUrl: string | null;
+  readonly appleMusicUrl: string | null;
+}
+
+export interface ArtworkLookup extends AlbumArtwork {
+  readonly checkedAt: Date;
+}
+
+export interface StoredAlbum extends NewAlbum, AlbumArtwork {
+  /** When artwork was last looked up; null until the first lookup. */
+  readonly artworkCheckedAt: Date | null;
   readonly createdAt: Date;
 }
 
@@ -22,4 +33,6 @@ export interface AlbumRepository {
    * so the first save wins. Rejects if the slug belongs to a different album.
    */
   insert(album: NewAlbum): Promise<StoredAlbum>;
+  /** Records an artwork lookup, including one that found nothing. Null if the album isn't stored. */
+  updateArtwork(releaseGroupId: string, lookup: ArtworkLookup): Promise<StoredAlbum | null>;
 }

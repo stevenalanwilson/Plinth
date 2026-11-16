@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { AlbumRepository, NewAlbum, StoredAlbum } from './albumRepository';
+import { AlbumRepository, ArtworkLookup, NewAlbum, StoredAlbum } from './albumRepository';
 
 interface AlbumRow {
   release_group_id: string;
@@ -10,10 +10,15 @@ interface AlbumRow {
   hook: string | null;
   genres: string[];
   country: string | null;
+  artwork_url: string | null;
+  apple_music_url: string | null;
+  artwork_checked_at: Date | null;
   created_at: Date;
 }
 
-const COLUMNS = 'release_group_id, slug, artist, album, year, hook, genres, country, created_at';
+const COLUMNS =
+  'release_group_id, slug, artist, album, year, hook, genres, country, ' +
+  'artwork_url, apple_music_url, artwork_checked_at, created_at';
 
 function toStoredAlbum(row: AlbumRow): StoredAlbum {
   return {
@@ -25,6 +30,9 @@ function toStoredAlbum(row: AlbumRow): StoredAlbum {
     hook: row.hook,
     genres: row.genres,
     country: row.country,
+    artworkUrl: row.artwork_url,
+    appleMusicUrl: row.apple_music_url,
+    artworkCheckedAt: row.artwork_checked_at,
     createdAt: row.created_at,
   };
 }
@@ -68,6 +76,20 @@ export function createPostgresAlbumRepository(pool: Pool): AlbumRepository {
         ],
       );
       return toStoredAlbum(rows[0]);
+    },
+
+    async updateArtwork(
+      releaseGroupId: string,
+      lookup: ArtworkLookup,
+    ): Promise<StoredAlbum | null> {
+      const { rows } = await pool.query<AlbumRow>(
+        `UPDATE albums
+         SET artwork_url = $2, apple_music_url = $3, artwork_checked_at = $4
+         WHERE release_group_id = $1
+         RETURNING ${COLUMNS}`,
+        [releaseGroupId, lookup.artworkUrl, lookup.appleMusicUrl, lookup.checkedAt],
+      );
+      return rows[0] ? toStoredAlbum(rows[0]) : null;
     },
   };
 }

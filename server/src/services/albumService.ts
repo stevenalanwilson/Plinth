@@ -1,5 +1,8 @@
-import { AlbumRepository, NewAlbum } from '../repositories/albumRepository';
+import { AlbumResponse } from '@shared/types';
+import { AlbumRepository, NewAlbum, StoredAlbum } from '../repositories/albumRepository';
 import { toSlug } from '../utils/musicNames';
+import { logger } from '../logger';
+import { fetchArtwork } from './artworkService';
 
 export type AlbumToSave = Omit<NewAlbum, 'slug'>;
 
@@ -26,4 +29,68 @@ export async function saveAlbum(albums: AlbumRepository, album: AlbumToSave): Pr
 
   const stored = await albums.insert({ ...album, slug: await availableSlug(albums, album) });
   return stored.slug;
+}
+
+// A missing cover is often temporary (the Cover Art Archive was busy, or art was added later),
+// so look again after an hour. A found cover is kept for good.
+const MISSING_ARTWORK_RECHECK_MS = 60 * 60 * 1000;
+
+function needsArtworkLookup(album: StoredAlbum, now: Date): boolean {
+  if (!album.artworkCheckedAt) return true;
+  if (album.artworkUrl) return false;
+  return now.getTime() - album.artworkCheckedAt.getTime() >= MISSING_ARTWORK_RECHECK_MS;
+}
+
+async function withArtwork(
+  albums: AlbumRepository,
+  album: StoredAlbum,
+  now: Date,
+): Promise<StoredAlbum> {
+  try {
+    const artwork = await fetchArtwork(album.artist, album.album, album.releaseGroupId);
+    const updated = await albums.updateArtwork(album.releaseGroupId, {
+      artworkUrl: artwork.artworkUrl,
+      appleMusicUrl: artwork.appleMusicUrl,
+      checkedAt: now,
+    });
+    return updated ?? album;
+  } catch (error) {
+    // Not recorded as checked, so the next view tries again.
+    logger.warn(
+      { error: error instanceof Error ? error.message : String(error), slug: album.slug },
+      'album artwork lookup failed',
+    );
+    return album;
+  }
+}
+
+function toAlbumResponse(album: StoredAlbum): AlbumResponse {
+  return {
+    slug: album.slug,
+    releaseGroupId: album.releaseGroupId,
+    artist: album.artist,
+    album: album.album,
+    year: album.year,
+    hook: album.hook,
+    genres: album.genres,
+    country: album.country,
+    artworkUrl: album.artworkUrl,
+    appleMusicUrl: album.appleMusicUrl,
+  };
+}
+
+/**
+ * Returns the album with its cover and listening links, or null if the slug isn't stored. The
+ * artwork lookup runs once and is kept, so later views don't touch any outside service.
+ */
+export async function getAlbum(
+  albums: AlbumRepository,
+  slug: string,
+  now: Date = new Date(),
+): Promise<AlbumResponse | null> {
+  const stored = await albums.findBySlug(slug);
+  if (!stored) return null;
+
+  const album = needsArtworkLookup(stored, now) ? await withArtwork(albums, stored, now) : stored;
+  return toAlbumResponse(album);
 }
