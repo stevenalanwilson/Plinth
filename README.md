@@ -78,12 +78,14 @@ All of these are optional, and any combination works.
 
 ## How a recommendation is made
 
-1. The client sends your preferences and the albums already suggested to `POST /api/recommend`.
+1. The client sends your preferences and the albums already suggested to `POST /api/v1/recommend`.
 2. The server asks Claude for a pick, then looks it up on MusicBrainz (one request per second, shared across all callers, with retries when MusicBrainz is busy).
 3. A pick that isn't found, or is a duplicate, is regenerated, up to three attempts. If MusicBrainz is down, the pick is returned unchecked rather than failing.
-4. The client then fetches the cover (`GET /api/artwork`, using the matched release group) and connected artists (`GET /api/artist-rels`). Covers are served through `/api/image`, which only fetches from trusted hosts.
+4. The client then fetches the cover (`GET /api/v1/artwork`, using the matched release group) and connected artists (`GET /api/v1/artist-rels`). Covers are served through `/api/v1/image`, which only fetches from trusted hosts.
 
 Structured logs (pino) record matches, regenerations and artwork sources, so you can see how often each happens.
+
+The API is versioned under `/api/v1`. Only add to it — released apps keep calling old versions for years. `/api/health` stays unversioned because the Railway and Docker health checks use it.
 
 ## Setup
 

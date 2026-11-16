@@ -7,6 +7,7 @@ import {
 } from '@shared/types';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
+const API_V1 = '/api/v1';
 const REQUEST_TIMEOUT_MS = 30_000;
 
 async function fetchWithTimeout(
@@ -63,7 +64,7 @@ export function fetchRecommendation(
   request: RecommendationRequest,
   signal?: AbortSignal,
 ): Promise<RecommendationResponse> {
-  return post<RecommendationResponse>('/api/recommend', request, signal);
+  return post<RecommendationResponse>(`${API_V1}/recommend`, request, signal);
 }
 
 export function fetchArtwork(
@@ -71,7 +72,7 @@ export function fetchArtwork(
   album: string,
   releaseGroupId?: string,
 ): Promise<ArtworkResponse> {
-  return get<ArtworkResponse>('/api/artwork', {
+  return get<ArtworkResponse>(`${API_V1}/artwork`, {
     artist,
     album,
     ...(releaseGroupId ? { releaseGroupId } : {}),
@@ -79,18 +80,18 @@ export function fetchArtwork(
 }
 
 export function fetchArtistRelations(artist: string): Promise<ArtistRelationsResponse> {
-  return get<ArtistRelationsResponse>('/api/artist-rels', { artist });
+  return get<ArtistRelationsResponse>(`${API_V1}/artist-rels`, { artist });
 }
 
 export function fetchArtistEssentials(
   artist: string,
   signal?: AbortSignal,
 ): Promise<ArtistEssentialsResponse> {
-  return post<ArtistEssentialsResponse>('/api/artist-essentials', { artist }, signal);
+  return post<ArtistEssentialsResponse>(`${API_V1}/artist-essentials`, { artist }, signal);
 }
 
 export function getProxiedArtworkUrl(artworkUrl: string): string {
-  return `${API_BASE}/api/image?url=${encodeURIComponent(artworkUrl)}`;
+  return `${API_BASE}${API_V1}/image?url=${encodeURIComponent(artworkUrl)}`;
 }
 
 export function buildAppleMusicSearchUrl(artist: string, album: string): string {
