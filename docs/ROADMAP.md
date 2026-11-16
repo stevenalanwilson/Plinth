@@ -36,16 +36,17 @@
 
 **Goal:** every recommendation can bring in a new user.
 
-- [ ] **P1.1 Permalinks** — each result gets its own page (e.g. `/album/the-sound-jeopardy`); store the generated result so the page loads without another API call
+**Order:** P1.6 → P1.1 (server) → P1.7 and P1.1 (client) → P1.5 → P1.4 → P1.2 and P1.3. Don't announce permalinks until the cache (P1.5) has landed.
+
+- [ ] **P1.1 Permalinks** — each album gets its own page (e.g. `/album/the-sound-jeopardy`); only picks MusicBrainz confirmed get one, and a slug never changes once issued. Store the album with a short `hook` from Claude (one line that doesn't depend on the user's preferences), so the page loads without calling Claude or MusicBrainz. The MusicBrainz release group ID identifies the album and the slug is its public name
 - [ ] **P1.2 Preview cards (OG tags)** — shared links show cover, title and a one-line hook (WhatsApp, Bluesky, Slack)
 - [ ] **P1.3 Share button** — copy link, plus the native share sheet on mobile
 - [ ] **P1.4 Album detail page** — the permalink page shows the tracklist, release info and related albums via MusicBrainz
-- [ ] **P1.5 Caching layer (Redis)** — cache MusicBrainz/Cover Art lookups and reuse results for identical inputs and permalink pages, to control API costs and rate-limit risk
-- [ ] **P1.6 Versioned API** — serve the routes under `/api/v1` and only add to them from now on, so older clients keep working (an app version stays in people's pockets for years)
-- [ ] **P1.7 Server-assembled recommendation** — `/recommend` returns the pick with its artwork and connected artists, so no client has to repeat the recommend → artwork → relations chain that `useRecommendation` runs today
-- [ ] **P1.8 Safe retries** — an idempotency key on `/recommend`, so a retry after a dropped connection doesn't pay for a second Claude call
+- [ ] **P1.5 Caching layer (Postgres)** — cache MusicBrainz, Cover Art and iTunes lookups and reuse results for identical inputs and permalink pages, to control API costs and rate-limit risk. Postgres rather than Redis, since Phase 4 needs it anyway; keep the cache behind a small interface so Redis can replace it later. Log cache hits and misses
+- [ ] **P1.6 Versioned API** — serve the routes under `/api/v1` and only add to them from now on, so older clients keep working (an app version stays in people's pockets for years). No legacy alias is needed while the server and client ship together; keep `/api/health` unversioned, as the Railway health check uses it
+- [ ] **P1.7 Album resource** — `GET /api/v1/albums/:slug` returns the album with its cover and listening links, and `/recommend` returns the pick with its slug straight away. Every client, including the permalink page, uses that one endpoint instead of repeating the recommend → artwork chain in `useRecommendation`. The cover stays a separate step so the pick appears without waiting for MusicBrainz, and history entries from before the slug keep using the existing artwork endpoint. Validate new endpoints with Zod so the API contract (P7.2) can be generated from them
 
-**Done when:** a shared link shows a proper card and opens a working page for someone who has never visited.
+**Done when:** a shared link shows a proper card and opens a working page for someone who has never visited, and a visit to a permalink makes no Claude calls.
 
 ---
 
@@ -85,6 +86,7 @@
 - [ ] **P4.4 Server-side library** — the server database becomes the source of truth for the crate; each client keeps a local copy and syncs through idempotent endpoints with last-modified times and delete markers (last write wins)
 - [ ] **P4.5 Token-based auth for every client** — an anonymous device token first, upgraded to an account at sign-in; bearer tokens rather than cookies, so web and native share one path
 - [ ] **P4.6 Insights on the server** — compute the stats on the server once the library is synced, so every client shows the same numbers
+- [ ] **P4.7 Safe retries** — an idempotency key on `/recommend`, kept briefly on the server, so a retry after a dropped connection (common on mobile) doesn't pay for a second Claude call
 
 **Done when:** a user can sign in on their phone and see the crate they built on desktop.
 
@@ -121,7 +123,7 @@
 **Order:** the PWA can ship once P1.6 and P1.7 are done. iOS needs Phase 4 first, because a phone app with a local-only crate loses everything when it's deleted. Items can be interleaved with Phases 2–6.
 
 - [ ] **P7.1 Choose the native stack and its reason to exist (explore)** — Expo/React Native (shares the TypeScript), Capacitor (wraps the web app, fastest to the store but feels like a web page) or Swift (best feel, a second codebase). Only go native if at least one thing needs it: MusicKit library access, barcode scanning for the vinyl layer, push notifications or a widget, a share extension, an offline crate
-- [ ] **P7.2 API contract (OpenAPI)** — define each request and response once (for example with Zod), generate the OpenAPI spec and typed clients from it, and have the server report a minimum supported app version so old apps can be asked to update. Needed for any non-TypeScript client; skippable if P7.1 picks Expo
+- [ ] **P7.2 API contract (OpenAPI)** — define each request and response once with Zod (new endpoints from P1.7 already do), generate the OpenAPI spec and typed clients from it, and have the server report a minimum supported app version so old apps can be asked to update. Needed for any non-TypeScript client; skippable if P7.1 picks Expo
 - [ ] **P7.3 Repo layout** — `apps/web`, `apps/ios` (later), `packages/contract` and `server/`; keep the server one modular monolith, with no microservices or per-client backends
 - [ ] **P7.4 Installable PWA** — a service worker, offline browsing of the crate, cached covers and an install prompt. On iOS, push only works once installed to the home screen, storage can be cleared by the system, and there is no MusicKit or scanning
 - [ ] **P7.5 Phone-first Discover flow** — a one-tap path (presets, "surprise me") with the fine controls behind "adjust"; a loading state for the 4–12 second wait that can be cancelled and survives the app going to the background
