@@ -11,6 +11,22 @@ jobs:
     name: Lint, typecheck & test
     runs-on: ubuntu-latest
 
+    # For the database integration tests, which are skipped when TEST_DATABASE_URL isn't set.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: plinth
+          POSTGRES_PASSWORD: plinth
+          POSTGRES_DB: plinth_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U plinth -d plinth_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -36,3 +52,5 @@ jobs:
 
       - name: Test
         run: npm run test
+        env:
+          TEST_DATABASE_URL: postgres://plinth:plinth@localhost:5432/plinth_test

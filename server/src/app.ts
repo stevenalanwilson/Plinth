@@ -4,9 +4,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import { logger } from './logger';
-import { apiRouter } from './routes/api';
+import { ApiDependencies, createApiRouter } from './routes/api';
 
-export function createApp(): Express {
+export type AppDependencies = ApiDependencies;
+
+export function createApp(dependencies: AppDependencies): Express {
   const app = express();
 
   app.use(helmet());
@@ -32,7 +34,7 @@ export function createApp(): Express {
     res.json({ status: 'ok' });
   });
   // Versioned so released apps keep working as the API grows: only add to v1, never break it.
-  app.use('/api/v1', apiRouter);
+  app.use('/api/v1', createApiRouter(dependencies));
   // Without this, unknown API paths fall through to the web app and return HTML with a 200.
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Not found' });

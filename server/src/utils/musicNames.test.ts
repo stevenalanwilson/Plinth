@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { artistsMatch, normaliseName, titlesMatch } from './musicNames';
+import { artistsMatch, normaliseName, titlesMatch, toSlug } from './musicNames';
 
 describe('normaliseName', () => {
   it('ignores case, accents and punctuation', () => {
@@ -68,5 +68,59 @@ describe('artistsMatch', () => {
 
   it('rejects an unrelated artist', () => {
     expect(artistsMatch('The Sound', 'Television’s Greatest Hits Band')).toBe(false);
+  });
+});
+
+describe('toSlug', () => {
+  it('lowercases and joins words with hyphens, keeping a leading "The"', () => {
+    expect(toSlug('The Sound Jeopardy')).toBe('the-sound-jeopardy');
+  });
+
+  it('folds accents and letters Unicode does not decompose', () => {
+    expect(toSlug('Sigur Rós Ágætis byrjun')).toBe('sigur-ros-agaetis-byrjun');
+    expect(toSlug('Amon Düül II Yeti')).toBe('amon-duul-ii-yeti');
+  });
+
+  it('drops apostrophes and acronym dots instead of splitting words', () => {
+    expect(toSlug("Bonnie 'Prince' Billy I See a Darkness")).toBe(
+      'bonnie-prince-billy-i-see-a-darkness',
+    );
+    expect(toSlug("Neu! Neu! '75")).toBe('neu-neu-75');
+    expect(toSlug('R.E.M. Murmur')).toBe('rem-murmur');
+  });
+
+  it('spells out "&"', () => {
+    expect(toSlug('Witthüser & Westrupp Trips und Träume')).toBe(
+      'witthuser-and-westrupp-trips-und-traume',
+    );
+  });
+
+  it('keeps letters from scripts without a Latin form', () => {
+    expect(toSlug('大瀧詠一 A Long Vacation')).toBe('大瀧詠一-a-long-vacation');
+  });
+
+  it('keeps edition words, since stored titles come from MusicBrainz and name one album', () => {
+    expect(toSlug('Harmonia Deluxe')).toBe('harmonia-deluxe');
+  });
+
+  it('returns an empty slug for names with no letters or digits', () => {
+    expect(toSlug('!!! ...')).toBe('');
+  });
+
+  it('caps the length at a word boundary', () => {
+    const slug = toSlug(
+      `Ólafur Arnalds ${'And They Have Escaped the Weight of Darkness '.repeat(3)}`,
+    );
+
+    expect(slug.length).toBeLessThanOrEqual(80);
+    expect(slug).toMatch(/^olafur-arnalds-and-they-have-escaped/);
+    expect(slug).not.toMatch(/-$/);
+    expect(
+      slug
+        .split('-')
+        .every((word) =>
+          'and they have escaped the weight of darkness olafur arnalds'.includes(word),
+        ),
+    ).toBe(true);
   });
 });

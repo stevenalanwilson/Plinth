@@ -16,26 +16,51 @@ const UNDECOMPOSED_LETTERS: Readonly<Record<string, string>> = {
   ı: 'i',
 };
 
+// Long enough for nearly every "artist album" pair; slugs are URLs people paste and read.
+const MAX_SLUG_LENGTH = 80;
+
+function stripAccents(value: string): string {
+  return value.normalize('NFKD').replace(/\p{M}/gu, '');
+}
+
+function foldLetters(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[æœøßðþłđı]/g, (letter) => UNDECOMPOSED_LETTERS[letter] ?? letter)
+    .replace(/['‘’]|(?<=\p{L})\.(?=\p{L})/gu, '')
+    .replace(/&/g, ' and ');
+}
+
 /**
  * Reduces an artist name or album title to a form that ignores case, accents, punctuation,
  * "&" vs "and", a leading "The" and edition notes, so two spellings of one album compare equal.
  */
 export function normaliseName(value: string): string {
-  const normalised = value
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
-    .replace(EDITION_NOTE, ' ')
-    .replace(REMASTER_SUFFIX, '')
-    .toLowerCase()
-    .replace(/[æœøßðþłđı]/g, (letter) => UNDECOMPOSED_LETTERS[letter] ?? letter)
-    .replace(/['‘’]|(?<=\p{L})\.(?=\p{L})/gu, '')
-    .replace(/&/g, ' and ')
+  const normalised = foldLetters(
+    stripAccents(value).replace(EDITION_NOTE, ' ').replace(REMASTER_SUFFIX, ''),
+  )
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
     .replace(/^the /, '');
 
   // Names made only of punctuation (the band !!!) would otherwise all normalise to "".
   return normalised === '' ? value.trim().toLowerCase() : normalised;
+}
+
+/**
+ * Turns a name into a readable URL segment, e.g. "The Sound Jeopardy" → "the-sound-jeopardy".
+ * Unlike normaliseName it keeps "The" and edition words, because a slug names one stored album
+ * rather than comparing spellings. Returns "" when the name has no letters or digits.
+ */
+export function toSlug(value: string): string {
+  const slug = foldLetters(stripAccents(value))
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  if (slug.length <= MAX_SLUG_LENGTH) return slug;
+
+  const cut = slug.slice(0, MAX_SLUG_LENGTH + 1);
+  const lastBreak = cut.lastIndexOf('-');
+  return lastBreak > 0 ? cut.slice(0, lastBreak) : slug.slice(0, MAX_SLUG_LENGTH);
 }
 
 export function titlesMatch(requested: string, candidate: string): boolean {

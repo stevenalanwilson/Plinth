@@ -13,6 +13,7 @@ import {
   MAX_PREFERENCE_ARRAY_LENGTH,
 } from '@shared/types';
 import { logger } from '../logger';
+import { AlbumRepository } from '../repositories/albumRepository';
 
 const VALID_ERAS = new Set<string>(ERA_VALUES);
 const MAX_ALREADY_SUGGESTED = 150;
@@ -80,7 +81,17 @@ function isValidPreferences(value: unknown): value is RecommendationPreferences 
   );
 }
 
-export async function handleRecommend(req: Request, res: Response): Promise<void> {
+export function createRecommendHandler(
+  albums: AlbumRepository,
+): (req: Request, res: Response) => Promise<void> {
+  return (req, res) => handleRecommend(req, res, albums);
+}
+
+async function handleRecommend(
+  req: Request,
+  res: Response,
+  albums: AlbumRepository,
+): Promise<void> {
   const body = req.body as Partial<RecommendationRequest>;
 
   if (!isValidPreferences(body.preferences)) {
@@ -118,13 +129,16 @@ export async function handleRecommend(req: Request, res: Response): Promise<void
   }
 
   try {
-    const recommendation = await getRecommendation({
-      preferences: body.preferences,
-      alreadySuggested: body.alreadySuggested,
-      pivot: body.pivot,
-      seedArtist,
-      vibeQuery,
-    });
+    const recommendation = await getRecommendation(
+      {
+        preferences: body.preferences,
+        alreadySuggested: body.alreadySuggested,
+        pivot: body.pivot,
+        seedArtist,
+        vibeQuery,
+      },
+      albums,
+    );
     res.json(recommendation);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';

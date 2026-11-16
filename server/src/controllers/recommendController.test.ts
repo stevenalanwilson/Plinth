@@ -7,13 +7,16 @@ vi.mock('../services/recommendationService', async (importOriginal) => ({
   getRecommendation: vi.fn(),
 }));
 
-import { handleRecommend } from './recommendController';
+import { createRecommendHandler } from './recommendController';
+import { createInMemoryAlbumRepository } from '../repositories/inMemoryAlbumRepository';
 import {
   getRecommendation,
   UnverifiedRecommendationError,
 } from '../services/recommendationService';
 
 const mockGetRecommendation = vi.mocked(getRecommendation);
+const albums = createInMemoryAlbumRepository();
+const handleRecommend = createRecommendHandler(albums);
 
 function makeRes(): {
   res: Response;
@@ -66,10 +69,10 @@ describe('handleRecommend', () => {
 
       await handleRecommend(makeReq(validBody), res);
 
-      expect(mockGetRecommendation).toHaveBeenCalledWith({
-        preferences: validPreferences,
-        alreadySuggested: [],
-      });
+      expect(mockGetRecommendation).toHaveBeenCalledWith(
+        { preferences: validPreferences, alreadySuggested: [] },
+        albums,
+      );
       expect(json).toHaveBeenCalledWith(mockRecommendation);
     });
 
@@ -82,6 +85,7 @@ describe('handleRecommend', () => {
 
       expect(mockGetRecommendation).toHaveBeenCalledWith(
         expect.objectContaining({ alreadySuggested: ['Dummy', 'OK Computer'] }),
+        albums,
       );
     });
   });
