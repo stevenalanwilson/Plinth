@@ -1,5 +1,8 @@
 import dotenv from 'dotenv';
-dotenv.config();
+// The .env file lives at the repo root, shared with Vite and Docker Compose, so load it from
+// there rather than the working directory, which is server/ under `npm run dev`. In Docker and
+// production the file isn't there and the variables come from the environment instead.
+dotenv.config({ path: `${__dirname}/../../.env` });
 
 // Validate required environment variables before starting
 if (!process.env.ANTHROPIC_API_KEY) {
