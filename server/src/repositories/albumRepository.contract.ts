@@ -63,6 +63,59 @@ export function describeAlbumRepository(
       expect(await albums.findBySlug('other-slug')).toBeNull();
     });
 
+    it('starts with no artwork and an unchecked lookup', async () => {
+      const stored = await albums.insert(JEOPARDY);
+
+      expect(stored).toMatchObject({
+        artworkUrl: null,
+        appleMusicUrl: null,
+        artworkCheckedAt: null,
+      });
+    });
+
+    it('records an artwork lookup and returns the updated album', async () => {
+      await albums.insert(JEOPARDY);
+      const checkedAt = new Date('2026-11-16T12:00:00Z');
+
+      const updated = await albums.updateArtwork(JEOPARDY.releaseGroupId, {
+        artworkUrl: 'https://coverartarchive.org/release/x/1-500.jpg',
+        appleMusicUrl: 'https://music.apple.com/gb/album/jeopardy/1',
+        checkedAt,
+      });
+
+      expect(updated).toMatchObject({
+        artworkUrl: 'https://coverartarchive.org/release/x/1-500.jpg',
+        appleMusicUrl: 'https://music.apple.com/gb/album/jeopardy/1',
+      });
+      expect(updated?.artworkCheckedAt?.toISOString()).toBe(checkedAt.toISOString());
+      expect((await albums.findBySlug(JEOPARDY.slug))?.artworkUrl).toBe(
+        'https://coverartarchive.org/release/x/1-500.jpg',
+      );
+    });
+
+    it('records a lookup that found no artwork', async () => {
+      await albums.insert(JEOPARDY);
+
+      const updated = await albums.updateArtwork(JEOPARDY.releaseGroupId, {
+        artworkUrl: null,
+        appleMusicUrl: null,
+        checkedAt: new Date(),
+      });
+
+      expect(updated?.artworkUrl).toBeNull();
+      expect(updated?.artworkCheckedAt).toBeInstanceOf(Date);
+    });
+
+    it('returns null when updating artwork for an album it does not have', async () => {
+      expect(
+        await albums.updateArtwork(TAGO_MAGO.releaseGroupId, {
+          artworkUrl: null,
+          appleMusicUrl: null,
+          checkedAt: new Date(),
+        }),
+      ).toBeNull();
+    });
+
     it('rejects a slug that belongs to a different album', async () => {
       await albums.insert(JEOPARDY);
 

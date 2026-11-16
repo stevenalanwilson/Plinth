@@ -57,6 +57,20 @@ export interface RecommendationResponse {
   readonly slug?: string;
 }
 
+/** A stored album with a permalink, from GET /api/v1/albums/:slug. */
+export interface AlbumResponse {
+  readonly slug: string;
+  readonly releaseGroupId: string;
+  readonly artist: string;
+  readonly album: string;
+  readonly year: string | null;
+  readonly hook: string | null;
+  readonly genres: readonly string[];
+  readonly country: string | null;
+  readonly artworkUrl: string | null;
+  readonly appleMusicUrl: string | null;
+}
+
 export interface ArtworkResponse {
   readonly artworkUrl: string | null;
   readonly year: string | null;
