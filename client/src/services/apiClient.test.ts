@@ -159,3 +159,71 @@ describe('fetchRecommendationArtwork', () => {
     );
   });
 });
+
+describe('request timeout and cancellation', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Behaves like fetch: rejects with an AbortError when the request's signal is aborted.
+  function hangUntilAborted(): void {
+    fetchMock.mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          const abort = (): void => reject(new DOMException('Aborted', 'AbortError'));
+          if (init?.signal?.aborted) abort();
+          else init?.signal?.addEventListener('abort', abort);
+        }),
+    );
+  }
+
+  it('works without AbortSignal.any and AbortSignal.timeout, which older Safari lacks', async () => {
+    vi.stubGlobal('AbortSignal', class extends EventTarget {});
+    respondWith(200, ALBUM);
+
+    await expect(fetchAlbum('the-sound-jeopardy', new AbortController().signal)).resolves.toEqual(
+      ALBUM,
+    );
+  });
+
+  it('turns a timeout into a friendly message', async () => {
+    vi.useFakeTimers();
+    hangUntilAborted();
+
+    const result = fetchArtistRelations('Can').catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(await result).toMatchObject({ message: 'Request timed out. Please try again.' });
+  });
+
+  it('passes the caller cancelling through untouched', async () => {
+    hangUntilAborted();
+    const controller = new AbortController();
+
+    const result = fetchAlbum('the-sound-jeopardy', controller.signal).catch(
+      (error: unknown) => error,
+    );
+    controller.abort();
+
+    expect(await result).toMatchObject({ name: 'AbortError' });
+  });
+
+  it('rejects at once when the caller had already cancelled', async () => {
+    hangUntilAborted();
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(fetchAlbum('the-sound-jeopardy', controller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+  });
+
+  it('leaves no timer running once the response arrives', async () => {
+    vi.useFakeTimers();
+    respondWith(200, ALBUM);
+
+    await fetchAlbum('the-sound-jeopardy');
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});

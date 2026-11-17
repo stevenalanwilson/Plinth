@@ -32,17 +32,25 @@ async function fetchWithTimeout(
   init?: RequestInit,
   externalSignal?: AbortSignal,
 ): Promise<Response> {
-  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const signals = externalSignal ? [timeoutSignal, externalSignal] : [timeoutSignal];
-  const signal = signals.length === 1 ? signals[0] : AbortSignal.any(signals);
+  // Combined by hand: AbortSignal.any needs Safari 17.4 and AbortSignal.timeout Safari 16.4,
+  // and a shared album link may well be opened on an older iPhone.
+  const controller = new AbortController();
+  const cancel = (): void => controller.abort();
+  const timeoutId = setTimeout(cancel, REQUEST_TIMEOUT_MS);
+  if (externalSignal?.aborted) cancel();
+  else externalSignal?.addEventListener('abort', cancel, { once: true });
+
   try {
-    return await fetch(input, { ...init, signal });
+    return await fetch(input, { ...init, signal: controller.signal });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       if (externalSignal?.aborted) throw err; // propagate cancellation as-is
       throw new Error('Request timed out. Please try again.');
     }
     throw err;
+  } finally {
+    clearTimeout(timeoutId);
+    externalSignal?.removeEventListener('abort', cancel);
   }
 }
 
@@ -62,9 +70,17 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
   return res.json() as Promise<T>;
 }
 
-async function get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+async function get<T>(
+  path: string,
+  params: Record<string, string> = {},
+  signal?: AbortSignal,
+): Promise<T> {
   const query = new URLSearchParams(params).toString();
-  const res = await fetchWithTimeout(`${API_BASE}${path}${query ? `?${query}` : ''}`);
+  const res = await fetchWithTimeout(
+    `${API_BASE}${path}${query ? `?${query}` : ''}`,
+    undefined,
+    signal,
+  );
 
   if (!res.ok) throw await toApiError(res);
 
@@ -90,8 +106,8 @@ export function fetchArtwork(
   });
 }
 
-export function fetchAlbum(slug: string): Promise<AlbumResponse> {
-  return get<AlbumResponse>(`${API_V1}/albums/${encodeURIComponent(slug)}`);
+export function fetchAlbum(slug: string, signal?: AbortSignal): Promise<AlbumResponse> {
+  return get<AlbumResponse>(`${API_V1}/albums/${encodeURIComponent(slug)}`, {}, signal);
 }
 
 /**
