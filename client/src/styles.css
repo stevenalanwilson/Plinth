@@ -388,6 +388,108 @@ body {
   .album-page-info { flex: 1; min-width: 0; padding: 28px 28px 32px; display: flex; flex-direction: column; justify-content: center; }
 }
 
+/* ─── Album details (tracklist, release facts, more from the artist) ─── */
+
+.album-details { margin-top: 28px; }
+
+.album-details-message { text-align: center; color: var(--muted); font-size: 13px; padding: 16px 0; }
+
+.album-details-heading {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  margin: 32px 0 12px;
+}
+
+.album-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 20px;
+  margin: 0;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+
+.album-facts > div { display: contents; }
+
+.album-facts dt {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-top: 3px;
+}
+
+.album-facts dd { margin: 0; line-height: 1.5; }
+
+.album-disc-heading {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 20px 0 6px;
+}
+
+.album-tracklist,
+.album-related { list-style: none; margin: 0; padding: 0; }
+
+.album-tracklist li {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.album-track-number { font-size: 12px; color: var(--muted); }
+.album-track-length { font-size: 12px; color: var(--muted); }
+
+.album-related li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 12px;
+  padding: 8px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.album-related-title { font-size: 14px; }
+.album-related-year { font-size: 12px; color: var(--muted); }
+.album-related-links { display: flex; gap: 10px; margin-left: auto; font-size: 11px; }
+/* Padded to a comfortable tap height on phones; tightened for a mouse below. */
+.album-related-links a { color: var(--muted); text-decoration: none; padding: 13px 4px; }
+.album-related-links a:hover { color: var(--accent); }
+
+@media (min-width: 769px) {
+  .album-related-links a { padding: 4px 2px; }
+}
+
+.album-details-skeleton { margin-top: 28px; }
+
+.album-details-skeleton > div {
+  height: 14px;
+  margin-bottom: 18px;
+  border-radius: 4px;
+  background: var(--surface2);
+  animation: albumPulse 1.4s ease-in-out infinite;
+}
+
+.album-details-skeleton > div:nth-child(2) { width: 82%; }
+.album-details-skeleton > div:nth-child(3) { width: 91%; }
+.album-details-skeleton > div:nth-child(4) { width: 64%; }
+
+@keyframes albumPulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .album-details-skeleton > div { animation: none; }
+}
+
 /* ─── History grid ────────────────────────────────────── */
 
 .history-grid {

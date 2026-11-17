@@ -9,6 +9,7 @@ import {
 } from '../../services/apiClient';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
 import { ServiceLinks } from '../../components/ServiceLinks';
+import { AlbumDetails } from './AlbumDetails';
 import { useAlbum } from './useAlbum';
 
 const DEFAULT_TITLE = 'Plinth';
@@ -48,7 +49,7 @@ function Message({ children }: { readonly children: React.ReactNode }): React.Re
   return <p className="album-page-message">{children}</p>;
 }
 
-function AlbumDetails({ album }: { readonly album: AlbumResponse }): React.ReactElement {
+function AlbumCard({ album }: { readonly album: AlbumResponse }): React.ReactElement {
   const [coverFailed, setCoverFailed] = useState(false);
   const details = [...album.genres, ...(album.country ? [album.country] : [])].join(' · ');
 
@@ -95,7 +96,12 @@ export function AlbumPage(): React.ReactElement {
       <Header />
       <main>
         {state.status === 'loading' && <Message>Loading album…</Message>}
-        {state.status === 'ready' && <AlbumDetails album={state.album} />}
+        {state.status === 'ready' && (
+          <>
+            <AlbumCard album={state.album} />
+            <AlbumDetails slug={state.album.slug} />
+          </>
+        )}
         {state.status === 'not-found' && <Message>We couldn&apos;t find that album.</Message>}
         {state.status === 'error' && (
           <>

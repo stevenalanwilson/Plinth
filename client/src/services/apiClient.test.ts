@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   ApiError,
   fetchAlbum,
+  fetchAlbumDetails,
   fetchRecommendation,
   fetchRecommendationArtwork,
   fetchArtwork,
@@ -225,5 +226,40 @@ describe('request timeout and cancellation', () => {
     await fetchAlbum('the-sound-jeopardy');
 
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('fetchAlbumDetails', () => {
+  const DETAILS = {
+    release: { date: '1980-11', country: 'GB', label: 'Korova', catalogueNumber: 'KODE 2' },
+    formats: ['12" Vinyl'],
+    discs: [],
+    moreFromArtist: null,
+  };
+
+  it('fetches the details from the v1 API, with no empty query string', async () => {
+    respondWith(200, DETAILS);
+
+    expect(await fetchAlbumDetails('the-sound-jeopardy')).toEqual(DETAILS);
+    expect(requestedUrl()).toBe('/api/v1/albums/the-sound-jeopardy/details');
+  });
+
+  it('encodes slugs in other scripts', async () => {
+    respondWith(200, DETAILS);
+
+    await fetchAlbumDetails('大瀧詠一-a-long-vacation');
+
+    expect(requestedUrl()).toBe(
+      `/api/v1/albums/${encodeURIComponent('大瀧詠一-a-long-vacation')}/details`,
+    );
+  });
+
+  it('throws an ApiError with the server message and status', async () => {
+    respondWith(502, { error: "Couldn't load the album details. Please try again." });
+
+    await expect(fetchAlbumDetails('the-sound-jeopardy')).rejects.toMatchObject({
+      status: 502,
+      message: "Couldn't load the album details. Please try again.",
+    });
   });
 });
