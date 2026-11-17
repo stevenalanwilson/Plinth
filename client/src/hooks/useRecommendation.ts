@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   RecommendationPreferences,
   RecommendationResponse,
@@ -15,6 +15,7 @@ import {
 import { mergeHistory } from '../services/libraryExport';
 import { takeSharedLinkEntry } from '../services/visitEntry';
 import { pruneLibrary } from '../services/libraryRetention';
+import { isSameAlbum } from '../services/albumIdentity';
 import { FeedbackStatus, parseFeedback } from '../types/feedback';
 
 const HISTORY_STORAGE_KEY = 'album-recommender-history';
@@ -82,6 +83,8 @@ interface UseRecommendationReturn {
   artistRelations: readonly ArtistRelation[];
   isLoadingRelations: boolean;
   history: HistoryEntry[];
+  /** The library entry for the pick on screen, or null when there is no pick. */
+  currentEntry: HistoryEntry | null;
   isLoading: boolean;
   error: string | null;
   fetchRecommendation: (pivot?: PivotHint, seedArtist?: string) => Promise<void>;
@@ -107,6 +110,16 @@ export function useRecommendation(): UseRecommendationReturn {
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistoryFromStorage);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Found by album, not by position: importing a library can reorder it without changing the
+  // pick on screen, and a rating must land on the album being shown.
+  const currentEntry = useMemo(
+    () =>
+      recommendation
+        ? (history.find((entry) => isSameAlbum(entry.recommendation, recommendation)) ?? null)
+        : null,
+    [history, recommendation],
+  );
 
   // Ref so fetchRecommendation can read the current history without needing it
   // in its dependency array. A ref is always up to date; a stale closure is not.
@@ -367,6 +380,7 @@ export function useRecommendation(): UseRecommendationReturn {
     artistRelations,
     isLoadingRelations,
     history,
+    currentEntry,
     isLoading,
     error,
     fetchRecommendation,
