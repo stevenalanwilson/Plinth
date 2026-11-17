@@ -3,6 +3,7 @@ import { HistoryEntry } from '../../types/history';
 import { downloadLibrary, parseLibraryFile } from '../../services/libraryExport';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { HistoryItem } from '../history/HistoryItem';
+import { WantList } from './WantList';
 import {
   countCrate,
   CRATE_FILTER_LABELS,
@@ -25,7 +26,7 @@ const EMPTY_MESSAGES: Record<CrateFilter, string> = {
   all: 'Only albums marked Not for me so far.',
   save: 'Nothing saved yet.',
   own: 'No albums marked as owned yet.',
-  'want-vinyl': 'Nothing on your want list yet.',
+  'want-vinyl': 'Nothing on your want list yet. Tap Want on vinyl on a pick to add it.',
   heard: 'No albums marked as heard yet.',
   'not-for-me': 'Nothing marked Not for me.',
 };
@@ -137,6 +138,8 @@ export function CratePage({
 
           {shown.length === 0 ? (
             <p className="crate-empty">{EMPTY_MESSAGES[filter]}</p>
+          ) : filter === 'want-vinyl' ? (
+            <WantList entries={shown} onSelect={onSelect} />
           ) : (
             <div className="history-grid">
               {shown.map((entry) => (

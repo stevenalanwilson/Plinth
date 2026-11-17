@@ -117,6 +117,50 @@ describe('CratePage', () => {
       expect(screen.getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'false');
     });
 
+    it('shows the albums wanted on vinyl as a want list, with links, not as cards', async () => {
+      renderCrate();
+
+      await userEvent.click(screen.getByRole('button', { name: /^Want on vinyl/ }));
+
+      const list = screen.getByRole('list');
+      expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+      expect(
+        within(list).getByRole('button', { name: 'Load Wanted by Artist' }),
+      ).toBeInTheDocument();
+      expect(within(list).getByRole('link', { name: 'Discogs' })).toBeInTheDocument();
+      expect(document.querySelector('.history-grid')).toBeNull();
+    });
+
+    it('goes back to cards for the other filters', async () => {
+      renderCrate();
+      await userEvent.click(screen.getByRole('button', { name: /^Want on vinyl/ }));
+
+      await userEvent.click(screen.getByRole('button', { name: /^Own it/ }));
+
+      expect(screen.queryByRole('list')).not.toBeInTheDocument();
+      expect(document.querySelector('.history-grid')).not.toBeNull();
+    });
+
+    it('says how to start a want list when it is empty', async () => {
+      renderCrate([entry('Unrated')]);
+
+      await userEvent.click(screen.getByRole('button', { name: /^Want on vinyl/ }));
+
+      expect(screen.queryByRole('list')).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Nothing on your want list yet. Tap Want on vinyl on a pick to add it.'),
+      ).toBeInTheDocument();
+    });
+
+    it('opens an album from the want list', async () => {
+      const { onSelect } = renderCrate();
+      await userEvent.click(screen.getByRole('button', { name: /^Want on vinyl/ }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Load Wanted by Artist' }));
+
+      expect(onSelect).toHaveBeenCalledWith('Wanted');
+    });
+
     it('shows the albums marked Not for me under their own filter', async () => {
       renderCrate();
 
