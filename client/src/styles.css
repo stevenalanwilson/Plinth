@@ -593,6 +593,9 @@ body::before {
 }
 
 .essentials-album-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -600,11 +603,55 @@ body::before {
   animation: fadeUp 0.25s ease both;
 }
 
+.essentials-album-cover {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.essentials-album-row[data-size='large'] .essentials-album-cover {
+  width: 104px;
+  height: 104px;
+}
+
+.essentials-album-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.essentials-album-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.essentials-album-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
 .essentials-album-title {
   font-family: var(--serif);
   font-style: italic;
   font-size: 18px;
   font-weight: 400;
+}
+
+.essentials-album-row[data-size='large'] .essentials-album-title { font-size: 21px; }
+
+.essentials-links {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
 }
 
 .essentials-album-meta {
@@ -834,4 +881,74 @@ body::before {
   background: var(--accent);
   border-color: var(--accent);
   color: #0e0e0f;
+}
+
+/* ─── Artist Essentials: start here and discography ──── */
+
+.essentials-result { margin-top: 24px; }
+
+.essentials-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.essentials-artist {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 22px;
+}
+
+.essentials-section + .essentials-section { margin-top: 32px; }
+
+.essentials-section-title {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.essentials-section-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 4px 0 12px;
+}
+
+.discography {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.discography-item:not([data-essential]) {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 6px 16px;
+}
+
+.discography-year {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  min-width: 34px;
+}
+
+.discography-title {
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--text);
+}
+
+@media (max-width: 430px) {
+  .essentials-album-row { gap: 12px; padding: 14px; }
+  .essentials-album-row[data-size='large'] .essentials-album-cover { width: 84px; height: 84px; }
+  .essentials-album-cover { width: 56px; height: 56px; }
 }

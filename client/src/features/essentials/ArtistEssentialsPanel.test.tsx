@@ -14,6 +14,7 @@ vi.mock('../../services/apiClient', () => ({
   buildDiscogsSearchUrl: vi.fn(
     (artist: string, album: string) => `https://www.discogs.com/search/?q=${artist}+${album}`,
   ),
+  getProxiedArtworkUrl: vi.fn((url: string) => `/api/v1/image?url=${encodeURIComponent(url)}`),
 }));
 
 import { fetchArtistEssentials } from '../../services/apiClient';
@@ -59,9 +60,9 @@ describe('ArtistEssentialsPanel', () => {
     await user.click(screen.getByRole('button', { name: /get essentials/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Spirit of Eden')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Spirit of Eden' })).toBeInTheDocument();
     });
-    expect(screen.getByText('Laughing Stock')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Laughing Stock' })).toBeInTheDocument();
     expect(screen.getByText('A transformative work.')).toBeInTheDocument();
   });
 
@@ -98,7 +99,7 @@ describe('ArtistEssentialsPanel', () => {
     await user.click(screen.getByRole('button', { name: /get essentials/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Spirit of Eden')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Spirit of Eden' })).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole('button', { name: /recommend from this artist/i }));
