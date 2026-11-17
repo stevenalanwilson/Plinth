@@ -611,13 +611,13 @@ describe('getArtistEssentials cache', () => {
     });
   });
 
-  it('keeps lists under a new version, leaving ones from before the discography behind', async () => {
+  it('keeps lists under a new version, leaving ones with bootlegs in the discography behind', async () => {
     const set = vi.spyOn(store, 'set');
 
     await getArtistEssentials({ artist: 'Talk Talk' });
 
     expect(set).toHaveBeenCalledWith(
-      'essentials:v2:talk talk',
+      'essentials:v3:talk talk',
       expect.anything(),
       expect.anything(),
     );
@@ -625,7 +625,7 @@ describe('getArtistEssentials cache', () => {
 
   it('ignores a cached list without a discography and asks again', async () => {
     const first = await getArtistEssentials({ artist: 'Talk Talk' });
-    await store.set('essentials:v2:talk talk', { artist: first.artist, albums: first.albums }, 60);
+    await store.set('essentials:v3:talk talk', { artist: first.artist, albums: first.albums }, 60);
 
     const result = await getArtistEssentials({ artist: 'Talk Talk' });
 
@@ -636,7 +636,7 @@ describe('getArtistEssentials cache', () => {
   it('ignores a cached entry that no longer has the right shape and asks again', async () => {
     await getArtistEssentials({ artist: 'Talk Talk' });
     // Overwrite the stored list with something an older version might have written.
-    await store.set('essentials:v2:talk talk', { artist: 'Talk Talk', albums: 'nope' }, 60);
+    await store.set('essentials:v3:talk talk', { artist: 'Talk Talk', albums: 'nope' }, 60);
 
     const result = await getArtistEssentials({ artist: 'Talk Talk' });
 

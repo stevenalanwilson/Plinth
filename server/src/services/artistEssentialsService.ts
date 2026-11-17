@@ -302,8 +302,9 @@ function logVerification(artist: string, attempt: number, result: VerifiedEssent
 // A list takes a Claude call and several MusicBrainz lookups to make, and an artist's essential
 // albums don't change, so a verified list keeps for a month.
 const ESSENTIALS_CACHE_SECONDS = 30 * 24 * 60 * 60;
-// Bump when ArtistEssentialsResponse changes shape, so entries from before are left behind.
-const ESSENTIALS_CACHE_VERSION = 'v2';
+// Bump when ArtistEssentialsResponse changes shape or what goes into it, so entries from before
+// are left behind. v3: discographies kept before it may list bootleg-only albums.
+const ESSENTIALS_CACHE_VERSION = 'v3';
 
 function isVerifiedAlbum(entry: unknown): boolean {
   if (typeof entry !== 'object' || entry === null) return false;
