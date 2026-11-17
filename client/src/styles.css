@@ -41,9 +41,106 @@ body {
 
 * { -webkit-tap-highlight-color: transparent; }
 
-/* On touch-only devices, always show the history card overlay (no hover state available) */
+/* History card: the cover's links and Remove sit in a panel that fades in on hover. Opacity and
+   pointer-events are set per card from its hover/open state. */
+.history-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 14, 15, 0.82);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  transition: opacity 0.2s;
+}
+
+.service-links-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.history-remove {
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--mono);
+  padding: 2px 8px;
+}
+
+.history-actions-toggle { display: none; }
+
+/* Without hover (a phone) the covers stay clear and the panel opens from a 44px control in the
+   corner. Four 44px targets don't stack in a two-column cover, so the panel is a 2x2 grid. */
 @media (hover: none) {
-  .history-overlay { opacity: 1 !important; pointer-events: auto !important; }
+  .history-actions-toggle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .history-actions-toggle span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border2);
+    background: rgba(14, 14, 15, 0.85);
+  }
+
+  .history-overlay {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 44px;
+    align-content: end;
+    gap: 6px;
+    padding: 8px;
+    /* Denser than on hover: the cover shows through behind four buttons rather than one stack. */
+    background: rgba(14, 14, 15, 0.92);
+  }
+
+  .history-overlay .service-links-compact { display: contents; }
+
+  .history-overlay .service-link,
+  .history-remove {
+    min-height: 44px;
+    box-sizing: border-box;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  /* A cell is about 70px wide, so "Tap again to remove" has to fit in two lines. */
+  .history-remove {
+    margin-top: 0;
+    padding: 0 2px;
+    letter-spacing: 0.02em;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+  }
 }
 
 /* ─── Button hover effects ───────────────────────────── */
@@ -1066,7 +1163,7 @@ body::before {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   pointer-events: none;
-  /* Above the card's overlay, which on a phone is always open and would hide the verdict. */
+  /* Above the card's overlay, which would otherwise hide the verdict while it is open. */
   z-index: 1;
 }
 

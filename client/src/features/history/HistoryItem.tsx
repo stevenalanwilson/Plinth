@@ -21,18 +21,24 @@ interface HistoryItemProps {
 
 export function HistoryItem({ entry, onRemove, onSelect }: HistoryItemProps): React.ReactElement {
   const [isHovered, setIsHovered] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [imgErrored, setImgErrored] = useState(false);
   const status = entry.feedback?.status ?? null;
+  const isOverlayShown = isHovered || isActionsOpen;
+  const cardName = `${entry.recommendation.album} by ${entry.recommendation.artist}`;
 
   return (
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Load ${entry.recommendation.album} by ${entry.recommendation.artist}${status ? `, marked ${FEEDBACK_LABELS[status]}` : ''}`}
-      onPointerEnter={() => setIsHovered(true)}
+      aria-label={`Load ${cardName}${status ? `, marked ${FEEDBACK_LABELS[status]}` : ''}`}
+      // A finger "enters" a card only for the length of a tap, so only a mouse or pen hovers.
+      onPointerEnter={(e) => setIsHovered(e.pointerType !== 'touch')}
       onPointerLeave={() => setIsHovered(false)}
       onClick={() => onSelect(entry.id)}
       onKeyDown={(e) => {
+        // Keys pressed on the controls inside the card are theirs, not a request to open the album.
+        if (e.target !== e.currentTarget) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onSelect(entry.id);
@@ -78,20 +84,14 @@ export function HistoryItem({ entry, onRemove, onSelect }: HistoryItemProps): Re
 
         <div
           className="history-overlay"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            // A tap on the panel itself, not on a link or Remove, puts it away.
+            if (e.target === e.currentTarget) setIsActionsOpen(false);
+          }}
           style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(14,14,15,0.82)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            opacity: isHovered ? 1 : 0,
-            pointerEvents: isHovered ? 'auto' : 'none',
-            transition: 'opacity 0.2s',
-            padding: '0 12px',
+            opacity: isOverlayShown ? 1 : 0,
+            pointerEvents: isOverlayShown ? 'auto' : 'none',
           }}
         >
           <ServiceLinks
@@ -116,20 +116,23 @@ export function HistoryItem({ entry, onRemove, onSelect }: HistoryItemProps): Re
             confirmLabel="Tap again to remove"
             requireConfirm={isRated(entry)}
             onConfirm={() => onRemove(entry.id)}
-            style={{
-              marginTop: 2,
-              fontSize: 10,
-              color: 'var(--muted)',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              fontFamily: 'var(--mono)',
-              padding: '2px 8px',
-            }}
+            className="history-remove"
           />
         </div>
+
+        {/* Hover isn't there on a phone, so the panel opens from here; CSS shows this only without hover. */}
+        <button
+          type="button"
+          className="history-actions-toggle"
+          aria-expanded={isActionsOpen}
+          aria-label={`${isActionsOpen ? 'Hide' : 'Show'} options for ${cardName}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsActionsOpen((open) => !open);
+          }}
+        >
+          <span aria-hidden="true">{isActionsOpen ? '×' : '⋯'}</span>
+        </button>
       </div>
 
       <div style={{ padding: '10px 12px 12px' }}>
