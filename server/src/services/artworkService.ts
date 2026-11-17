@@ -1,5 +1,6 @@
 import { ArtworkResponse } from '@shared/types';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+import { cachedResponse } from '../repositories/lookupCache';
 import { artistsMatch, titlesMatch } from '../utils/musicNames';
 import { logger } from '../logger';
 import { findAlbum } from './albumMatchService';
@@ -40,6 +41,9 @@ interface ItunesData {
 
 const NO_ITUNES_DATA: ItunesData = { appleMusicUrl: null, artworkUrl: null };
 
+// Apple's catalogue changes slowly, and an album that isn't there today may be next week.
+const ITUNES_CACHE_SECONDS = 24 * 60 * 60;
+
 async function fetchCoverArt(
   releaseGroupId: string,
   budgetSignal: AbortSignal,
@@ -64,10 +68,13 @@ async function fetchItunesDataOnce(
   budgetSignal: AbortSignal,
 ): Promise<ItunesData> {
   const term = encodeURIComponent(`${artist} ${album}`);
-  const res = await fetchWithTimeout(
-    `https://itunes.apple.com/search?term=${term}&media=music&entity=album&limit=5`,
-    budgetSignal,
-  );
+  const url = `https://itunes.apple.com/search?term=${term}&media=music&entity=album&limit=5`;
+  const res = await cachedResponse({
+    namespace: 'itunes',
+    key: url,
+    ttlSeconds: () => ITUNES_CACHE_SECONDS,
+    fetch: () => fetchWithTimeout(url, budgetSignal),
+  });
   if (!res.ok) return NO_ITUNES_DATA;
 
   const data = (await res.json()) as ItunesSearchResult;

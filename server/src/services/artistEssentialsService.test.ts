@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@anthropic-ai/sdk', () => {
   return {
@@ -27,6 +27,9 @@ import {
   verifyEssentials,
 } from './artistEssentialsService';
 import { findArtistAlbums, ReleaseGroupCandidate } from './albumMatchService';
+import { CacheStore } from '../repositories/cacheStore';
+import { createInMemoryCacheStore } from '../repositories/inMemoryCacheStore';
+import { configureLookupCache } from '../repositories/lookupCache';
 
 const mockCreate = vi.fn();
 const mockFindArtistAlbums = vi.mocked(findArtistAlbums);
@@ -290,5 +293,105 @@ describe('getArtistEssentials album check', () => {
 
     expect(result.albums).toHaveLength(5);
     expect(result.albums[0].releaseGroupId).toBeUndefined();
+  });
+});
+
+describe('getArtistEssentials cache', () => {
+  const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
+  let store: CacheStore;
+
+  beforeEach(() => {
+    store = createInMemoryCacheStore();
+    configureLookupCache(store);
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: validJsonResponse }] });
+  });
+
+  afterEach(() => {
+    configureLookupCache(null);
+  });
+
+  it('answers a repeat request without calling Claude or MusicBrainz', async () => {
+    const first = await getArtistEssentials({ artist: 'Talk Talk' });
+    mockFindArtistAlbums.mockClear();
+
+    const second = await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(second).toEqual(first);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockFindArtistAlbums).not.toHaveBeenCalled();
+  });
+
+  it.each(['talk talk', '  TALK TALK  ', 'Talk-Talk', 'The Talk Talk'])(
+    'treats %s as the same artist',
+    async (spelling) => {
+      await getArtistEssentials({ artist: 'Talk Talk' });
+
+      await getArtistEssentials({ artist: spelling });
+
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('asks again for a different artist', async () => {
+    await getArtistEssentials({ artist: 'Talk Talk' });
+
+    await getArtistEssentials({ artist: 'Mark Hollis' });
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a verified list for 30 days', async () => {
+    const set = vi.spyOn(store, 'set');
+
+    await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(set).toHaveBeenCalledWith(
+      expect.stringContaining('essentials:'),
+      expect.anything(),
+      THIRTY_DAYS_SECONDS,
+    );
+  });
+
+  it('does not keep a list that went out unchecked because MusicBrainz was down', async () => {
+    mockFindArtistAlbums.mockResolvedValue({ status: 'lookup_failed' });
+    await getArtistEssentials({ artist: 'Talk Talk' });
+
+    mockFindArtistAlbums.mockResolvedValue({
+      status: 'found',
+      artist: 'Talk Talk',
+      albums: talkTalkCatalogue,
+    });
+    const recovered = await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(recovered.albums.every((album) => album.releaseGroupId !== undefined)).toBe(true);
+  });
+
+  it('does not keep a failure', async () => {
+    mockFindArtistAlbums.mockResolvedValue({ status: 'not_found' });
+    await expect(getArtistEssentials({ artist: 'Talk Talk' })).rejects.toBeInstanceOf(
+      UnverifiedEssentialsError,
+    );
+
+    mockFindArtistAlbums.mockResolvedValue({
+      status: 'found',
+      artist: 'Talk Talk',
+      albums: talkTalkCatalogue,
+    });
+
+    await expect(getArtistEssentials({ artist: 'Talk Talk' })).resolves.toMatchObject({
+      artist: 'Talk Talk',
+    });
+  });
+
+  it('ignores a cached entry that no longer has the right shape and asks again', async () => {
+    await getArtistEssentials({ artist: 'Talk Talk' });
+    // Overwrite the stored list with something an older version might have written.
+    await store.set('essentials:v1:talk talk', { artist: 'Talk Talk', albums: 'nope' }, 60);
+
+    const result = await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(result.albums.length).toBeGreaterThan(0);
   });
 });
