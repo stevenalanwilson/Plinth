@@ -141,6 +141,14 @@ describe('AlbumPage', () => {
     expect(mockFetchAlbumDetails).not.toHaveBeenCalled();
   });
 
+  it('has a Share button for the album', async () => {
+    mockFetchAlbum.mockResolvedValue(ALBUM);
+
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Share' })).toBeInTheDocument();
+  });
+
   it('shows the cover through the image proxy', async () => {
     mockFetchAlbum.mockResolvedValue(ALBUM);
 

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!-- Source for client/public/og-default.png, the card shown when a shared link has no cover. -->
+  <rect width="1200" height="630" fill="#0e0e0f"/>
+
+  <g transform="translate(950 315) scale(0.95)">
+    <circle r="226" fill="#161618" stroke="#ffffff" stroke-opacity="0.08" stroke-width="2"/>
+    <circle r="200" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="2"/>
+    <circle r="176" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="2"/>
+    <circle r="152" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="2"/>
+    <circle r="128" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="2"/>
+    <circle r="82" fill="#c8a96e"/>
+    <circle r="9" fill="#0e0e0f"/>
+  </g>
+
+  <text x="96" y="338" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="156" fill="#f0ede8">Plinth</text>
+  <text x="102" y="412" font-family="Helvetica, Arial, sans-serif" font-size="26" letter-spacing="4" fill="#c8a96e">WHOLE RECORDS, PICKED FOR YOU</text>
+</svg>

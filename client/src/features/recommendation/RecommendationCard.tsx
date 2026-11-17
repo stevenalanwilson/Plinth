@@ -8,6 +8,7 @@ import {
 } from '../../services/apiClient';
 import { ServiceLinks } from '../../components/ServiceLinks';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
+import { ShareButton } from '../../components/ShareButton';
 
 interface RecommendationCardProps {
   recommendation: RecommendationResponse | null;
@@ -213,6 +214,16 @@ export function RecommendationCard({
             spotifyUrl={buildSpotifySearchUrl(recommendation.artist, recommendation.album)}
             discogsUrl={buildDiscogsSearchUrl(recommendation.artist, recommendation.album)}
           />
+          {recommendation.slug && (
+            <div style={{ marginTop: 10 }}>
+              <ShareButton
+                slug={recommendation.slug}
+                album={recommendation.album}
+                artist={recommendation.artist}
+                hook={recommendation.hook ?? null}
+              />
+            </div>
+          )}
         </div>
       </div>
       <div

@@ -9,6 +9,7 @@ import {
 } from '../../services/apiClient';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
 import { ServiceLinks } from '../../components/ServiceLinks';
+import { ShareButton } from '../../components/ShareButton';
 import { AlbumDetails } from './AlbumDetails';
 import { useAlbum } from './useAlbum';
 
@@ -78,6 +79,14 @@ function AlbumCard({ album }: { readonly album: AlbumResponse }): React.ReactEle
           spotifyUrl={buildSpotifySearchUrl(album.artist, album.album)}
           discogsUrl={buildDiscogsSearchUrl(album.artist, album.album)}
         />
+        <div className="album-page-share">
+          <ShareButton
+            slug={album.slug}
+            album={album.album}
+            artist={album.artist}
+            hook={album.hook}
+          />
+        </div>
       </div>
     </article>
   );
