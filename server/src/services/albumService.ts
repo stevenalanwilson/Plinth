@@ -3,6 +3,7 @@ import { AlbumRepository, NewAlbum, StoredAlbum } from '../repositories/albumRep
 import { toSlug } from '../utils/musicNames';
 import { logger } from '../logger';
 import { fetchArtwork } from './artworkService';
+import { isCutHook } from '../utils/hookText';
 
 export type AlbumToSave = Omit<NewAlbum, 'slug'>;
 
@@ -111,7 +112,11 @@ export async function getExampleAlbum(
   albums: AlbumRepository,
   chooseIndex: ChooseIndex = randomIndex,
 ): Promise<AlbumResponse | null> {
-  const candidates = await albums.findRecentWithCoverAndHook(EXAMPLE_POOL_SIZE);
+  const recent = await albums.findRecentWithCoverAndHook(EXAMPLE_POOL_SIZE);
+  // A hook cut short with an ellipsis is a poor first impression, so those are only shown when
+  // nothing else qualifies. Hooks are stored once and never rewritten, so older ones stay cut.
+  const whole = recent.filter((album) => album.hook && !isCutHook(album.hook));
+  const candidates = whole.length > 0 ? whole : recent;
   if (candidates.length === 0) return null;
 
   const index = Math.min(Math.max(chooseIndex(candidates.length), 0), candidates.length - 1);

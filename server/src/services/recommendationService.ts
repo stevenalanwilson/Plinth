@@ -9,6 +9,7 @@ import { normaliseName } from '../utils/musicNames';
 import { AlbumRepository } from '../repositories/albumRepository';
 import { AlbumMatch, findAlbum } from './albumMatchService';
 import { saveAlbum } from './albumService';
+import { capHook } from '../utils/hookText';
 
 const SYSTEM_PROMPT =
   'You are a music expert with encyclopaedic knowledge of albums across all genres. ' +
@@ -109,19 +110,10 @@ Respond with ONLY this JSON:
   "album": "Album Title",
   "year": "YYYY",
   "reason": "Two sentences on why this fits their preferences.",
-  "hook": "One line on what makes the album itself worth hearing, without mentioning the listener or their preferences.",
+  "hook": "One short sentence, 20 words at most, on what makes the album itself worth hearing, without mentioning the listener or their preferences.",
   "genres": ["Primary Genre", "Secondary Genre"],
   "country": "Country of Origin"
 }`;
-}
-
-// The hook appears in link previews, which truncate long text anyway, and the cap stops a vibe
-// query steering Claude into writing a paragraph onto a public page.
-const MAX_HOOK_LENGTH = 160;
-
-function capHook(hook: string): string {
-  if (hook.length <= MAX_HOOK_LENGTH) return hook;
-  return `${hook.slice(0, MAX_HOOK_LENGTH - 1).trimEnd()}…`;
 }
 
 function toRecommendation(parsed: unknown): RecommendationResponse {
