@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlbumResponse } from '@shared/types';
 import {
   buildAppleMusicSearchUrl,
@@ -12,6 +12,7 @@ import { ServiceLinks } from '../../components/ServiceLinks';
 import { ShareButton } from '../../components/ShareButton';
 import { AlbumDetails } from './AlbumDetails';
 import { useAlbum } from './useAlbum';
+import { moreLikeThisState } from '../recommendation/moreLikeThis';
 
 const DEFAULT_TITLE = 'Plinth';
 
@@ -35,13 +36,30 @@ function Header(): React.ReactElement {
   );
 }
 
-function GetYourOwnPick(): React.ReactElement {
+/**
+ * Turns someone who arrived on a shared link into someone trying a pick: one tap for more like
+ * this album, or the Discover page to set their own vibe.
+ */
+function GetYourOwnPick({ album }: { readonly album: AlbumResponse | null }): React.ReactElement {
+  const navigate = useNavigate();
+
   return (
     <div className="album-page-cta">
       <p>Plinth picks one album at a time, to fit your mood.</p>
-      <Link to="/" className="album-page-cta-link">
-        Get your own pick
-      </Link>
+      <div className="album-page-cta-actions">
+        {album && (
+          <button
+            type="button"
+            className="album-page-cta-button"
+            onClick={() => navigate('/', { state: moreLikeThisState(album.artist, album.album) })}
+          >
+            Find me something like this
+          </button>
+        )}
+        <Link to="/" className="album-page-cta-link">
+          {album ? 'Or set your own vibe' : 'Get your own pick'}
+        </Link>
+      </div>
     </div>
   );
 }
@@ -121,7 +139,9 @@ export function AlbumPage(): React.ReactElement {
           </>
         )}
       </main>
-      {state.status !== 'loading' && <GetYourOwnPick />}
+      {state.status !== 'loading' && (
+        <GetYourOwnPick album={state.status === 'ready' ? state.album : null} />
+      )}
     </div>
   );
 }

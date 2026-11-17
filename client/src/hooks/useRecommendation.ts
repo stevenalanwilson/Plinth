@@ -13,6 +13,7 @@ import {
   fetchArtistRelations,
 } from '../services/apiClient';
 import { mergeHistory } from '../services/libraryExport';
+import { takeSharedLinkEntry } from '../services/visitEntry';
 
 const HISTORY_STORAGE_KEY = 'album-recommender-history';
 // Kept only for the one-time cleanup below — do not read from this key.
@@ -291,6 +292,7 @@ export function useRecommendation(): UseRecommendationReturn {
             pivot,
             seedArtist,
             vibeQuery: vibeQuery.trim() || undefined,
+            entry: takeSharedLinkEntry(),
           },
           controller.signal,
         );
