@@ -8,6 +8,8 @@ import {
 } from '../../services/apiClient';
 import { ServiceLinks } from '../../components/ServiceLinks';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
+import { FeedbackBadge } from '../feedback/FeedbackBadge';
+import { FEEDBACK_LABELS } from '../feedback/feedbackLabels';
 
 const VISIBLE_COUNT = 9;
 
@@ -26,12 +28,13 @@ interface HistoryItemProps {
 function HistoryItem({ entry, onRemove, onSelect }: HistoryItemProps): React.ReactElement {
   const [isHovered, setIsHovered] = useState(false);
   const [imgErrored, setImgErrored] = useState(false);
+  const status = entry.feedback?.status ?? null;
 
   return (
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Load ${entry.recommendation.album} by ${entry.recommendation.artist}`}
+      aria-label={`Load ${entry.recommendation.album} by ${entry.recommendation.artist}${status ? `, marked ${FEEDBACK_LABELS[status]}` : ''}`}
       onPointerEnter={() => setIsHovered(true)}
       onPointerLeave={() => setIsHovered(false)}
       onClick={() => onSelect(entry.id)}
@@ -76,6 +79,8 @@ function HistoryItem({ entry, onRemove, onSelect }: HistoryItemProps): React.Rea
             compact
           />
         )}
+
+        <FeedbackBadge status={status} />
 
         <div
           className="history-overlay"
