@@ -159,4 +159,37 @@ describe('HistoryGrid', () => {
     await userEvent.click(screen.getByRole('button', { name: /show less/i }));
     expect(screen.queryByText('Album 9')).not.toBeInTheDocument();
   });
+
+  describe('verdict badges', () => {
+    const rated = (status: 'own' | 'not-for-me' | null): HistoryEntry[] => [
+      { ...entries[0], feedback: { status, at: new Date().toISOString() } },
+    ];
+
+    it('labels an album that has a verdict', () => {
+      render(<HistoryGrid history={rated('own')} onRemove={vi.fn()} onSelect={vi.fn()} />);
+
+      expect(screen.getByText('Own it')).toHaveAttribute('data-status', 'own');
+    });
+
+    it('says the verdict in the card’s name, for screen readers', () => {
+      render(<HistoryGrid history={rated('not-for-me')} onRemove={vi.fn()} onSelect={vi.fn()} />);
+
+      expect(
+        screen.getByRole('button', { name: 'Load Untrue by Burial, marked Not for me' }),
+      ).toBeInTheDocument();
+    });
+
+    it('shows no badge for an album with no verdict, or one that was cleared', () => {
+      render(
+        <HistoryGrid
+          history={[entries[1], ...rated(null)]}
+          onRemove={vi.fn()}
+          onSelect={vi.fn()}
+        />,
+      );
+
+      expect(document.querySelector('.feedback-badge')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Load Untrue by Burial' })).toBeInTheDocument();
+    });
+  });
 });

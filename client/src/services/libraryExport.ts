@@ -1,6 +1,7 @@
 import { HistoryEntry } from '../types/history';
 import { parseFeedback } from '../types/feedback';
 import { pruneLibrary } from './libraryRetention';
+import { albumKeys } from './albumIdentity';
 
 // Version 2 added each album's feedback. Files without it (version 1) still import.
 export interface LibraryExportFile {
@@ -127,15 +128,6 @@ export async function parseLibraryFile(file: File): Promise<HistoryEntry[]> {
   return parseLibraryJson(text);
 }
 
-// The same album, whichever way it was recorded: by its MusicBrainz release group when the pick
-// was matched to one, and by name either way (older picks have no release group).
-function identityKeys(entry: HistoryEntry): string[] {
-  const { artist, album, releaseGroupId } = entry.recommendation;
-  const keys = [`name:${artist.toLowerCase()}|${album.toLowerCase()}`];
-  if (releaseGroupId) keys.push(`release-group:${releaseGroupId}`);
-  return keys;
-}
-
 /** Keeps the entry's own details, but takes the other's verdict when it was given more recently. */
 function withNewerFeedback(kept: HistoryEntry, other: HistoryEntry): HistoryEntry {
   if (!other.feedback) return kept;
@@ -153,7 +145,7 @@ export function mergeHistory(
   const positionByKey = new Map<string, number>();
 
   for (const entry of [...existing, ...imported]) {
-    const keys = identityKeys(entry);
+    const keys = albumKeys(entry.recommendation);
     const seenAt = keys.map((key) => positionByKey.get(key)).find((index) => index !== undefined);
 
     if (seenAt !== undefined) {

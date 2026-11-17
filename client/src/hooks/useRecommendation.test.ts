@@ -291,4 +291,62 @@ describe('useRecommendation library feedback and retention', () => {
     expect(result.current.history[0].id).toBe('stored-2');
     expect(result.current.history[0].feedback).toEqual(OWNED);
   });
+
+  it('finds the library entry for the pick on screen', () => {
+    seed([aged(1, 1, OWNED), aged(2, 2)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    expect(result.current.currentEntry?.id).toBe('stored-1');
+    expect(result.current.currentEntry?.feedback).toEqual(OWNED);
+  });
+
+  it('has no entry when there is no pick', () => {
+    const { result } = renderHook(() => useRecommendation());
+
+    expect(result.current.currentEntry).toBeNull();
+  });
+
+  it('follows a rating made on the pick on screen', () => {
+    seed([aged(1, 1)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => {
+      const current = result.current.currentEntry;
+      if (current) result.current.setFeedback(current.id, 'heard');
+    });
+
+    expect(result.current.currentEntry?.feedback?.status).toBe('heard');
+  });
+
+  it('moves to the entry brought to the front', () => {
+    seed([aged(1, 1), aged(2, 2, OWNED)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.selectFromHistory('stored-2'));
+
+    expect(result.current.currentEntry?.id).toBe('stored-2');
+  });
+
+  it('stays on the pick on screen when an import puts a newer entry first', () => {
+    seed([aged(1, 5)]);
+    const { result } = renderHook(() => useRecommendation());
+    const newer = {
+      ...aged(9, 0),
+      recommendation: { artist: 'Other', album: 'Newer', year: '2020', reason: 'r' },
+    } as unknown as HistoryEntry;
+
+    act(() => result.current.importHistory([newer]));
+
+    expect(result.current.history[0].recommendation.album).toBe('Newer');
+    expect(result.current.currentEntry?.id).toBe('stored-1');
+  });
+
+  it('has no entry once the pick on screen is removed', () => {
+    seed([aged(1, 1)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.removeFromHistory('stored-1'));
+
+    expect(result.current.currentEntry).toBeNull();
+  });
 });

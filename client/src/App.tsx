@@ -39,6 +39,7 @@ export default function App(): React.ReactElement {
     artistRelations,
     isLoadingRelations,
     history,
+    currentEntry,
     isLoading,
     error,
     fetchRecommendation,
@@ -46,6 +47,7 @@ export default function App(): React.ReactElement {
     removeFromHistory,
     selectFromHistory,
     importHistory,
+    setFeedback,
   } = useRecommendation();
   // An album page's "Find me something like this" lands here and starts the pick at once.
   useMoreLikeThisFromNavigation(
@@ -281,6 +283,10 @@ export default function App(): React.ReactElement {
               isLoading={isLoading}
               error={error}
               onSeedArtist={(name) => void fetchRecommendation(undefined, name)}
+              feedback={currentEntry?.feedback?.status ?? null}
+              onFeedback={(status) => {
+                if (currentEntry) setFeedback(currentEntry.id, status);
+              }}
             />
 
             {recommendation && !isLoading && (

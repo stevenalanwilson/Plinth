@@ -10,6 +10,8 @@ import { ServiceLinks } from '../../components/ServiceLinks';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
 import { ShareButton } from '../../components/ShareButton';
 import { EmptyResult } from '../example/EmptyResult';
+import { FeedbackButtons } from '../feedback/FeedbackButtons';
+import { FeedbackStatus } from '../../types/feedback';
 
 interface RecommendationCardProps {
   recommendation: RecommendationResponse | null;
@@ -19,6 +21,9 @@ interface RecommendationCardProps {
   isLoading: boolean;
   error: string | null;
   onSeedArtist: (name: string) => void;
+  /** The verdict already given on this pick, or null for none. */
+  feedback: FeedbackStatus | null;
+  onFeedback: (status: FeedbackStatus | null) => void;
 }
 
 export function RecommendationCard({
@@ -29,6 +34,8 @@ export function RecommendationCard({
   isLoading,
   error,
   onSeedArtist,
+  feedback,
+  onFeedback,
 }: RecommendationCardProps): React.ReactElement {
   const [imgErrored, setImgErrored] = useState(false);
 
@@ -209,6 +216,9 @@ export function RecommendationCard({
         }}
       >
         {recommendation.reason}
+      </div>
+      <div className="recommendation-card-feedback">
+        <FeedbackButtons status={feedback} onChange={onFeedback} />
       </div>
       <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px' }}>
         <div
