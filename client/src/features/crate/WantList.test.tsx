@@ -35,22 +35,21 @@ function rows(): HTMLElement[] {
 
 describe('WantList', () => {
   it('lists the albums newest first by when they were added', () => {
-    render(<WantList entries={LIST} onSelect={vi.fn()} />);
+    render(<WantList entries={LIST} onSelect={vi.fn()} onGotIt={vi.fn()} />);
 
-    expect(rows().map((row) => within(row).getByRole('button').textContent)).toEqual([
-      'From the Lion’s Mouth',
-      'Jeopardy',
-    ]);
+    expect(
+      rows().map((row) => within(row).getByRole('button', { name: /^Load / }).textContent),
+    ).toEqual(['From the Lion’s Mouth', 'Jeopardy']);
   });
 
   it('shows each album’s artist and year', () => {
-    render(<WantList entries={[LIST[0]]} onSelect={vi.fn()} />);
+    render(<WantList entries={[LIST[0]]} onSelect={vi.fn()} onGotIt={vi.fn()} />);
 
     expect(screen.getByText('The Sound · 1980')).toBeInTheDocument();
   });
 
   it('offers Apple Music, Spotify and Discogs for each album', () => {
-    render(<WantList entries={LIST} onSelect={vi.fn()} />);
+    render(<WantList entries={LIST} onSelect={vi.fn()} onGotIt={vi.fn()} />);
 
     rows().forEach((row) => {
       expect(
@@ -62,7 +61,7 @@ describe('WantList', () => {
   });
 
   it('goes straight to Apple Music when the album’s link is known, and searches otherwise', () => {
-    render(<WantList entries={LIST} onSelect={vi.fn()} />);
+    render(<WantList entries={LIST} onSelect={vi.fn()} onGotIt={vi.fn()} />);
 
     const [searched, direct] = rows().map((row) =>
       within(row).getByRole('link', { name: 'Apple Music' }).getAttribute('href'),
@@ -72,7 +71,7 @@ describe('WantList', () => {
   });
 
   it('shows the cover through the image proxy, or a placeholder sleeve without one', () => {
-    render(<WantList entries={LIST} onSelect={vi.fn()} />);
+    render(<WantList entries={LIST} onSelect={vi.fn()} onGotIt={vi.fn()} />);
 
     expect(screen.getByAltText('Jeopardy album artwork')).toHaveAttribute(
       'src',
@@ -86,7 +85,7 @@ describe('WantList', () => {
   });
 
   it('falls back to the placeholder sleeve when a cover fails to load', () => {
-    render(<WantList entries={[LIST[0]]} onSelect={vi.fn()} />);
+    render(<WantList entries={[LIST[0]]} onSelect={vi.fn()} onGotIt={vi.fn()} />);
 
     fireEvent.error(screen.getByAltText('Jeopardy album artwork'));
 
@@ -96,7 +95,7 @@ describe('WantList', () => {
 
   it('brings the album back as the pick when its title is tapped', () => {
     const onSelect = vi.fn();
-    render(<WantList entries={LIST} onSelect={onSelect} />);
+    render(<WantList entries={LIST} onSelect={onSelect} onGotIt={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Load Jeopardy by The Sound' }));
 
@@ -106,8 +105,35 @@ describe('WantList', () => {
   it('does not change what it is given', () => {
     const copy = [...LIST];
 
-    render(<WantList entries={LIST} onSelect={vi.fn()} />);
+    render(<WantList entries={LIST} onSelect={vi.fn()} onGotIt={vi.fn()} />);
 
     expect(LIST).toEqual(copy);
+  });
+
+  it('has a Got it button for each album, named for the album', () => {
+    render(<WantList entries={LIST} onSelect={vi.fn()} onGotIt={vi.fn()} />);
+
+    expect(screen.getAllByRole('button', { name: /^Mark .* as owned$/ })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Mark Jeopardy as owned' })).toHaveTextContent(
+      'Got it',
+    );
+  });
+
+  it('hands over the album that was bought', () => {
+    const onGotIt = vi.fn();
+    render(<WantList entries={LIST} onSelect={vi.fn()} onGotIt={onGotIt} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Jeopardy as owned' }));
+
+    expect(onGotIt).toHaveBeenCalledWith('Jeopardy');
+  });
+
+  it('does not open the album when Got it is tapped', () => {
+    const onSelect = vi.fn();
+    render(<WantList entries={LIST} onSelect={onSelect} onGotIt={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Jeopardy as owned' }));
+
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

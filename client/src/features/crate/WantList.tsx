@@ -9,6 +9,8 @@ interface WantListProps {
   readonly entries: readonly HistoryEntry[];
   /** Brings an album back as the pick on screen. */
   readonly onSelect: (id: string) => void;
+  /** The listener has bought it: it leaves the want list and becomes one they own. */
+  readonly onGotIt: (id: string) => void;
 }
 
 function WantCover({ entry }: { readonly entry: HistoryEntry }): React.ReactElement {
@@ -28,7 +30,7 @@ function WantCover({ entry }: { readonly entry: HistoryEntry }): React.ReactElem
 }
 
 /** The albums the listener wants on vinyl, newest first, each with where to hear or buy it. */
-export function WantList({ entries, onSelect }: WantListProps): React.ReactElement {
+export function WantList({ entries, onSelect, onGotIt }: WantListProps): React.ReactElement {
   return (
     <ul className="want-list">
       {newestAnswerFirst(entries).map((entry) => {
@@ -50,11 +52,21 @@ export function WantList({ entries, onSelect }: WantListProps): React.ReactEleme
               <div className="want-meta">
                 {artist} · {year}
               </div>
-              <ListeningLinks
-                artist={artist}
-                album={album}
-                appleMusicUrl={entry.artworkResponse.appleMusicUrl}
-              />
+              <div className="want-actions">
+                <ListeningLinks
+                  artist={artist}
+                  album={album}
+                  appleMusicUrl={entry.artworkResponse.appleMusicUrl}
+                />
+                <button
+                  type="button"
+                  className="want-got-it"
+                  aria-label={`Mark ${album} as owned`}
+                  onClick={() => onGotIt(entry.id)}
+                >
+                  Got it
+                </button>
+              </div>
             </div>
           </li>
         );

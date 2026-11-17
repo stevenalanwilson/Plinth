@@ -40,6 +40,7 @@ interface Handlers {
   onRemove: ReturnType<typeof vi.fn>;
   onClear: ReturnType<typeof vi.fn>;
   onImport: ReturnType<typeof vi.fn>;
+  onFeedback: ReturnType<typeof vi.fn>;
   onOpenInsights: ReturnType<typeof vi.fn>;
 }
 
@@ -49,6 +50,7 @@ function renderCrate(history: readonly HistoryEntry[] = LIBRARY): Handlers {
     onRemove: vi.fn(),
     onClear: vi.fn(),
     onImport: vi.fn(),
+    onFeedback: vi.fn(),
     onOpenInsights: vi.fn(),
   };
   render(<CratePage history={history} {...handlers} />);
@@ -150,6 +152,15 @@ describe('CratePage', () => {
       expect(
         screen.getByText('Nothing on your want list yet. Tap Want on vinyl on a pick to add it.'),
       ).toBeInTheDocument();
+    });
+
+    it('marks an album as owned when it is bought', async () => {
+      const { onFeedback } = renderCrate();
+      await userEvent.click(screen.getByRole('button', { name: /^Want on vinyl/ }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Mark Wanted as owned' }));
+
+      expect(onFeedback).toHaveBeenCalledWith('Wanted', 'own');
     });
 
     it('opens an album from the want list', async () => {

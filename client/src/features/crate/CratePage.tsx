@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { HistoryEntry } from '../../types/history';
+import { FeedbackStatus } from '../../types/feedback';
 import { downloadLibrary, parseLibraryFile } from '../../services/libraryExport';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { HistoryItem } from '../history/HistoryItem';
@@ -19,6 +20,8 @@ interface CratePageProps {
   readonly onRemove: (id: string) => void;
   readonly onClear: () => void;
   readonly onImport: (entries: HistoryEntry[]) => void;
+  /** Sets or clears the answer on an album. */
+  readonly onFeedback: (id: string, status: FeedbackStatus | null) => void;
   readonly onOpenInsights: () => void;
 }
 
@@ -38,6 +41,7 @@ export function CratePage({
   onRemove,
   onClear,
   onImport,
+  onFeedback,
   onOpenInsights,
 }: CratePageProps): React.ReactElement {
   const [filter, setFilter] = useState<CrateFilter>('all');
@@ -139,7 +143,7 @@ export function CratePage({
           {shown.length === 0 ? (
             <p className="crate-empty">{EMPTY_MESSAGES[filter]}</p>
           ) : filter === 'want-vinyl' ? (
-            <WantList entries={shown} onSelect={onSelect} />
+            <WantList entries={shown} onSelect={onSelect} onGotIt={(id) => onFeedback(id, 'own')} />
           ) : (
             <div className="history-grid">
               {shown.map((entry) => (
