@@ -2,17 +2,33 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { AlbumResponse } from '@shared/types';
+import { AlbumDetailsResponse, AlbumResponse } from '@shared/types';
 
 vi.mock('../../services/apiClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/apiClient')>()),
   fetchAlbum: vi.fn(),
+  fetchAlbumDetails: vi.fn(),
 }));
 
-import { ApiError, fetchAlbum } from '../../services/apiClient';
+import { ApiError, fetchAlbum, fetchAlbumDetails } from '../../services/apiClient';
 import { AlbumPage } from './AlbumPage';
 
 const mockFetchAlbum = vi.mocked(fetchAlbum);
+const mockFetchAlbumDetails = vi.mocked(fetchAlbumDetails);
+
+const DETAILS: AlbumDetailsResponse = {
+  release: { date: '1980-11', country: 'GB', label: 'Korova', catalogueNumber: 'KODE 2' },
+  formats: ['12" Vinyl'],
+  discs: [
+    {
+      position: 1,
+      title: null,
+      format: '12" Vinyl',
+      tracks: [{ number: 'A1', title: "I Can't Escape Myself", lengthSeconds: 236 }],
+    },
+  ],
+  moreFromArtist: null,
+};
 
 // Placeholder sleeves repeat the album and artist, so text queries skip them.
 const NOT_IN_SLEEVE = { ignore: '[role="img"] *, script, style' };
@@ -44,6 +60,7 @@ function renderPage(slug = 'the-sound-jeopardy'): void {
 beforeEach(() => {
   vi.clearAllMocks();
   document.title = 'Plinth';
+  mockFetchAlbumDetails.mockResolvedValue(DETAILS);
 });
 
 afterEach(() => {
@@ -75,6 +92,53 @@ describe('AlbumPage', () => {
     );
     expect(screen.getByRole('link', { name: /Search in Spotify/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Search in Discogs/ })).toBeInTheDocument();
+  });
+
+  it('shows the tracklist and release facts below the album', async () => {
+    mockFetchAlbum.mockResolvedValue(ALBUM);
+
+    renderPage();
+
+    expect(await screen.findByText("I Can't Escape Myself")).toBeInTheDocument();
+    expect(screen.getByText('November 1980')).toBeInTheDocument();
+    expect(mockFetchAlbumDetails).toHaveBeenCalledWith(
+      'the-sound-jeopardy',
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('shows the album at once, and the details when they arrive', async () => {
+    mockFetchAlbum.mockResolvedValue(ALBUM);
+    mockFetchAlbumDetails.mockReturnValue(new Promise(() => {}));
+
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Jeopardy' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading album details' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Get your own pick' })).toBeInTheDocument();
+  });
+
+  it('keeps the album when only the details fail', async () => {
+    mockFetchAlbum.mockResolvedValue(ALBUM);
+    mockFetchAlbumDetails.mockRejectedValue(
+      new ApiError("Couldn't load the album details. Please try again.", 502),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByText("Couldn't load the album details. Please try again."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Jeopardy' })).toBeInTheDocument();
+  });
+
+  it('does not ask for details for an album that does not exist', async () => {
+    mockFetchAlbum.mockRejectedValue(new ApiError('Album not found', 404));
+
+    renderPage('nope');
+
+    await screen.findByText("We couldn't find that album.");
+    expect(mockFetchAlbumDetails).not.toHaveBeenCalled();
   });
 
   it('shows the cover through the image proxy', async () => {

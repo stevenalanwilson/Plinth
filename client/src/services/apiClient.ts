@@ -1,4 +1,5 @@
 import {
+  AlbumDetailsResponse,
   AlbumResponse,
   RecommendationRequest,
   RecommendationResponse,
@@ -108,6 +109,17 @@ export function fetchArtwork(
 
 export function fetchAlbum(slug: string, signal?: AbortSignal): Promise<AlbumResponse> {
   return get<AlbumResponse>(`${API_V1}/albums/${encodeURIComponent(slug)}`, {}, signal);
+}
+
+export function fetchAlbumDetails(
+  slug: string,
+  signal?: AbortSignal,
+): Promise<AlbumDetailsResponse> {
+  return get<AlbumDetailsResponse>(
+    `${API_V1}/albums/${encodeURIComponent(slug)}/details`,
+    {},
+    signal,
+  );
 }
 
 /**

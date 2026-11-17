@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { createRecommendHandler } from '../controllers/recommendController';
 import { createAlbumHandler } from '../controllers/albumController';
+import { createAlbumDetailsHandler } from '../controllers/albumDetailsController';
 import { handleArtwork } from '../controllers/artworkController';
 import { handleArtistRelations } from '../controllers/artistRelationsController';
 import { handleImage } from '../controllers/imageController';
@@ -61,10 +62,21 @@ const albumLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
+// Cold, one request makes several MusicBrainz calls, and they all queue at one per second, so
+// this is limited more tightly than the album itself. Repeat views are served from the cache.
+const albumDetailsLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' },
+});
+
 export function createApiRouter({ albums }: ApiDependencies): Router {
   const router = Router();
   router.post('/recommend', recommendLimiter, createRecommendHandler(albums));
   router.get('/albums/:slug', albumLimiter, createAlbumHandler(albums));
+  router.get('/albums/:slug/details', albumDetailsLimiter, createAlbumDetailsHandler(albums));
   router.post('/artist-essentials', artistEssentialsLimiter, handleArtistEssentials);
   router.get('/artwork', artworkLimiter, handleArtwork);
   router.get('/artist-rels', artistRelsLimiter, handleArtistRelations);
