@@ -13,6 +13,9 @@ vi.mock('./routes/api', async () => {
   router.get('/ping', (_req, res) => {
     res.json({ pong: true });
   });
+  router.get('/whoami', (req, res) => {
+    res.json({ ip: req.ip });
+  });
   return { createApiRouter: (): typeof router => router };
 });
 
@@ -27,9 +30,9 @@ let server: Server;
 let baseUrl: string;
 let albums: AlbumRepository;
 
-async function start(indexTemplate: string | null): Promise<void> {
+async function start(indexTemplate: string | null, trustProxyHops?: number): Promise<void> {
   albums = createInMemoryAlbumRepository();
-  server = createApp({ albums, indexTemplate }).listen(0);
+  server = createApp({ albums, indexTemplate, trustProxyHops }).listen(0);
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
@@ -114,5 +117,65 @@ describe('createApp album pages', () => {
     expect(await res.text()).not.toContain('og:title');
     await stop();
     await start(TEMPLATE);
+  });
+});
+
+describe('createApp proxy trust', () => {
+  interface Running {
+    readonly server: Server;
+    readonly baseUrl: string;
+  }
+
+  // One server per setting, started once: restarting a server for every assertion is slow, and
+  // slower still when other tests are running.
+  const running = new Map<number | undefined, Running>();
+
+  beforeAll(async () => {
+    for (const hops of [undefined, 0, 1, 2]) {
+      const instance = createApp({
+        albums: createInMemoryAlbumRepository(),
+        indexTemplate: TEMPLATE,
+        trustProxyHops: hops,
+      }).listen(0);
+      await new Promise<void>((resolve) => instance.once('listening', () => resolve()));
+      running.set(hops, {
+        server: instance,
+        baseUrl: `http://127.0.0.1:${(instance.address() as AddressInfo).port}`,
+      });
+    }
+  });
+
+  afterAll(async () => {
+    await Promise.all(
+      [...running.values()].map(
+        ({ server: instance }) => new Promise<void>((resolve) => instance.close(() => resolve())),
+      ),
+    );
+  });
+
+  async function addressSeenWith(forwardedFor: string, hops?: number): Promise<string> {
+    const instance = running.get(hops);
+    if (!instance) throw new Error(`no server for ${String(hops)}`);
+    const res = await fetch(`${instance.baseUrl}/api/v1/whoami`, {
+      headers: { 'x-forwarded-for': forwardedFor },
+    });
+    return ((await res.json()) as { ip: string }).ip;
+  }
+
+  it('sees the visitor’s own address behind one trusted proxy', async () => {
+    expect(await addressSeenWith('203.0.113.9', 1)).toBe('203.0.113.9');
+  });
+
+  it('ignores addresses a visitor adds to the left of the proxy’s, so a limit can’t be dodged', async () => {
+    expect(await addressSeenWith('6.6.6.6, 203.0.113.9', 1)).toBe('203.0.113.9');
+  });
+
+  it('counts the right number of proxies', async () => {
+    expect(await addressSeenWith('6.6.6.6, 203.0.113.9, 198.51.100.4', 2)).toBe('203.0.113.9');
+  });
+
+  it('ignores the header when no proxy is trusted', async () => {
+    expect(await addressSeenWith('203.0.113.9', 0)).toMatch(/127\.0\.0\.1$/);
+    expect(await addressSeenWith('203.0.113.9')).toMatch(/127\.0\.0\.1$/);
   });
 });

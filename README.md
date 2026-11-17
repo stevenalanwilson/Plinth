@@ -156,17 +156,18 @@ Then open [http://localhost:5173](http://localhost:5173).
 
 ## Environment variables
 
-| Variable              | Required | Default                 | Description                                                                            |
-| --------------------- | -------- | ----------------------- | -------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`   | ✅       | —                       | Anthropic API key — powers album recommendations                                       |
-| `PORT`                |          | `3001`                  | Server port                                                                            |
-| `CORS_ORIGIN`         |          | `http://localhost:5173` | Allowed client origin                                                                  |
-| `PUBLIC_URL`          | In prod  | the request's address   | Public address of the app, for shared-link preview cards                               |
-| `DATABASE_URL`        | In prod  | — (in memory)           | Postgres connection for stored albums; the server won't start without it in production |
-| `MUSICBRAINZ_CONTACT` |          | —                       | Email or URL sent in the MusicBrainz User-Agent, as their etiquette asks               |
-| `VITE_API_URL`        |          | `''` (same origin)      | Client → server base URL (local dev without Docker)                                    |
-| `VITE_MONZO_URL`      |          | —                       | Monzo.me payment link shown in the footer                                              |
-| `VITE_FEEDBACK_EMAIL` |          | —                       | Email address for the feedback link in the footer                                      |
+| Variable              | Required | Default                     | Description                                                                                |
+| --------------------- | -------- | --------------------------- | ------------------------------------------------------------------------------------------ |
+| `ANTHROPIC_API_KEY`   | ✅       | —                           | Anthropic API key — powers album recommendations                                           |
+| `PORT`                |          | `3001`                      | Server port                                                                                |
+| `CORS_ORIGIN`         |          | `http://localhost:5173`     | Allowed client origin                                                                      |
+| `TRUST_PROXY`         |          | `1` in production, else `0` | Number of proxies in front of the server, so rate limits count each visitor, not the proxy |
+| `PUBLIC_URL`          | In prod  | the request's address       | Public address of the app, for shared-link preview cards                                   |
+| `DATABASE_URL`        | In prod  | — (in memory)               | Postgres connection for stored albums; the server won't start without it in production     |
+| `MUSICBRAINZ_CONTACT` |          | —                           | Email or URL sent in the MusicBrainz User-Agent, as their etiquette asks                   |
+| `VITE_API_URL`        |          | `''` (same origin)          | Client → server base URL (local dev without Docker)                                        |
+| `VITE_MONZO_URL`      |          | —                           | Monzo.me payment link shown in the footer                                                  |
+| `VITE_FEEDBACK_EMAIL` |          | —                           | Email address for the feedback link in the footer                                          |
 
 **Getting your Anthropic API key**
 
