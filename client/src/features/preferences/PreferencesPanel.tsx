@@ -1,5 +1,6 @@
 import React from 'react';
 import { RecommendationPreferences, Era, SLIDER_MIN, SLIDER_MAX, ERA_VALUES } from '@shared/types';
+import { GENRE_OPTIONS, MOOD_OPTIONS } from './preferenceOptions';
 
 // Derived from the interface so field names stay in sync automatically with any future renames.
 type SliderField = {
@@ -9,31 +10,6 @@ type SliderField = {
 type ToggleField = {
   [K in keyof RecommendationPreferences]: RecommendationPreferences[K] extends boolean ? K : never;
 }[keyof RecommendationPreferences];
-
-const GENRE_OPTIONS = [
-  'Electronic',
-  'Post-punk',
-  'Ambient',
-  'Indie',
-  'Krautrock',
-  'Drum & Bass',
-  'Art Rock',
-  'Jazz',
-  'Folk',
-  'Metal',
-  'Hip-hop',
-  'Classical',
-] as const;
-
-const MOOD_OPTIONS = [
-  'Late night',
-  'High energy',
-  'Chill',
-  'Focus',
-  'Melancholic',
-  'Euphoric',
-  'Hopeful',
-] as const;
 
 // Record keyed on Era enforces exhaustiveness: TypeScript errors if a new era is added
 // to ERA_VALUES without a corresponding label here.
