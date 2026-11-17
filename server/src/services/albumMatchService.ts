@@ -189,20 +189,32 @@ export type ArtistAlbumsLookup =
       readonly status: 'found';
       readonly artist: string;
       readonly albums: readonly ReleaseGroupCandidate[];
+      /** IDs of the albums the artist's MusicBrainz page lists; null if they couldn't be fetched. */
+      readonly listedIds: ReadonlySet<string> | null;
     }
   | { readonly status: 'not_found' }
   | { readonly status: 'lookup_failed' };
 
+/**
+ * Which of an artist's albums to fetch. `all` is everything MusicBrainz has, bootlegs included;
+ * `listed` is what the artist's MusicBrainz page lists, leaving out release groups whose
+ * releases are all bootleg, promotional or pseudo-releases.
+ */
+export type CatalogueScope = 'all' | 'listed';
+
+function browseAlbumsPath(artistId: string, scope: CatalogueScope, page: number): string {
+  const status = scope === 'listed' ? '&release-group-status=website-default' : '';
+  return `release-group?artist=${artistId}&type=album${status}&inc=artist-credits&limit=${BROWSE_PAGE_SIZE}&offset=${page * BROWSE_PAGE_SIZE}&fmt=json`;
+}
+
 export async function browseArtistAlbums(
   artistId: string,
   budgetSignal: AbortSignal,
+  scope: CatalogueScope = 'all',
 ): Promise<ReleaseGroupCandidate[] | null> {
   const albums: ReleaseGroupCandidate[] = [];
   for (let page = 0; page < MAX_BROWSE_PAGES; page++) {
-    const res = await musicBrainzFetch(
-      `release-group?artist=${artistId}&type=album&inc=artist-credits&limit=${BROWSE_PAGE_SIZE}&offset=${page * BROWSE_PAGE_SIZE}&fmt=json`,
-      budgetSignal,
-    );
+    const res = await musicBrainzFetch(browseAlbumsPath(artistId, scope, page), budgetSignal);
     if (!res.ok) return null;
 
     const data = (await res.json()) as ReleaseGroupBrowseResult;
@@ -211,6 +223,24 @@ export async function browseArtistAlbums(
     if (batch.length === 0 || albums.length >= (data['release-group-count'] ?? 0)) break;
   }
   return albums;
+}
+
+/**
+ * The IDs of the albums the artist's page lists, or null if MusicBrainz couldn't supply them.
+ * They only tidy what is shown, so a failure here mustn't fail the lookup. MusicBrainz returns
+ * both browses in the same order (by ID) and the listed albums are a subset, so even when both
+ * stop at MAX_BROWSE_PAGES, every listed album in the full pages is in the listed pages too.
+ */
+async function listedAlbumIds(
+  artistId: string,
+  budgetSignal: AbortSignal,
+): Promise<ReadonlySet<string> | null> {
+  try {
+    const listed = await browseArtistAlbums(artistId, budgetSignal, 'listed');
+    return listed ? new Set(listed.map((album) => album.id)) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -247,11 +277,22 @@ export async function findArtistAlbums(
       return { status: 'lookup_failed' };
     }
 
+    // Albums are verified against the whole catalogue, so a pick that exists only as a bootleg
+    // still counts; the listed IDs keep such albums out of what is shown as the discography.
+    const listedIds = await listedAlbumIds(found.id, budgetSignal);
+    if (!listedIds) logger.warn({ artist, artistId: found.id }, 'listed albums unavailable');
+
     logger.info(
-      { artist, outcome: 'found', artistId: found.id, albumCount: albums.length },
+      {
+        artist,
+        outcome: 'found',
+        artistId: found.id,
+        albumCount: albums.length,
+        listedCount: listedIds?.size ?? null,
+      },
       'artist albums',
     );
-    return { status: 'found', artist: found.name, albums };
+    return { status: 'found', artist: found.name, albums, listedIds };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.warn({ artist, outcome: 'lookup_failed', error: message }, 'artist albums');
