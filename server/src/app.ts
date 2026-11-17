@@ -10,10 +10,16 @@ import { createAlbumPageHandler } from './controllers/albumPageController';
 export interface AppDependencies extends ApiDependencies {
   /** The built client's index.html, or null when there is no build (development). */
   readonly indexTemplate?: string | null;
+  /** Proxies between visitors and the app, so Express knows whose address to believe. */
+  readonly trustProxyHops?: number;
 }
 
 export function createApp(dependencies: AppDependencies): Express {
   const app = express();
+
+  // Without this, behind a proxy every visitor has the proxy's address, and the rate limits
+  // (which count by address) would be shared by everyone.
+  app.set('trust proxy', dependencies.trustProxyHops ?? 0);
 
   app.use(helmet());
   const allowedOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:5173';

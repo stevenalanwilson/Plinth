@@ -15,6 +15,7 @@ import { Pool } from 'pg';
 import { logger } from './logger';
 import { createApp } from './app';
 import { loadIndexTemplate } from './utils/indexTemplate';
+import { trustProxyHops } from './utils/trustProxy';
 import { createPool } from './db/pool';
 import { migrate } from './db/migrate';
 import { AlbumRepository } from './repositories/albumRepository';
@@ -61,6 +62,10 @@ async function connectStorage(): Promise<Storage> {
 }
 
 async function start(): Promise<void> {
+  // Checked first, so a bad value stops the server before it touches the database.
+  const proxyHops = trustProxyHops(process.env);
+  logger.info({ trustProxyHops: proxyHops }, 'trusting proxies for visitor addresses');
+
   const { albums, cache, pool } = await connectStorage();
   configureLookupCache(cache);
   const stopCacheCleanup = startCacheCleanup(cache);
@@ -72,9 +77,12 @@ async function start(): Promise<void> {
     );
   }
 
-  const server = createApp({ albums, indexTemplate }).listen(Number(port), () => {
-    logger.info({ port }, 'Server running');
-  });
+  const server = createApp({ albums, indexTemplate, trustProxyHops: proxyHops }).listen(
+    Number(port),
+    () => {
+      logger.info({ port }, 'Server running');
+    },
+  );
 
   process.on('SIGTERM', () => {
     logger.info('SIGTERM received, shutting down gracefully');
