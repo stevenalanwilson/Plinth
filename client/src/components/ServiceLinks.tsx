@@ -111,12 +111,7 @@ export function ServiceLinks({
   };
 
   return (
-    <div
-      className={compact ? undefined : 'service-links'}
-      style={
-        compact ? { display: 'flex', flexDirection: 'column', gap: 6, width: '100%' } : undefined
-      }
-    >
+    <div className={compact ? 'service-links-compact' : 'service-links'}>
       <a
         href={appleMusicUrl}
         target="_blank"

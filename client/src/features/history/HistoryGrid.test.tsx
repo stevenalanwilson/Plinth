@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HistoryGrid } from './HistoryGrid';
@@ -230,6 +230,133 @@ describe('HistoryGrid', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
       expect(onRemove).toHaveBeenCalledWith('test-id-1');
+    });
+  });
+
+  describe('actions on a touch screen', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    // The overlay is the card's links and Remove; it stays in the DOM and is shown or hidden by style.
+    const overlayOf = (): HTMLElement => document.querySelector('.history-overlay') as HTMLElement;
+    const toggle = (): HTMLElement => screen.getByRole('button', { name: /options for Untrue/i });
+    const renderOne = (onSelect = vi.fn()): void => {
+      render(<HistoryGrid history={[entries[0]]} onRemove={vi.fn()} onSelect={onSelect} />);
+    };
+
+    it('keeps the links and Remove out of the way until asked for', () => {
+      renderOne();
+
+      expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+      expect(overlayOf()).toHaveStyle({ opacity: '0', pointerEvents: 'none' });
+    });
+
+    it('opens them from a labelled control, and closes them from the same one', () => {
+      renderOne();
+
+      fireEvent.click(toggle());
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+      expect(toggle()).toHaveAccessibleName('Hide options for Untrue by Burial');
+      expect(overlayOf()).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
+
+      fireEvent.click(toggle());
+      expect(overlayOf()).toHaveStyle({ opacity: '0', pointerEvents: 'none' });
+    });
+
+    it('does not open the album when the control is used', () => {
+      const onSelect = vi.fn();
+      renderOne(onSelect);
+
+      fireEvent.click(toggle());
+      fireEvent.keyDown(toggle(), { key: 'Enter' });
+
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('closes when the panel behind the links is tapped, without opening the album', () => {
+      const onSelect = vi.fn();
+      renderOne(onSelect);
+      fireEvent.click(toggle());
+
+      fireEvent.click(overlayOf());
+
+      expect(overlayOf()).toHaveStyle({ opacity: '0' });
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('stays open when a link inside it is tapped', () => {
+      renderOne();
+      fireEvent.click(toggle());
+
+      fireEvent.click(screen.getByRole('link', { name: 'Spotify' }));
+
+      expect(overlayOf()).toHaveStyle({ opacity: '1' });
+    });
+
+    it('still opens the album when the card itself is tapped', () => {
+      const onSelect = vi.fn();
+      renderOne(onSelect);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Load Untrue by Burial' }));
+
+      expect(onSelect).toHaveBeenCalledWith('test-id-1');
+    });
+
+    it('does not treat a touch as hovering, so a tap never flashes the panel', () => {
+      // jsdom has no PointerEvent, so give it one that carries the pointer type.
+      class TestPointerEvent extends MouseEvent {
+        readonly pointerType: string;
+        constructor(type: string, init: MouseEventInit & { pointerType?: string } = {}) {
+          super(type, init);
+          this.pointerType = init.pointerType ?? '';
+        }
+      }
+      vi.stubGlobal('PointerEvent', TestPointerEvent);
+      renderOne();
+
+      fireEvent.pointerEnter(screen.getByRole('button', { name: 'Load Untrue by Burial' }), {
+        pointerType: 'touch',
+      });
+
+      expect(overlayOf()).toHaveStyle({ opacity: '0' });
+    });
+
+    it('still fades the panel in for a mouse', () => {
+      renderOne();
+
+      fireEvent.pointerEnter(screen.getByRole('button', { name: 'Load Untrue by Burial' }), {
+        pointerType: 'mouse',
+      });
+
+      expect(overlayOf()).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
+    });
+
+    it('keeps the verdict badge while the panel is open', () => {
+      const rated: HistoryEntry = {
+        ...entries[0],
+        feedback: { status: 'own', at: new Date().toISOString() },
+      };
+      render(<HistoryGrid history={[rated]} onRemove={vi.fn()} onSelect={vi.fn()} />);
+
+      fireEvent.click(toggle());
+
+      expect(screen.getByText('Own it')).toBeInTheDocument();
+    });
+
+    it('still asks before removing a rated album from the open panel', () => {
+      const onRemove = vi.fn();
+      const rated: HistoryEntry = {
+        ...entries[0],
+        feedback: { status: 'own', at: new Date().toISOString() },
+      };
+      render(<HistoryGrid history={[rated]} onRemove={onRemove} onSelect={vi.fn()} />);
+      fireEvent.click(toggle());
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+      expect(onRemove).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Tap again to remove' })).toBeInTheDocument();
     });
   });
 });
