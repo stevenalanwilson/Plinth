@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HistoryGrid } from './HistoryGrid';
 import { HistoryEntry } from '../../types/history';
@@ -190,6 +190,46 @@ describe('HistoryGrid', () => {
 
       expect(document.querySelector('.feedback-badge')).toBeNull();
       expect(screen.getByRole('button', { name: 'Load Untrue by Burial' })).toBeInTheDocument();
+    });
+  });
+
+  describe('removing an album', () => {
+    // The overlay's buttons are only reachable while hovered, so these use fireEvent.
+    it('removes an unrated album on the first tap', () => {
+      const onRemove = vi.fn();
+      render(<HistoryGrid history={[entries[0]]} onRemove={onRemove} onSelect={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+      expect(onRemove).toHaveBeenCalledWith('test-id-1');
+    });
+
+    it('asks before removing an album the listener rated', () => {
+      const onRemove = vi.fn();
+      const rated: HistoryEntry = {
+        ...entries[0],
+        feedback: { status: 'own', at: new Date().toISOString() },
+      };
+      render(<HistoryGrid history={[rated]} onRemove={onRemove} onSelect={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+      expect(onRemove).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Tap again to remove' }));
+      expect(onRemove).toHaveBeenCalledWith('test-id-1');
+    });
+
+    it('removes an album whose rating was cleared on the first tap', () => {
+      const onRemove = vi.fn();
+      const cleared: HistoryEntry = {
+        ...entries[0],
+        feedback: { status: null, at: new Date().toISOString() },
+      };
+      render(<HistoryGrid history={[cleared]} onRemove={onRemove} onSelect={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+      expect(onRemove).toHaveBeenCalledWith('test-id-1');
     });
   });
 });
