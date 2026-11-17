@@ -5,8 +5,12 @@ import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import { logger } from './logger';
 import { ApiDependencies, createApiRouter } from './routes/api';
+import { createAlbumPageHandler } from './controllers/albumPageController';
 
-export type AppDependencies = ApiDependencies;
+export interface AppDependencies extends ApiDependencies {
+  /** The built client's index.html, or null when there is no build (development). */
+  readonly indexTemplate?: string | null;
+}
 
 export function createApp(dependencies: AppDependencies): Express {
   const app = express();
@@ -39,6 +43,18 @@ export function createApp(dependencies: AppDependencies): Express {
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Not found' });
   });
+
+  // Album pages carry their own link preview tags. This comes before the catch-all below, which
+  // would otherwise serve them the same index.html as every other page.
+  if (dependencies.indexTemplate) {
+    app.get(
+      '/album/:slug',
+      createAlbumPageHandler({
+        albums: dependencies.albums,
+        template: dependencies.indexTemplate,
+      }),
+    );
+  }
 
   // Serve React client in production (static files built into public/)
   const clientDist = path.join(__dirname, '..', 'public');

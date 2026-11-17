@@ -1,3 +1,4 @@
+import path from 'path';
 import dotenv from 'dotenv';
 // The .env file lives at the repo root, shared with Vite and Docker Compose, so load it from
 // there rather than the working directory, which is server/ under `npm run dev`. In Docker and
@@ -13,6 +14,7 @@ if (!process.env.ANTHROPIC_API_KEY) {
 import { Pool } from 'pg';
 import { logger } from './logger';
 import { createApp } from './app';
+import { loadIndexTemplate } from './utils/indexTemplate';
 import { createPool } from './db/pool';
 import { migrate } from './db/migrate';
 import { AlbumRepository } from './repositories/albumRepository';
@@ -63,7 +65,14 @@ async function start(): Promise<void> {
   configureLookupCache(cache);
   const stopCacheCleanup = startCacheCleanup(cache);
 
-  const server = createApp({ albums }).listen(Number(port), () => {
+  const indexTemplate = await loadIndexTemplate(path.join(__dirname, '..', 'public'));
+  if (indexTemplate && !process.env.PUBLIC_URL) {
+    logger.warn(
+      'PUBLIC_URL is not set: link previews will use the address each request arrives on',
+    );
+  }
+
+  const server = createApp({ albums, indexTemplate }).listen(Number(port), () => {
     logger.info({ port }, 'Server running');
   });
 
