@@ -38,13 +38,13 @@
 
 **Order:** P1.6 → P1.1 (server) → P1.7 and P1.1 (client) → P1.5 → P1.4 → P1.2 and P1.3. Don't announce permalinks until the cache (P1.5) has landed.
 
-- [ ] **P1.1 Permalinks** — each album gets its own page (e.g. `/album/the-sound-jeopardy`); only picks MusicBrainz confirmed get one, and a slug never changes once issued. Store the album with a short `hook` from Claude (one line that doesn't depend on the user's preferences), so the page loads without calling Claude or MusicBrainz. The MusicBrainz release group ID identifies the album and the slug is its public name
-- [ ] **P1.2 Preview cards (OG tags)** — shared links show cover, title and a one-line hook (WhatsApp, Bluesky, Slack)
-- [ ] **P1.3 Share button** — copy link, plus the native share sheet on mobile
-- [ ] **P1.4 Album detail page** — the permalink page shows the tracklist, release info and related albums via MusicBrainz
-- [ ] **P1.5 Caching layer (Postgres)** — cache MusicBrainz, Cover Art and iTunes lookups and reuse results for identical inputs and permalink pages, to control API costs and rate-limit risk. Postgres rather than Redis, since Phase 4 needs it anyway; keep the cache behind a small interface so Redis can replace it later. Log cache hits and misses
-- [ ] **P1.6 Versioned API** — serve the routes under `/api/v1` and only add to them from now on, so older clients keep working (an app version stays in people's pockets for years). No legacy alias is needed while the server and client ship together; keep `/api/health` unversioned, as the Railway health check uses it
-- [ ] **P1.7 Album resource** — `GET /api/v1/albums/:slug` returns the album with its cover and listening links, and `/recommend` returns the pick with its slug straight away. Every client, including the permalink page, uses that one endpoint instead of repeating the recommend → artwork chain in `useRecommendation`. The cover stays a separate step so the pick appears without waiting for MusicBrainz, and history entries from before the slug keep using the existing artwork endpoint. Validate new endpoints with Zod so the API contract (P7.2) can be generated from them
+- [x] **P1.1 Permalinks** — each album gets its own page (e.g. `/album/the-sound-jeopardy`); only picks MusicBrainz confirmed get one, and a slug never changes once issued. Store the album with a short `hook` from Claude (one line that doesn't depend on the user's preferences), so the page loads without calling Claude or MusicBrainz. The MusicBrainz release group ID identifies the album and the slug is its public name
+- [x] **P1.2 Preview cards (OG tags)** — shared links show cover, title and a one-line hook (WhatsApp, Bluesky, Slack)
+- [x] **P1.3 Share button** — copy link, plus the native share sheet on mobile
+- [x] **P1.4 Album detail page** — the permalink page shows the tracklist, release info and related albums via MusicBrainz
+- [x] **P1.5 Caching layer (Postgres)** — cache MusicBrainz, Cover Art and iTunes lookups and reuse results for identical inputs and permalink pages, to control API costs and rate-limit risk. Postgres rather than Redis, since Phase 4 needs it anyway; keep the cache behind a small interface so Redis can replace it later. Log cache hits and misses
+- [x] **P1.6 Versioned API** — serve the routes under `/api/v1` and only add to them from now on, so older clients keep working (an app version stays in people's pockets for years). No legacy alias is needed while the server and client ship together; keep `/api/health` unversioned, as the Railway health check uses it
+- [x] **P1.7 Album resource** — `GET /api/v1/albums/:slug` returns the album with its cover and listening links, and `/recommend` returns the pick with its slug straight away. Every client, including the permalink page, uses that one endpoint instead of repeating the recommend → artwork chain in `useRecommendation`. The cover stays a separate step so the pick appears without waiting for MusicBrainz, and history entries from before the slug keep using the existing artwork endpoint. Validate new endpoints with Zod so the API contract (P7.2) can be generated from them
 
 **Done when:** a shared link shows a proper card and opens a working page for someone who has never visited, and a visit to a permalink makes no Claude calls.
 
@@ -161,6 +161,9 @@
 - **Library stats dashboard** — Dedicated Insights page with summary cards, monthly activity chart, decade/genre/country breakdowns, top artists, and gap observations
 - **Reload from history** — History grid cards are clickable; selecting one restores it as the current recommendation with a fresh connected-artists fetch
 - **Genre/mood filtering** — Genre, mood, tempo/energy/density sliders, era and discovery controls on the Discover tab
+- **Album pages and permalinks (P1.1, P1.4, P1.7)** — Every pick MusicBrainz confirms is stored with a permanent slug and a one-line hook, and gets a page at `/album/:slug` with the cover, release details, formats, the tracklist numbered as on the record and the artist's other albums, loaded through one cached `GET /api/v1/albums/:slug`
+- **Shareable links (P1.2, P1.3)** — Album links carry the tags WhatsApp, Slack and Bluesky read to build a preview card (the server adds them, and a Plinth card stands in when there's no cover), and a Share button copies the link or opens the share sheet on a phone
+- **Lookup cache and versioned API (P1.5, P1.6)** — MusicBrainz, iTunes and verified Artist Essentials lookups are cached in Postgres, the API lives under `/api/v1`, and the rate limits now count each visitor behind Railway's proxy
 
 ---
 
