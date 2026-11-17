@@ -4,6 +4,7 @@ import { slugSchema } from '../schemas/albumSchemas';
 import { getAlbum } from '../services/albumService';
 import { albumPageHead, defaultPageHead, injectHead, PageHead } from '../services/albumPageService';
 import { logger } from '../logger';
+import { isLinkPreviewCrawler } from '../utils/linkPreviewCrawler';
 
 interface AlbumPageDependencies {
   readonly albums: AlbumRepository;
@@ -23,6 +24,18 @@ function publicUrl(req: Request): string {
   const forwarded = req.get('x-forwarded-proto')?.split(',')[0].trim();
   const protocol = forwarded === 'https' ? 'https' : req.protocol;
   return `${protocol}://${req.get('host') ?? 'localhost'}`;
+}
+
+/**
+ * Logs each album page served, so the logs show how many people arrive on a shared link
+ * (crawler: false) and whether shared links are being fetched for previews (crawler: true).
+ * Opening an album from inside the app doesn't come here, so these are arrivals from outside.
+ */
+function logView(req: Request, slug: string, found: boolean): void {
+  logger.info(
+    { slug, found, crawler: isLinkPreviewCrawler(req.get('user-agent')) },
+    'album page served',
+  );
 }
 
 /**
@@ -48,6 +61,7 @@ export function createAlbumPageHandler({
 
     try {
       const album = await getAlbum(albums, slug.data);
+      logView(req, slug.data, album !== null);
       if (!album) {
         send(res, 404, defaultPageHead(baseUrl));
         return;

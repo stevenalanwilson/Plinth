@@ -40,7 +40,15 @@ export interface RecommendationRequest {
   readonly pivot?: PivotHint;
   readonly seedArtist?: string;
   readonly vibeQuery?: string;
+  /**
+   * Set on the first pick of a visit that began on a shared album link, so the server can count
+   * how many of those visitors go on to try a pick of their own. Carries nothing about them.
+   */
+  readonly entry?: VisitEntry;
 }
+
+export const VISIT_ENTRIES = ['shared-link'] as const;
+export type VisitEntry = (typeof VISIT_ENTRIES)[number];
 
 export interface RecommendationResponse {
   readonly artist: string;
