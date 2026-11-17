@@ -71,6 +71,7 @@ beforeEach(() => {
     status: 'found',
     artist: 'Talk Talk',
     albums: talkTalkCatalogue,
+    listedIds: null,
   });
 });
 
@@ -319,7 +320,7 @@ describe('buildDiscography', () => {
   it('lists studio albums oldest first, with MusicBrainz titles and years', () => {
     const shuffled = [talkTalkCatalogue[4], talkTalkCatalogue[0], talkTalkCatalogue[3]];
 
-    expect(buildDiscography(shuffled, [])).toEqual([
+    expect(buildDiscography(shuffled, [], null)).toEqual([
       { title: 'The Party’s Over', year: '1982', releaseGroupId: 'rg-The Party’s Over' },
       { title: 'Spirit of Eden', year: '1988', releaseGroupId: 'rg-Spirit of Eden' },
       { title: 'Laughing Stock', year: '1991', releaseGroupId: 'rg-Laughing Stock' },
@@ -327,7 +328,7 @@ describe('buildDiscography', () => {
   });
 
   it('leaves out compilations and live albums', () => {
-    const titles = buildDiscography(talkTalkCatalogue, []).map((album) => album.title);
+    const titles = buildDiscography(talkTalkCatalogue, [], null).map((album) => album.title);
 
     expect(titles).not.toContain('Natural History');
     expect(titles).toHaveLength(5);
@@ -337,12 +338,36 @@ describe('buildDiscography', () => {
     const live = catalogueAlbum('London 1986', '1999', ['Live']);
     const essentials = [{ ...essential('London 1986', true), releaseGroupId: live.id }];
 
-    const titles = buildDiscography([...talkTalkCatalogue, live], essentials).map(
+    const titles = buildDiscography([...talkTalkCatalogue, live], essentials, null).map(
       (album) => album.title,
     );
 
     expect(titles).toContain('London 1986');
     expect(titles).not.toContain('Natural History');
+  });
+
+  it('leaves out albums MusicBrainz doesn’t list on the artist’s page, such as bootlegs', () => {
+    const bootleg = catalogueAlbum('Live in Montreux', '2008');
+    const listedIds = new Set(talkTalkCatalogue.map((album) => album.id));
+
+    const titles = buildDiscography([...talkTalkCatalogue, bootleg], [], listedIds).map(
+      (album) => album.title,
+    );
+
+    expect(titles).not.toContain('Live in Montreux');
+    expect(titles).toHaveLength(5);
+  });
+
+  it('keeps an essential album that MusicBrainz doesn’t list', () => {
+    const bootleg = catalogueAlbum('Live in Montreux', '2008');
+    const essentials = [{ ...essential('Live in Montreux', true), releaseGroupId: bootleg.id }];
+    const listedIds = new Set(talkTalkCatalogue.map((album) => album.id));
+
+    const titles = buildDiscography([...talkTalkCatalogue, bootleg], essentials, listedIds).map(
+      (album) => album.title,
+    );
+
+    expect(titles).toContain('Live in Montreux');
   });
 
   it('puts a year alone after a fuller date in the same year, and undated albums last', () => {
@@ -352,7 +377,7 @@ describe('buildDiscography', () => {
       catalogueAlbum('March 1986', '1986-03-01'),
     ];
 
-    expect(buildDiscography(catalogue, [])).toEqual([
+    expect(buildDiscography(catalogue, [], null)).toEqual([
       { title: 'March 1986', year: '1986', releaseGroupId: 'rg-March 1986' },
       { title: 'Sometime 1986', year: '1986', releaseGroupId: 'rg-Sometime 1986' },
       { title: 'Undated', year: null, releaseGroupId: 'rg-Undated' },
@@ -387,6 +412,27 @@ describe('getArtistEssentials album check', () => {
     expect(retryPrompt).toContain('Made Up One, Made Up Two');
     expect(retryPrompt).toContain('Laughing Stock');
     expect(retryPrompt).not.toContain('Natural History');
+  });
+
+  it('still verifies an album MusicBrainz doesn’t list, but doesn’t suggest one', async () => {
+    const bootleg = catalogueAlbum('Live in Montreux', '2008');
+    mockFindArtistAlbums.mockResolvedValue({
+      status: 'found',
+      artist: 'Talk Talk',
+      albums: [...talkTalkCatalogue, bootleg],
+      listedIds: new Set(talkTalkCatalogue.map((album) => album.id)),
+    });
+    mockCreate
+      .mockResolvedValueOnce(claudeEssentials('Talk Talk', ['Live in Montreux', 'Made Up One']))
+      .mockResolvedValueOnce(claudeEssentials('Talk Talk', ['Live in Montreux']));
+
+    const result = await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(result.albums.map((album) => album.album)).toEqual(['Live in Montreux']);
+    expect(result.discography?.map((album) => album.title)).toContain('Live in Montreux');
+    const retryPrompt = mockCreate.mock.calls[1][0].messages[0].content as string;
+    expect(retryPrompt).toContain('Laughing Stock');
+    expect(retryPrompt.split('choose from them:')[1]).not.toContain('Live in Montreux');
   });
 
   it('keeps the first answer if the retry checks out worse', async () => {
@@ -539,6 +585,7 @@ describe('getArtistEssentials cache', () => {
       status: 'found',
       artist: 'Talk Talk',
       albums: talkTalkCatalogue,
+      listedIds: null,
     });
     const recovered = await getArtistEssentials({ artist: 'Talk Talk' });
 
@@ -556,6 +603,7 @@ describe('getArtistEssentials cache', () => {
       status: 'found',
       artist: 'Talk Talk',
       albums: talkTalkCatalogue,
+      listedIds: null,
     });
 
     await expect(getArtistEssentials({ artist: 'Talk Talk' })).resolves.toMatchObject({

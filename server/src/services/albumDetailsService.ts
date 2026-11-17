@@ -184,7 +184,8 @@ async function moreFromArtist(
   // A compilation's "artist" is Various Artists, whose catalogue is nobody's albums.
   if (!credited?.id || credited.id === VARIOUS_ARTISTS_ID) return null;
 
-  const catalogue = await browseArtistAlbums(credited.id, budgetSignal).catch(() => null);
+  // Only for show, so the albums the artist's page lists are enough: no bootlegs.
+  const catalogue = await browseArtistAlbums(credited.id, budgetSignal, 'listed').catch(() => null);
   if (!catalogue) {
     logger.warn({ slug }, 'album details: artist albums unavailable');
     return null;

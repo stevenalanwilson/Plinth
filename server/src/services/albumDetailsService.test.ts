@@ -261,7 +261,11 @@ describe('getAlbumDetails', () => {
       `release?release-group=${GROUP_ID}&status=official&inc=media+labels+artist-credits&limit=100&offset=0&fmt=json`,
     );
     expect(paths[1]).toBe('release/uk?inc=recordings&fmt=json');
-    expect(mockBrowseArtistAlbums).toHaveBeenCalledWith(ARTIST_ID, expect.any(AbortSignal));
+    expect(mockBrowseArtistAlbums).toHaveBeenCalledWith(
+      ARTIST_ID,
+      expect.any(AbortSignal),
+      'listed',
+    );
   });
 
   it('lists each format once, in the order the album was released on it', async () => {

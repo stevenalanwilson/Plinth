@@ -190,19 +190,48 @@ describe('findArtistAlbums', () => {
     return { ok: true, json: async (): Promise<unknown> => body } as Response;
   }
 
-  it('finds the artist and fetches their albums', async () => {
+  it('finds the artist and fetches their albums, and which of them their page lists', async () => {
+    const bootleg = { ...jeopardy, id: 'live-bootleg', title: 'Live at the Marquee' };
     mockMusicBrainzFetch
       .mockResolvedValueOnce(jsonResponse({ artists: [{ id: 'artist-1', name: 'The Sound' }] }))
+      .mockResolvedValueOnce(
+        jsonResponse({ 'release-group-count': 2, 'release-groups': [jeopardy, bootleg] }),
+      )
       .mockResolvedValueOnce(
         jsonResponse({ 'release-group-count': 1, 'release-groups': [jeopardy] }),
       );
 
     const lookup = await findArtistAlbums('the sound');
 
-    expect(lookup).toEqual({ status: 'found', artist: 'The Sound', albums: [jeopardy] });
-    expect(mockMusicBrainzFetch.mock.calls[1][0]).toContain(
-      'release-group?artist=artist-1&type=album',
+    expect(lookup).toEqual({
+      status: 'found',
+      artist: 'The Sound',
+      albums: [jeopardy, bootleg],
+      listedIds: new Set(['jeopardy-1980']),
+    });
+    const [, all, listed] = mockMusicBrainzFetch.mock.calls.map(([path]) => path);
+    expect(all).toContain('release-group?artist=artist-1&type=album&inc');
+    expect(listed).toContain(
+      'release-group?artist=artist-1&type=album&release-group-status=website-default',
     );
+  });
+
+  it('still finds the albums when the listed ones can’t be fetched', async () => {
+    mockMusicBrainzFetch
+      .mockResolvedValueOnce(jsonResponse({ artists: [{ id: 'artist-1', name: 'The Sound' }] }))
+      .mockResolvedValueOnce(
+        jsonResponse({ 'release-group-count': 1, 'release-groups': [jeopardy] }),
+      )
+      .mockRejectedValueOnce(new Error('timed out'));
+
+    const lookup = await findArtistAlbums('The Sound');
+
+    expect(lookup).toEqual({
+      status: 'found',
+      artist: 'The Sound',
+      albums: [jeopardy],
+      listedIds: null,
+    });
   });
 
   it('pages through a large catalogue', async () => {

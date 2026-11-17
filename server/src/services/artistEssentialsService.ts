@@ -224,17 +224,33 @@ function isStudioAlbum(candidate: ReleaseGroupCandidate): boolean {
 }
 
 /**
+ * True unless MusicBrainz leaves the album off the artist's page, as it does for an archive
+ * tape that only came out as a bootleg. Without the listed IDs, nothing is left out.
+ */
+function isListed(
+  candidate: ReleaseGroupCandidate,
+  listedIds: ReadonlySet<string> | null,
+): boolean {
+  return listedIds?.has(candidate.id) ?? true;
+}
+
+/**
  * The artist's studio albums, oldest first, so a newcomer can see where the essentials sit.
- * An essential that isn't a studio album (a live album, say) is kept too, so every essential
- * appears in it.
+ * Albums MusicBrainz doesn't list (bootlegs) are left out. An essential is always kept, even a
+ * live album or a bootleg, so every essential appears in it.
  */
 export function buildDiscography(
   catalogue: readonly ReleaseGroupCandidate[],
   essentials: readonly EssentialAlbum[],
+  listedIds: ReadonlySet<string> | null,
 ): DiscographyAlbum[] {
   const essentialIds = new Set(essentials.map((album) => album.releaseGroupId));
   return catalogue
-    .filter((candidate) => isStudioAlbum(candidate) || essentialIds.has(candidate.id))
+    .filter(
+      (candidate) =>
+        (isStudioAlbum(candidate) && isListed(candidate, listedIds)) ||
+        essentialIds.has(candidate.id),
+    )
     .sort((a, b) =>
       sortableDate(a['first-release-date']).localeCompare(sortableDate(b['first-release-date'])),
     )
@@ -245,9 +261,12 @@ export function buildDiscography(
     }));
 }
 
-function studioAlbumTitles(catalogue: readonly ReleaseGroupCandidate[]): string[] {
+function studioAlbumTitles(
+  catalogue: readonly ReleaseGroupCandidate[],
+  listedIds: ReadonlySet<string> | null,
+): string[] {
   return catalogue
-    .filter(isStudioAlbum)
+    .filter((candidate) => isStudioAlbum(candidate) && isListed(candidate, listedIds))
     .map((candidate) => candidate.title)
     .slice(0, MAX_KNOWN_ALBUMS);
 }
@@ -364,7 +383,7 @@ async function buildEssentials(
     const retry = verifyEssentials(
       await requestEssentials(lookup.artist, {
         notFound: result.notFound,
-        knownAlbums: studioAlbumTitles(lookup.albums),
+        knownAlbums: studioAlbumTitles(lookup.albums, lookup.listedIds),
       }),
       lookup.artist,
       lookup.albums,
@@ -378,6 +397,6 @@ async function buildEssentials(
   return {
     artist: result.essentials.artist,
     albums,
-    discography: buildDiscography(lookup.albums, albums),
+    discography: buildDiscography(lookup.albums, albums, lookup.listedIds),
   };
 }
