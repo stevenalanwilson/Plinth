@@ -14,6 +14,8 @@ import {
 } from '../services/apiClient';
 import { mergeHistory } from '../services/libraryExport';
 import { takeSharedLinkEntry } from '../services/visitEntry';
+import { pruneLibrary } from '../services/libraryRetention';
+import { FeedbackStatus, parseFeedback } from '../types/feedback';
 
 const HISTORY_STORAGE_KEY = 'album-recommender-history';
 // Kept only for the one-time cleanup below — do not read from this key.
@@ -31,9 +33,6 @@ export const DEFAULT_PREFERENCES: RecommendationPreferences = {
   stayFocused: false,
 };
 
-const HISTORY_MAX_AGE_DAYS = 90;
-const HISTORY_MAX_ENTRIES = 50;
-
 const EMPTY_ARTWORK: ArtworkResponse = { artworkUrl: null, year: null, appleMusicUrl: null };
 
 function loadHistoryFromStorage(): HistoryEntry[] {
@@ -42,18 +41,24 @@ function loadHistoryFromStorage(): HistoryEntry[] {
     if (!raw) return [];
     // Backfill id/createdAt for entries persisted before these fields were introduced.
     const parsed = JSON.parse(raw) as Array<
-      Omit<HistoryEntry, 'id' | 'createdAt'> & { id?: string; createdAt?: string }
+      Omit<HistoryEntry, 'id' | 'createdAt' | 'feedback'> & {
+        id?: string;
+        createdAt?: string;
+        feedback?: unknown;
+      }
     >;
-    const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
-    return parsed
-      .map((entry) => ({
+    const entries = parsed.map(({ feedback: storedFeedback, ...entry }): HistoryEntry => {
+      const feedback = parseFeedback(storedFeedback);
+      return {
         ...entry,
         id: entry.id ?? crypto.randomUUID(),
         // Entries without a createdAt pre-date this field; treat as now so existing
         // history is preserved rather than immediately pruned.
         createdAt: entry.createdAt ?? new Date().toISOString(),
-      }))
-      .filter((entry) => new Date(entry.createdAt).getTime() > cutoff);
+        ...(feedback ? { feedback } : {}),
+      };
+    });
+    return pruneLibrary(entries);
   } catch {
     return [];
   }
@@ -84,6 +89,8 @@ interface UseRecommendationReturn {
   removeFromHistory: (id: string) => void;
   selectFromHistory: (id: string) => void;
   importHistory: (entries: HistoryEntry[]) => void;
+  /** Sets the verdict on a library entry, or clears it with null. */
+  setFeedback: (id: string, status: FeedbackStatus | null) => void;
 }
 
 export function useRecommendation(): UseRecommendationReturn {
@@ -236,6 +243,19 @@ export function useRecommendation(): UseRecommendationReturn {
     setHistory((prev) => mergeHistory(prev, entries));
   }, []);
 
+  const setFeedback = useCallback((id: string, status: FeedbackStatus | null): void => {
+    const at = new Date().toISOString();
+    setHistory((prev) =>
+      prev.map((entry) => {
+        if (entry.id !== id) return entry;
+        const current = entry.feedback?.status ?? null;
+        // Nothing changed, so the time of the last real change stays as it was.
+        if (current === status) return entry;
+        return { ...entry, feedback: { status, at } };
+      }),
+    );
+  }, []);
+
   const selectFromHistory = useCallback((id: string): void => {
     const entry = historyRef.current.find((e) => e.id === id);
     if (!entry || historyRef.current[0]?.id === id) return;
@@ -324,7 +344,7 @@ export function useRecommendation(): UseRecommendationReturn {
           artworkResponse: EMPTY_ARTWORK,
           createdAt: new Date().toISOString(),
         };
-        setHistory((prev) => [newEntry, ...prev].slice(0, HISTORY_MAX_ENTRIES));
+        setHistory((prev) => pruneLibrary([newEntry, ...prev]));
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
         setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -354,5 +374,6 @@ export function useRecommendation(): UseRecommendationReturn {
     removeFromHistory,
     selectFromHistory,
     importHistory,
+    setFeedback,
   };
 }

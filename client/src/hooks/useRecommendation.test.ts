@@ -139,3 +139,156 @@ describe('useRecommendation', () => {
     sessionStorage.clear();
   });
 });
+
+describe('useRecommendation library feedback and retention', () => {
+  const STORAGE_KEY = 'album-recommender-history';
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  function seed(entries: readonly unknown[]): void {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  }
+
+  function stored(): HistoryEntry[] {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as HistoryEntry[];
+  }
+
+  function aged(index: number, days: number, feedback?: unknown): Record<string, unknown> {
+    return {
+      ...storedEntry(index),
+      createdAt: new Date(Date.now() - days * DAY_MS).toISOString(),
+      ...(feedback === undefined ? {} : { feedback }),
+    };
+  }
+
+  const OWNED = { status: 'own', at: '2026-01-05T10:00:00.000Z' };
+
+  it('keeps a rated album older than 90 days and drops an unrated one', () => {
+    seed([aged(1, 5), aged(2, 200, OWNED), aged(3, 200)]);
+
+    const { result } = renderHook(() => useRecommendation());
+
+    expect(result.current.history.map((entry) => entry.id)).toEqual(['stored-1', 'stored-2']);
+    expect(result.current.history[1].feedback).toEqual(OWNED);
+  });
+
+  it('ignores stored feedback that is malformed', () => {
+    seed([aged(1, 5, { status: 'loved', at: 'sometime' }), aged(2, 5, 'own')]);
+
+    const { result } = renderHook(() => useRecommendation());
+
+    expect(result.current.history).toHaveLength(2);
+    expect(result.current.history.every((entry) => entry.feedback === undefined)).toBe(true);
+  });
+
+  it('records a status with the time it was set, and saves it', () => {
+    seed([aged(1, 1)]);
+    const { result } = renderHook(() => useRecommendation());
+    const before = Date.now();
+
+    act(() => result.current.setFeedback('stored-1', 'want-vinyl'));
+
+    const feedback = result.current.history[0].feedback;
+    expect(feedback?.status).toBe('want-vinyl');
+    expect(Date.parse(feedback?.at ?? '')).toBeGreaterThanOrEqual(before);
+    expect(stored()[0].feedback).toEqual(feedback);
+  });
+
+  it('changes a status to another, and the time moves on', async () => {
+    seed([aged(1, 1, OWNED)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-1', 'heard'));
+
+    expect(result.current.history[0].feedback?.status).toBe('heard');
+    expect(result.current.history[0].feedback?.at).not.toBe(OWNED.at);
+  });
+
+  it('leaves the time alone when the status is set to what it already is', () => {
+    seed([aged(1, 1, OWNED)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-1', 'own'));
+
+    expect(result.current.history[0].feedback).toEqual(OWNED);
+  });
+
+  it('clears a status but keeps the time of the clearing', () => {
+    seed([aged(1, 1, OWNED)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-1', null));
+
+    expect(result.current.history[0].feedback?.status).toBeNull();
+    expect(result.current.history[0].feedback?.at).not.toBe(OWNED.at);
+    expect(stored()[0].feedback?.status).toBeNull();
+  });
+
+  it('does not invent feedback to clear on an album that has none', () => {
+    seed([aged(1, 1)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-1', null));
+
+    expect(result.current.history[0].feedback).toBeUndefined();
+  });
+
+  it('ignores an id that is not in the library', () => {
+    seed([aged(1, 1)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('nope', 'own'));
+
+    expect(result.current.history[0].feedback).toBeUndefined();
+  });
+
+  it('only changes the album it was asked about', () => {
+    seed([aged(1, 1), aged(2, 2)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-2', 'save'));
+
+    expect(result.current.history[0].feedback).toBeUndefined();
+    expect(result.current.history[1].feedback?.status).toBe('save');
+  });
+
+  it('keeps rated albums when a new pick pushes the unrated ones past 50', async () => {
+    const unrated = Array.from({ length: 50 }, (_, index) => aged(index, 1));
+    seed([
+      ...unrated,
+      aged(100, 300, OWNED),
+      aged(101, 300, { status: 'not-for-me', at: OWNED.at }),
+    ]);
+    mockFetchArtwork.mockResolvedValue(artwork);
+    const { result } = renderHook(() => useRecommendation());
+
+    await act(() => result.current.fetchRecommendation());
+
+    const ids = result.current.history.map((entry) => entry.id);
+    expect(ids).toContain('stored-100');
+    expect(ids).toContain('stored-101');
+    expect(result.current.history.filter((entry) => entry.feedback === undefined)).toHaveLength(50);
+    expect(ids).not.toContain('stored-49');
+  });
+
+  it('returns a cleared album to the ordinary limits at the next load, not at once', () => {
+    seed([aged(1, 200, OWNED)]);
+    const first = renderHook(() => useRecommendation());
+
+    act(() => first.result.current.setFeedback('stored-1', null));
+    expect(first.result.current.history).toHaveLength(1);
+    first.unmount();
+
+    const second = renderHook(() => useRecommendation());
+    expect(second.result.current.history).toHaveLength(0);
+  });
+
+  it('keeps the rating when an album is brought back to the front', () => {
+    seed([aged(1, 1), aged(2, 2, OWNED)]);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.selectFromHistory('stored-2'));
+
+    expect(result.current.history[0].id).toBe('stored-2');
+    expect(result.current.history[0].feedback).toEqual(OWNED);
+  });
+});
