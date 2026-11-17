@@ -1,10 +1,6 @@
 import React from 'react';
 import { ArtistEssentialsResponse, EssentialAlbum } from '@shared/types';
-import {
-  buildAppleMusicSearchUrl,
-  buildSpotifySearchUrl,
-  buildDiscogsSearchUrl,
-} from '../../services/apiClient';
+import { ListeningLinks } from '../../components/ListeningLinks';
 import { EssentialCover } from './EssentialCover';
 import { DiscographyRow, layOutEssentials } from './essentialsLayout';
 
@@ -16,37 +12,6 @@ interface EssentialsResultProps {
 interface AlbumProps {
   readonly entry: EssentialAlbum;
   readonly artist: string;
-}
-
-function ListeningLinks({ entry, artist }: AlbumProps): React.ReactElement {
-  return (
-    <div className="essentials-links">
-      <a
-        href={buildAppleMusicSearchUrl(artist, entry.album)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="essentials-link"
-      >
-        Apple Music
-      </a>
-      <a
-        href={buildSpotifySearchUrl(artist, entry.album)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="essentials-link"
-      >
-        Spotify
-      </a>
-      <a
-        href={buildDiscogsSearchUrl(artist, entry.album)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="essentials-link"
-      >
-        Discogs
-      </a>
-    </div>
-  );
 }
 
 /** An essential album with its cover, reason and listening links. */
@@ -66,7 +31,7 @@ function EssentialAlbumCard({
           <span className="essentials-album-meta">{entry.year}</span>
         </div>
         <p className="essentials-album-reason">{entry.reason}</p>
-        <ListeningLinks entry={entry} artist={artist} />
+        <ListeningLinks artist={artist} album={entry.album} />
       </div>
     </article>
   );
