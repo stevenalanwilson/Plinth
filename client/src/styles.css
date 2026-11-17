@@ -1409,3 +1409,44 @@ body::before {
   line-height: 1.6;
   color: var(--muted);
 }
+
+/* ─── Taste summary (top of Insights) ─────────────────── */
+
+.taste-summary {
+  margin-bottom: 32px;
+  padding: 20px 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.taste-summary-title {
+  margin-bottom: 10px;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.taste-summary-text {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 22px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.taste-summary-note {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.taste-summary-title + .taste-summary-note { margin-top: 0; }
+
+@media (max-width: 430px) {
+  .taste-summary { padding: 16px; }
+  .taste-summary-text { font-size: 19px; }
+}

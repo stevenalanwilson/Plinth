@@ -32,6 +32,33 @@ describe('InsightsPage', () => {
     expect(screen.getByText(/Start discovering albums/)).toBeInTheDocument();
   });
 
+  it('describes the listener’s taste at the top', () => {
+    const history = Array.from({ length: 6 }, (_, i) =>
+      makeEntry(`Artist ${i}`, '1981', ['Post-punk'], 'Germany'),
+    );
+    render(<InsightsPage history={history} />);
+
+    const taste = screen.getByRole('region', { name: 'Your taste' });
+    expect(taste).toHaveTextContent(
+      'You lean towards Post-punk, mostly from the 1980s and Germany.',
+    );
+    expect(taste.compareDocumentPosition(screen.getByText('Albums discovered'))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it('asks the listener to keep going while there are too few albums to describe', () => {
+    render(<InsightsPage history={sampleHistory.slice(0, 3)} />);
+
+    expect(screen.getByText(/Keep going/)).toBeInTheDocument();
+  });
+
+  it('shows no taste section when the library is empty', () => {
+    render(<InsightsPage history={[]} />);
+
+    expect(screen.queryByRole('region', { name: 'Your taste' })).not.toBeInTheDocument();
+  });
+
   it('renders summary stat cards', () => {
     render(<InsightsPage history={sampleHistory} />);
     expect(screen.getByText('Albums discovered')).toBeInTheDocument();

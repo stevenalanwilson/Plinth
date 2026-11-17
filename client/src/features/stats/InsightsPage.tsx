@@ -1,5 +1,6 @@
 import React from 'react';
 import { HistoryEntry } from '../../types/history';
+import { TasteSummary } from './TasteSummary';
 import {
   computeSummaryStats,
   computeDecadeBreakdown,
@@ -249,6 +250,8 @@ export function InsightsPage({ history }: InsightsPageProps): React.ReactElement
 
   return (
     <div style={{ paddingBottom: 60 }}>
+      <TasteSummary history={history} />
+
       {/* Summary stat cards */}
       <div
         style={{
