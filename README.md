@@ -87,6 +87,17 @@ All of these are optional, and any combination works.
 
 Structured logs (pino) record matches, regenerations and artwork sources, so you can see how often each happens.
 
+Slow, rate-limited or paid lookups are cached in the `cache_entries` table (in memory when there's no database), so a repeat costs nothing and skips the MusicBrainz queue:
+
+| What                              | Kept for                                                              |
+| --------------------------------- | --------------------------------------------------------------------- |
+| MusicBrainz lookups by ID         | 30 days                                                               |
+| MusicBrainz searches and browses  | 7 days (1 day when they found nothing, so a new artist is found soon) |
+| iTunes searches                   | 1 day                                                                 |
+| Artist Essentials, by artist name | 30 days, only when every album was matched in MusicBrainz             |
+
+Failures are never cached, a cache error just means a miss, and expired rows are removed hourly. Each lookup logs `cache hit` or `cache miss` with a `namespace`, so hits ÷ (hits + misses) is the hit rate.
+
 The API is versioned under `/api/v1`. Only add to it — released apps keep calling old versions for years. `/api/health` stays unversioned because the Railway and Docker health checks use it.
 
 ## Setup
@@ -202,7 +213,7 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/), wit
 │   └── src/
 │       ├── controllers/     # Thin HTTP handlers
 │       ├── services/        # recommendation, albumMatch, artwork, artistEssentials, artistRelations
-│       ├── repositories/    # Claude and MusicBrainz clients, album storage
+│       ├── repositories/    # Claude and MusicBrainz clients, album storage, lookup cache
 │       ├── db/              # Connection pool and migrations runner
 │       ├── utils/           # Name matching, timeouts
 │       └── routes/
