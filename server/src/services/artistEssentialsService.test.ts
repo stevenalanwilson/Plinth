@@ -21,11 +21,14 @@ vi.mock('../logger', () => ({
 import Anthropic from '@anthropic-ai/sdk';
 import {
   getArtistEssentials,
+  buildDiscography,
   buildPrompt,
+  markStartHere,
   toArtistEssentials,
   UnverifiedEssentialsError,
   verifyEssentials,
 } from './artistEssentialsService';
+import { EssentialAlbum } from '@shared/types';
 import { findArtistAlbums, ReleaseGroupCandidate } from './albumMatchService';
 import { CacheStore } from '../repositories/cacheStore';
 import { createInMemoryCacheStore } from '../repositories/inMemoryCacheStore';
@@ -94,6 +97,12 @@ describe('buildPrompt', () => {
     const prompt = buildPrompt('Talk Talk');
     expect(prompt.toLowerCase()).toContain('essential');
   });
+
+  it('asks for the two or three albums to start with', () => {
+    const prompt = buildPrompt('Talk Talk');
+    expect(prompt).toContain('two or three albums a newcomer should start with');
+    expect(prompt).toContain('"startHere": true');
+  });
 });
 
 describe('toArtistEssentials', () => {
@@ -102,6 +111,28 @@ describe('toArtistEssentials', () => {
     expect(result.artist).toBe('Talk Talk');
     expect(result.albums).toHaveLength(5);
     expect(result.albums[0].album).toBe('Spirit of Eden');
+  });
+
+  it('keeps the start-here mark', () => {
+    const result = toArtistEssentials({
+      artist: 'Talk Talk',
+      albums: [
+        { album: 'Spirit of Eden', year: '1988', reason: 'A.', startHere: true },
+        { album: 'Laughing Stock', year: '1991', reason: 'B.', startHere: false },
+      ],
+    });
+    expect(result.albums.map((album) => album.startHere)).toEqual([true, false]);
+  });
+
+  it('treats a missing or non-boolean mark as not marked', () => {
+    const result = toArtistEssentials({
+      artist: 'Talk Talk',
+      albums: [
+        { album: 'Spirit of Eden', year: '1988', reason: 'A.' },
+        { album: 'Laughing Stock', year: '1991', reason: 'B.', startHere: 'yes' },
+      ],
+    });
+    expect(result.albums.map((album) => album.startHere)).toEqual([false, false]);
   });
 
   it('coerces numeric year to string', () => {
@@ -173,6 +204,27 @@ describe('getArtistEssentials', () => {
   });
 });
 
+function essentialsWithMarks(
+  albums: readonly (readonly [string, boolean])[],
+): Record<string, unknown> {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          artist: 'Talk Talk',
+          albums: albums.map(([album, startHere]) => ({
+            album,
+            year: '1988',
+            reason: 'Essential.',
+            startHere,
+          })),
+        }),
+      },
+    ],
+  };
+}
+
 function claudeEssentials(artist: string, albums: readonly string[]): Record<string, unknown> {
   return {
     content: [
@@ -216,6 +268,95 @@ describe('verifyEssentials', () => {
     );
 
     expect(result.essentials.albums).toHaveLength(1);
+  });
+});
+
+function essential(album: string, startHere: boolean): EssentialAlbum {
+  return { album, year: '1988', reason: 'Essential.', startHere };
+}
+
+function startHereTitles(albums: readonly EssentialAlbum[]): string[] {
+  return albums.filter((album) => album.startHere).map((album) => album.album);
+}
+
+describe('markStartHere', () => {
+  it('keeps two or three albums Claude marked', () => {
+    const albums = [essential('A', false), essential('B', true), essential('C', true)];
+
+    expect(startHereTitles(markStartHere(albums))).toEqual(['B', 'C']);
+  });
+
+  it('keeps only the first three when more are marked', () => {
+    const albums = ['A', 'B', 'C', 'D', 'E'].map((title) => essential(title, true));
+
+    expect(startHereTitles(markStartHere(albums))).toEqual(['A', 'B', 'C']);
+  });
+
+  it('marks the first two when none are marked', () => {
+    const albums = ['A', 'B', 'C', 'D'].map((title) => essential(title, false));
+
+    expect(startHereTitles(markStartHere(albums))).toEqual(['A', 'B']);
+  });
+
+  it('adds the first unmarked album when only one is marked', () => {
+    const albums = [essential('A', false), essential('B', false), essential('C', true)];
+
+    expect(startHereTitles(markStartHere(albums))).toEqual(['A', 'C']);
+  });
+
+  it('marks the only album of a one-album list', () => {
+    expect(startHereTitles(markStartHere([essential('A', false)]))).toEqual(['A']);
+  });
+
+  it('keeps the albums in Claude’s order', () => {
+    const albums = [essential('A', false), essential('B', true), essential('C', true)];
+
+    expect(markStartHere(albums).map((album) => album.album)).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('buildDiscography', () => {
+  it('lists studio albums oldest first, with MusicBrainz titles and years', () => {
+    const shuffled = [talkTalkCatalogue[4], talkTalkCatalogue[0], talkTalkCatalogue[3]];
+
+    expect(buildDiscography(shuffled, [])).toEqual([
+      { title: 'The Party’s Over', year: '1982', releaseGroupId: 'rg-The Party’s Over' },
+      { title: 'Spirit of Eden', year: '1988', releaseGroupId: 'rg-Spirit of Eden' },
+      { title: 'Laughing Stock', year: '1991', releaseGroupId: 'rg-Laughing Stock' },
+    ]);
+  });
+
+  it('leaves out compilations and live albums', () => {
+    const titles = buildDiscography(talkTalkCatalogue, []).map((album) => album.title);
+
+    expect(titles).not.toContain('Natural History');
+    expect(titles).toHaveLength(5);
+  });
+
+  it('keeps an essential album that isn’t a studio album', () => {
+    const live = catalogueAlbum('London 1986', '1999', ['Live']);
+    const essentials = [{ ...essential('London 1986', true), releaseGroupId: live.id }];
+
+    const titles = buildDiscography([...talkTalkCatalogue, live], essentials).map(
+      (album) => album.title,
+    );
+
+    expect(titles).toContain('London 1986');
+    expect(titles).not.toContain('Natural History');
+  });
+
+  it('puts a year alone after a fuller date in the same year, and undated albums last', () => {
+    const catalogue = [
+      catalogueAlbum('Undated', ''),
+      catalogueAlbum('Sometime 1986', '1986'),
+      catalogueAlbum('March 1986', '1986-03-01'),
+    ];
+
+    expect(buildDiscography(catalogue, [])).toEqual([
+      { title: 'March 1986', year: '1986', releaseGroupId: 'rg-March 1986' },
+      { title: 'Sometime 1986', year: '1986', releaseGroupId: 'rg-Sometime 1986' },
+      { title: 'Undated', year: null, releaseGroupId: 'rg-Undated' },
+    ]);
   });
 });
 
@@ -293,6 +434,44 @@ describe('getArtistEssentials album check', () => {
 
     expect(result.albums).toHaveLength(5);
     expect(result.albums[0].releaseGroupId).toBeUndefined();
+    expect(result.discography).toBeUndefined();
+    expect(startHereTitles(result.albums)).toHaveLength(2);
+  });
+
+  it('includes the discography and the albums to start with', async () => {
+    mockCreate.mockResolvedValue(
+      essentialsWithMarks([
+        ['Spirit of Eden', true],
+        ['Laughing Stock', false],
+        ['The Colour of Spring', true],
+      ]),
+    );
+
+    const result = await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(startHereTitles(result.albums)).toEqual(['Spirit of Eden', 'The Colour of Spring']);
+    expect(result.discography?.map((album) => album.title)).toEqual([
+      'The Party’s Over',
+      'It’s My Life',
+      'The Colour of Spring',
+      'Spirit of Eden',
+      'Laughing Stock',
+    ]);
+  });
+
+  it('replaces a start-here album that MusicBrainz doesn’t have with the next one', async () => {
+    mockCreate.mockResolvedValue(
+      essentialsWithMarks([
+        ['Made Up One', true],
+        ['Spirit of Eden', true],
+        ['Laughing Stock', false],
+        ['The Colour of Spring', false],
+      ]),
+    );
+
+    const result = await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(startHereTitles(result.albums)).toEqual(['Spirit of Eden', 'Laughing Stock']);
   });
 });
 
@@ -384,10 +563,32 @@ describe('getArtistEssentials cache', () => {
     });
   });
 
+  it('keeps lists under a new version, leaving ones from before the discography behind', async () => {
+    const set = vi.spyOn(store, 'set');
+
+    await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(set).toHaveBeenCalledWith(
+      'essentials:v2:talk talk',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('ignores a cached list without a discography and asks again', async () => {
+    const first = await getArtistEssentials({ artist: 'Talk Talk' });
+    await store.set('essentials:v2:talk talk', { artist: first.artist, albums: first.albums }, 60);
+
+    const result = await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(result.discography).toBeDefined();
+  });
+
   it('ignores a cached entry that no longer has the right shape and asks again', async () => {
     await getArtistEssentials({ artist: 'Talk Talk' });
     // Overwrite the stored list with something an older version might have written.
-    await store.set('essentials:v1:talk talk', { artist: 'Talk Talk', albums: 'nope' }, 60);
+    await store.set('essentials:v2:talk talk', { artist: 'Talk Talk', albums: 'nope' }, 60);
 
     const result = await getArtistEssentials({ artist: 'Talk Talk' });
 

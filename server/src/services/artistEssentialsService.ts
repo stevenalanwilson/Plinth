@@ -1,8 +1,14 @@
-import { ArtistEssentialsRequest, ArtistEssentialsResponse, EssentialAlbum } from '@shared/types';
+import {
+  ArtistEssentialsRequest,
+  ArtistEssentialsResponse,
+  DiscographyAlbum,
+  EssentialAlbum,
+} from '@shared/types';
 import { completeJson } from '../repositories/claudeClient';
 import { logger } from '../logger';
 import { normaliseName } from '../utils/musicNames';
 import { readCache, writeCache } from '../repositories/lookupCache';
+import { sortableDate } from '../utils/releaseDates';
 import {
   ArtistAlbumsLookup,
   findArtistAlbums,
@@ -38,13 +44,15 @@ function correctionText(artist: string, correction: EssentialsCorrection | undef
 export function buildPrompt(artist: string, correction?: EssentialsCorrection): string {
   return `List 5 to 8 essential albums by ${artist} that a new listener should explore. Order them in the way you'd recommend a newcomer to listen through the catalogue — whether that means chronologically, by accessibility, or by importance.
 
+Mark the two or three albums a newcomer should start with as "startHere": true, and the rest false.
+
 Each album must be a real, verifiably released studio or live album by ${artist}. Do not invent titles.${correctionText(artist, correction)}
 
 Respond with ONLY this JSON:
 {
   "artist": "Canonical Artist Name",
   "albums": [
-    { "album": "Album Title", "year": "YYYY", "reason": "One or two sentences on why this album is essential." }
+    { "album": "Album Title", "year": "YYYY", "reason": "One or two sentences on why this album is essential.", "startHere": true }
   ]
 }`;
 }
@@ -90,7 +98,14 @@ export function toArtistEssentials(parsed: unknown): ArtistEssentialsResponse {
         throw new Error(`Album at index ${index} has invalid field types`);
       }
 
-      return { album: entry.album, year: entry.year, reason: entry.reason };
+      // An answer without the mark (from an older prompt, say) still parses; markStartHere
+      // fills the gap.
+      return {
+        album: entry.album,
+        year: entry.year,
+        reason: entry.reason,
+        startHere: entry.startHere === true,
+      };
     });
 
   return { artist: data.artist, albums };
@@ -110,8 +125,9 @@ const ESSENTIALS_SCHEMA = {
           album: { type: 'string' },
           year: { type: 'string' },
           reason: { type: 'string' },
+          startHere: { type: 'boolean' },
         },
-        required: ['album', 'year', 'reason'],
+        required: ['album', 'year', 'reason', 'startHere'],
         additionalProperties: false,
       },
     },
@@ -170,6 +186,7 @@ export function verifyEssentials(
       album: match.album,
       year: match.year ?? entry.year,
       reason: entry.reason,
+      startHere: entry.startHere,
       releaseGroupId: match.releaseGroupId,
     });
   }
@@ -177,9 +194,60 @@ export function verifyEssentials(
   return { essentials: { artist, albums }, notFound };
 }
 
+const MIN_START_HERE = 2;
+const MAX_START_HERE = 3;
+
+/**
+ * Makes sure two or three albums are marked to start with, keeping Claude's choices where it
+ * made them. Runs after verification, so an album dropped as unknown is replaced by the next
+ * one in Claude's order rather than leaving a gap.
+ */
+export function markStartHere(albums: readonly EssentialAlbum[]): EssentialAlbum[] {
+  const chosen = new Set(
+    albums
+      .map((album, index) => (album.startHere ? index : -1))
+      .filter((index) => index >= 0)
+      .slice(0, MAX_START_HERE),
+  );
+  for (let index = 0; index < albums.length && chosen.size < MIN_START_HERE; index++) {
+    chosen.add(index);
+  }
+  return albums.map((album, index) => ({ ...album, startHere: chosen.has(index) }));
+}
+
+function withStartHere(essentials: ArtistEssentialsResponse): ArtistEssentialsResponse {
+  return { ...essentials, albums: markStartHere(essentials.albums) };
+}
+
+function isStudioAlbum(candidate: ReleaseGroupCandidate): boolean {
+  return (candidate['secondary-types']?.length ?? 0) === 0;
+}
+
+/**
+ * The artist's studio albums, oldest first, so a newcomer can see where the essentials sit.
+ * An essential that isn't a studio album (a live album, say) is kept too, so every essential
+ * appears in it.
+ */
+export function buildDiscography(
+  catalogue: readonly ReleaseGroupCandidate[],
+  essentials: readonly EssentialAlbum[],
+): DiscographyAlbum[] {
+  const essentialIds = new Set(essentials.map((album) => album.releaseGroupId));
+  return catalogue
+    .filter((candidate) => isStudioAlbum(candidate) || essentialIds.has(candidate.id))
+    .sort((a, b) =>
+      sortableDate(a['first-release-date']).localeCompare(sortableDate(b['first-release-date'])),
+    )
+    .map((candidate) => ({
+      title: candidate.title,
+      year: candidate['first-release-date']?.substring(0, 4) || null,
+      releaseGroupId: candidate.id,
+    }));
+}
+
 function studioAlbumTitles(catalogue: readonly ReleaseGroupCandidate[]): string[] {
   return catalogue
-    .filter((candidate) => (candidate['secondary-types']?.length ?? 0) === 0)
+    .filter(isStudioAlbum)
     .map((candidate) => candidate.title)
     .slice(0, MAX_KNOWN_ALBUMS);
 }
@@ -216,25 +284,44 @@ function logVerification(artist: string, attempt: number, result: VerifiedEssent
 // albums don't change, so a verified list keeps for a month.
 const ESSENTIALS_CACHE_SECONDS = 30 * 24 * 60 * 60;
 // Bump when ArtistEssentialsResponse changes shape, so entries from before are left behind.
-const ESSENTIALS_CACHE_VERSION = 'v1';
+const ESSENTIALS_CACHE_VERSION = 'v2';
 
-/** True for a list where every album was matched in MusicBrainz, the only kind worth keeping. */
+function isVerifiedAlbum(entry: unknown): boolean {
+  if (typeof entry !== 'object' || entry === null) return false;
+  const album = entry as EssentialAlbum;
+  return (
+    typeof album.album === 'string' &&
+    typeof album.year === 'string' &&
+    typeof album.reason === 'string' &&
+    typeof album.releaseGroupId === 'string' &&
+    typeof album.startHere === 'boolean'
+  );
+}
+
+function isDiscographyAlbum(entry: unknown): boolean {
+  if (typeof entry !== 'object' || entry === null) return false;
+  const album = entry as DiscographyAlbum;
+  return (
+    typeof album.title === 'string' &&
+    (typeof album.year === 'string' || album.year === null) &&
+    typeof album.releaseGroupId === 'string'
+  );
+}
+
+/**
+ * True for a list where every album was matched in MusicBrainz, and so has a discography: the
+ * only kind worth keeping.
+ */
 function isVerifiedEssentials(value: unknown): value is ArtistEssentialsResponse {
   if (typeof value !== 'object' || value === null) return false;
-  const { artist, albums } = value as Partial<ArtistEssentialsResponse>;
+  const { artist, albums, discography } = value as Partial<ArtistEssentialsResponse>;
   return (
     typeof artist === 'string' &&
     Array.isArray(albums) &&
     albums.length > 0 &&
-    albums.every(
-      (entry: unknown) =>
-        typeof entry === 'object' &&
-        entry !== null &&
-        typeof (entry as EssentialAlbum).album === 'string' &&
-        typeof (entry as EssentialAlbum).year === 'string' &&
-        typeof (entry as EssentialAlbum).reason === 'string' &&
-        typeof (entry as EssentialAlbum).releaseGroupId === 'string',
-    )
+    albums.every(isVerifiedAlbum) &&
+    Array.isArray(discography) &&
+    discography.every(isDiscographyAlbum)
   );
 }
 
@@ -267,7 +354,7 @@ async function buildEssentials(
   const lookup = await lookUpCatalogue(request.artist, first.artist, pendingCatalogue);
 
   // Better an unchecked list than none at all while MusicBrainz is down.
-  if (lookup.status === 'lookup_failed') return first;
+  if (lookup.status === 'lookup_failed') return withStartHere(first);
   if (lookup.status === 'not_found') throw new UnverifiedEssentialsError();
 
   let result = verifyEssentials(first, lookup.artist, lookup.albums);
@@ -287,5 +374,10 @@ async function buildEssentials(
   }
 
   if (result.essentials.albums.length === 0) throw new UnverifiedEssentialsError();
-  return result.essentials;
+  const albums = markStartHere(result.essentials.albums);
+  return {
+    artist: result.essentials.artist,
+    albums,
+    discography: buildDiscography(lookup.albums, albums),
+  };
 }

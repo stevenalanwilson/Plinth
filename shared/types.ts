@@ -127,6 +127,15 @@ export interface EssentialAlbum {
   readonly reason: string;
   /** MusicBrainz release group the album was matched to; absent if it couldn't be checked. */
   readonly releaseGroupId?: string;
+  /** One of the two or three albums a newcomer should start with. */
+  readonly startHere?: boolean;
+}
+
+/** An album in an artist's discography, from MusicBrainz. */
+export interface DiscographyAlbum {
+  readonly title: string;
+  readonly year: string | null;
+  readonly releaseGroupId: string;
 }
 
 export interface ArtistEssentialsRequest {
@@ -136,4 +145,9 @@ export interface ArtistEssentialsRequest {
 export interface ArtistEssentialsResponse {
   readonly artist: string;
   readonly albums: readonly EssentialAlbum[];
+  /**
+   * The artist's studio albums, plus any essential album that isn't one (a live album, say),
+   * oldest first. Absent when the list couldn't be checked against MusicBrainz.
+   */
+  readonly discography?: readonly DiscographyAlbum[];
 }
