@@ -3,6 +3,7 @@ import { AlbumRepository } from '../repositories/albumRepository';
 import { musicBrainzFetch } from '../repositories/musicBrainzClient';
 import { logger } from '../logger';
 import { browseArtistAlbums, ReleaseGroupCandidate } from './albumMatchService';
+import { sortableDate } from '../utils/releaseDates';
 
 // Cold, this is up to three release pages, the tracklist and up to three pages of the artist's
 // albums, each queued behind MusicBrainz's one request per second.
@@ -61,15 +62,6 @@ export class AlbumDetailsUnavailableError extends Error {
 
 function trackCount(release: MusicBrainzRelease): number {
   return (release.media ?? []).reduce((total, medium) => total + (medium['track-count'] ?? 0), 0);
-}
-
-// A date can be "1980", "1980-11" or "1980-11-21". A year alone means "sometime in 1980", so it
-// sorts as the end of the year: otherwise a French release dated just "1980" would beat the
-// UK pressing of November 1980.
-function sortableDate(date: string | undefined): string {
-  if (!date) return '9999-99-99';
-  const [year, month = '99', day = '99'] = date.split('-');
-  return `${year}-${month}-${day}`;
 }
 
 /** The earliest release that has tracks, which is usually the original pressing. */
