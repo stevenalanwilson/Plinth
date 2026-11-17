@@ -111,6 +111,11 @@ export function fetchAlbum(slug: string, signal?: AbortSignal): Promise<AlbumRes
   return get<AlbumResponse>(`${API_V1}/albums/${encodeURIComponent(slug)}`, {}, signal);
 }
 
+/** A real album to show first-time visitors. Rejects with a 404 ApiError until one exists. */
+export function fetchExampleAlbum(signal?: AbortSignal): Promise<AlbumResponse> {
+  return get<AlbumResponse>(`${API_V1}/example-album`, {}, signal);
+}
+
 export function fetchAlbumDetails(
   slug: string,
   signal?: AbortSignal,

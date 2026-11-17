@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { RecommendationCard } from './RecommendationCard';
 
+// The empty state's own example is tested with it; here it stays on the waiting message.
+vi.mock('../example/useExampleAlbum', () => ({ useExampleAlbum: () => null }));
+
 // Placeholder sleeves repeat the album and artist, so text queries skip them.
 const NOT_IN_SLEEVE = { ignore: '[role="img"] *, script, style' };
 

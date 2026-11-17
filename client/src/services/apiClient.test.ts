@@ -3,6 +3,7 @@ import {
   ApiError,
   fetchAlbum,
   fetchAlbumDetails,
+  fetchExampleAlbum,
   fetchRecommendation,
   fetchRecommendationArtwork,
   fetchArtwork,
@@ -94,6 +95,21 @@ const PICK: RecommendationResponse = {
 function respondWith(status: number, body: unknown): void {
   fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
 }
+
+describe('fetchExampleAlbum', () => {
+  it('fetches an example album from the v1 API', async () => {
+    respondWith(200, ALBUM);
+
+    expect(await fetchExampleAlbum()).toEqual(ALBUM);
+    expect(requestedUrl()).toBe('/api/v1/example-album');
+  });
+
+  it('rejects with the status when there is no example yet', async () => {
+    respondWith(404, { error: 'No example album yet' });
+
+    await expect(fetchExampleAlbum()).rejects.toMatchObject({ status: 404 });
+  });
+});
 
 describe('fetchAlbum', () => {
   it('fetches the album by slug from the v1 API, with no empty query string', async () => {

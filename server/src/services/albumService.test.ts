@@ -7,7 +7,7 @@ vi.mock('../logger', () => ({
 
 import { AlbumRepository } from '../repositories/albumRepository';
 import { createInMemoryAlbumRepository } from '../repositories/inMemoryAlbumRepository';
-import { AlbumToSave, getAlbum, saveAlbum } from './albumService';
+import { AlbumToSave, getAlbum, getExampleAlbum, saveAlbum } from './albumService';
 import { fetchArtwork } from './artworkService';
 import { logger } from '../logger';
 
@@ -139,5 +139,84 @@ describe('getAlbum', () => {
 
     await getAlbum(albums, slug, minutesLater(1));
     expect(mockFetchArtwork).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('getExampleAlbum', () => {
+  async function storeWithCover(album: AlbumToSave): Promise<string> {
+    const slug = await saveAlbum(albums, album);
+    await albums.updateArtwork(album.releaseGroupId, {
+      artworkUrl: COVER,
+      appleMusicUrl: APPLE,
+      checkedAt: new Date(),
+    });
+    return slug;
+  }
+
+  const PORNOGRAPHY: AlbumToSave = {
+    ...JEOPARDY,
+    releaseGroupId: 'a1b2c3d4-0000-4000-8000-000000000002',
+    artist: 'The Cure',
+    album: 'Pornography',
+    hook: 'The Cure at their most claustrophobic.',
+  };
+
+  it('returns a stored album with its cover and hook', async () => {
+    await storeWithCover(JEOPARDY);
+
+    expect(await getExampleAlbum(albums, () => 0)).toEqual({
+      slug: 'the-sound-jeopardy',
+      releaseGroupId: JEOPARDY.releaseGroupId,
+      artist: 'The Sound',
+      album: 'Jeopardy',
+      year: '1980',
+      hook: 'Post-punk with its heart on its sleeve.',
+      genres: ['Post-punk'],
+      country: 'United Kingdom',
+      artworkUrl: COVER,
+      appleMusicUrl: APPLE,
+    });
+  });
+
+  it('chooses among recent albums with the given choice', async () => {
+    await storeWithCover(JEOPARDY);
+    await storeWithCover(PORNOGRAPHY);
+    const chooseIndex = vi.fn(() => 1);
+
+    const example = await getExampleAlbum(albums, chooseIndex);
+
+    expect(chooseIndex).toHaveBeenCalledWith(2);
+    expect(example?.slug).toBe('the-sound-jeopardy');
+  });
+
+  it('keeps a choice out of range inside the list', async () => {
+    await storeWithCover(JEOPARDY);
+
+    expect((await getExampleAlbum(albums, () => 5))?.slug).toBe('the-sound-jeopardy');
+    expect((await getExampleAlbum(albums, () => -1))?.slug).toBe('the-sound-jeopardy');
+  });
+
+  it('chooses from the 50 most recent', async () => {
+    const findRecent = vi.spyOn(albums, 'findRecentWithCoverAndHook');
+
+    await getExampleAlbum(albums);
+
+    expect(findRecent).toHaveBeenCalledWith(50);
+  });
+
+  it('returns null when no album has both a cover and a hook', async () => {
+    await saveAlbum(albums, JEOPARDY);
+    await storeWithCover({ ...PORNOGRAPHY, hook: null });
+
+    expect(await getExampleAlbum(albums)).toBeNull();
+  });
+
+  it('never looks artwork up, since every candidate already has a cover', async () => {
+    await storeWithCover(JEOPARDY);
+    mockFetchArtwork.mockClear();
+
+    await getExampleAlbum(albums);
+
+    expect(mockFetchArtwork).not.toHaveBeenCalled();
   });
 });

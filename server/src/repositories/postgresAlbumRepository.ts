@@ -91,5 +91,16 @@ export function createPostgresAlbumRepository(pool: Pool): AlbumRepository {
       );
       return rows[0] ? toStoredAlbum(rows[0]) : null;
     },
+
+    async findRecentWithCoverAndHook(limit: number): Promise<StoredAlbum[]> {
+      const { rows } = await pool.query<AlbumRow>(
+        `SELECT ${COLUMNS} FROM albums
+         WHERE artwork_url IS NOT NULL AND artwork_url <> '' AND hook IS NOT NULL AND hook <> ''
+         ORDER BY created_at DESC
+         LIMIT $1`,
+        [limit],
+      );
+      return rows.map(toStoredAlbum);
+    },
   };
 }

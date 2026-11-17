@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { createRecommendHandler } from '../controllers/recommendController';
 import { createAlbumHandler } from '../controllers/albumController';
 import { createAlbumDetailsHandler } from '../controllers/albumDetailsController';
+import { createExampleAlbumHandler } from '../controllers/exampleAlbumController';
 import { handleArtwork } from '../controllers/artworkController';
 import { handleArtistRelations } from '../controllers/artistRelationsController';
 import { handleImage } from '../controllers/imageController';
@@ -53,7 +54,8 @@ const artistEssentialsLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
-// Album pages load this on every visit, but it reads only from the database after the first.
+// Album pages and the first-run example load from here on every visit, but after the first
+// view of an album they read only from the database.
 const albumLimiter = rateLimit({
   windowMs: 60_000,
   max: 60,
@@ -77,6 +79,7 @@ export function createApiRouter({ albums }: ApiDependencies): Router {
   router.post('/recommend', recommendLimiter, createRecommendHandler(albums));
   router.get('/albums/:slug', albumLimiter, createAlbumHandler(albums));
   router.get('/albums/:slug/details', albumDetailsLimiter, createAlbumDetailsHandler(albums));
+  router.get('/example-album', albumLimiter, createExampleAlbumHandler(albums));
   router.post('/artist-essentials', artistEssentialsLimiter, handleArtistEssentials);
   router.get('/artwork', artworkLimiter, handleArtwork);
   router.get('/artist-rels', artistRelsLimiter, handleArtistRelations);

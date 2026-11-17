@@ -94,3 +94,26 @@ export async function getAlbum(
   const album = needsArtworkLookup(stored, now) ? await withArtwork(albums, stored, now) : stored;
   return toAlbumResponse(album);
 }
+
+// Recent enough to rotate as new picks are made, big enough that two visits rarely match.
+const EXAMPLE_POOL_SIZE = 50;
+
+export type ChooseIndex = (count: number) => number;
+
+const randomIndex: ChooseIndex = (count) => Math.floor(Math.random() * count);
+
+/**
+ * A real album to show first-time visitors, chosen from recent picks that have a cover and a
+ * hook. Only the hook is shown, never the reason, because the hook doesn't depend on whoever
+ * the album was picked for. Null until some album qualifies.
+ */
+export async function getExampleAlbum(
+  albums: AlbumRepository,
+  chooseIndex: ChooseIndex = randomIndex,
+): Promise<AlbumResponse | null> {
+  const candidates = await albums.findRecentWithCoverAndHook(EXAMPLE_POOL_SIZE);
+  if (candidates.length === 0) return null;
+
+  const index = Math.min(Math.max(chooseIndex(candidates.length), 0), candidates.length - 1);
+  return toAlbumResponse(candidates[index]);
+}
