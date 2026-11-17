@@ -11,6 +11,8 @@ import {
   SLIDER_MAX,
   ERA_VALUES,
   MAX_PREFERENCE_ARRAY_LENGTH,
+  VISIT_ENTRIES,
+  VisitEntry,
 } from '@shared/types';
 import { logger } from '../logger';
 import { AlbumRepository } from '../repositories/albumRepository';
@@ -57,6 +59,10 @@ function isValidPivot(value: unknown): value is PivotHint | undefined {
     isName(p.artist) &&
     isName(p.album)
   );
+}
+
+function isVisitEntry(value: unknown): value is VisitEntry {
+  return VISIT_ENTRIES.some((entry) => entry === value);
 }
 
 function isValidPreferences(value: unknown): value is RecommendationPreferences {
@@ -127,6 +133,15 @@ async function handleRecommend(
     res.status(400).json({ error: 'vibeQuery must be a non-empty string (max 300 characters)' });
     return;
   }
+
+  const { entry } = body;
+  if (entry !== undefined && !isVisitEntry(entry)) {
+    res.status(400).json({ error: `entry must be one of: ${VISIT_ENTRIES.join(', ')}` });
+    return;
+  }
+  // Counted when asked for, not when it succeeds: the question is whether people who arrive on
+  // a shared link go on to try a pick, and a failed one still counts as trying.
+  if (entry) logger.info({ entry }, 'pick requested after arriving');
 
   try {
     const recommendation = await getRecommendation(

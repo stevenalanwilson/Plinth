@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { PivotHint } from '@shared/types';
 import { downloadLibrary, parseLibraryFile } from './services/libraryExport';
 import { useRecommendation } from './hooks/useRecommendation';
@@ -8,6 +8,7 @@ import { HistoryGrid } from './features/history/HistoryGrid';
 import { InsightsPage } from './features/stats/InsightsPage';
 import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPanel';
 import { VibePresets } from './features/presets/VibePresets';
+import { useMoreLikeThisFromNavigation } from './features/recommendation/useMoreLikeThisFromNavigation';
 
 type Page = 'home' | 'insights' | 'essentials';
 
@@ -46,6 +47,10 @@ export default function App(): React.ReactElement {
     selectFromHistory,
     importHistory,
   } = useRecommendation();
+  // An album page's "Find me something like this" lands here and starts the pick at once.
+  useMoreLikeThisFromNavigation(
+    useCallback((pivot: PivotHint) => void fetchRecommendation(pivot), [fetchRecommendation]),
+  );
   // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives, and
   // the presets stay to hand for trying another.
   const [isFirstVisit] = useState(recommendation === null);

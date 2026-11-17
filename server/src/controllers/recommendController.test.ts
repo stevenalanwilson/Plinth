@@ -7,7 +7,12 @@ vi.mock('../services/recommendationService', async (importOriginal) => ({
   getRecommendation: vi.fn(),
 }));
 
+vi.mock('../logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
 import { createRecommendHandler } from './recommendController';
+import { logger } from '../logger';
 import { createInMemoryAlbumRepository } from '../repositories/inMemoryAlbumRepository';
 import {
   getRecommendation,
@@ -291,5 +296,70 @@ describe('handleRecommend', () => {
         error: 'Failed to get recommendation. Please try again.',
       });
     });
+  });
+});
+
+describe('recommend handler: where the visit began', () => {
+  const body = { preferences: validPreferences, alreadySuggested: [] };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRecommendation.mockResolvedValue({
+      artist: 'The Sound',
+      album: 'Jeopardy',
+      year: '1980',
+      reason: 'Because.',
+    });
+  });
+
+  it('counts a pick asked for after arriving on a shared link', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, entry: 'shared-link' }), res);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      { entry: 'shared-link' },
+      'pick requested after arriving',
+    );
+  });
+
+  it('counts it even when the pick fails', async () => {
+    mockGetRecommendation.mockRejectedValue(new Error('Claude is down'));
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, entry: 'shared-link' }), res);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      { entry: 'shared-link' },
+      'pick requested after arriving',
+    );
+  });
+
+  it('logs nothing about arrival for an ordinary pick', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq(body), res);
+
+    expect(logger.info).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'pick requested after arriving',
+    );
+  });
+
+  it('does not pass the entry on to the recommendation', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, entry: 'shared-link' }), res);
+
+    expect(mockGetRecommendation.mock.calls[0][0]).not.toHaveProperty('entry');
+  });
+
+  it.each(['newsletter', 1, null, ''])('rejects the unknown entry %j', async (entry) => {
+    const { res, status } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, entry }), res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(mockGetRecommendation).not.toHaveBeenCalled();
   });
 });

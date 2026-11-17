@@ -952,3 +952,40 @@ body::before {
   .essentials-album-row[data-size='large'] .essentials-album-cover { width: 84px; height: 84px; }
   .essentials-album-cover { width: 56px; height: 56px; }
 }
+
+/* ─── Album page: from a shared link to a pick ────────── */
+
+.album-page-cta-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.album-page-cta-button {
+  min-height: 48px;
+  padding: 15px 24px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #0e0e0f;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.album-page-cta-button:focus-visible,
+.album-page-cta-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* With the one-tap pick offered, setting your own vibe becomes the quieter second choice. */
+.album-page-cta-button + .album-page-cta-link {
+  padding: 12px 8px;
+  background: none;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

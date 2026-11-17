@@ -1,7 +1,8 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AlbumDetailsResponse, AlbumResponse } from '@shared/types';
 
 vi.mock('../../services/apiClient', async (importOriginal) => ({
@@ -45,6 +46,10 @@ const ALBUM: AlbumResponse = {
   artworkUrl: 'https://coverartarchive.org/release/x/1-500.jpg',
   appleMusicUrl: 'https://music.apple.com/gb/album/jeopardy/1',
 };
+
+function DiscoverState(): React.ReactElement {
+  return <div data-testid="discover-state">{JSON.stringify(useLocation().state)}</div>;
+}
 
 function renderPage(slug = 'the-sound-jeopardy'): void {
   render(
@@ -115,7 +120,7 @@ describe('AlbumPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Jeopardy' })).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Loading album details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Get your own pick' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Find me something like this' })).toBeInTheDocument();
   });
 
   it('keeps the album when only the details fail', async () => {
@@ -192,7 +197,7 @@ describe('AlbumPage', () => {
     await screen.findByRole('heading', { name: 'Jeopardy' });
     expect(document.title).toBe('Jeopardy by The Sound · Plinth');
 
-    await userEvent.click(screen.getByRole('link', { name: 'Get your own pick' }));
+    await userEvent.click(screen.getByRole('link', { name: 'Or set your own vibe' }));
 
     expect(document.title).toBe('Plinth');
   });
@@ -201,8 +206,28 @@ describe('AlbumPage', () => {
     mockFetchAlbum.mockResolvedValue(ALBUM);
     renderPage();
 
-    await userEvent.click(await screen.findByRole('link', { name: 'Get your own pick' }));
+    await userEvent.click(await screen.findByRole('link', { name: 'Or set your own vibe' }));
     expect(screen.getByText('Discover page')).toBeInTheDocument();
+  });
+
+  it('sends you to Discover asking for more like this album', async () => {
+    mockFetchAlbum.mockResolvedValue(ALBUM);
+    render(
+      <MemoryRouter initialEntries={['/album/the-sound-jeopardy']}>
+        <Routes>
+          <Route path="/album/:slug" element={<AlbumPage />} />
+          <Route path="/" element={<DiscoverState />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Find me something like this' }),
+    );
+
+    expect(screen.getByTestId('discover-state')).toHaveTextContent(
+      JSON.stringify({ moreLikeThis: { artist: 'The Sound', album: 'Jeopardy' } }),
+    );
   });
 
   it('says so when the album does not exist, and still offers a way in', async () => {
@@ -212,6 +237,9 @@ describe('AlbumPage', () => {
 
     expect(await screen.findByText("We couldn't find that album.")).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Get your own pick' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Find me something like this' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows other errors and lets you try again', async () => {

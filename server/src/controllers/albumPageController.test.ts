@@ -155,6 +155,52 @@ describe('album page', () => {
     expect(html).toContain('&quot;/&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
   });
 
+  describe('counting arrivals', () => {
+    const PHONE =
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+
+    it('logs a person arriving on an album page', async () => {
+      await storeAlbum();
+
+      await fetch(`${baseUrl}/album/the-sound-jeopardy`, { headers: { 'user-agent': PHONE } });
+
+      expect(logger.info).toHaveBeenCalledWith(
+        { slug: 'the-sound-jeopardy', found: true, crawler: false },
+        'album page served',
+      );
+    });
+
+    it('logs a link preview fetch as a crawler', async () => {
+      await storeAlbum();
+
+      await fetch(`${baseUrl}/album/the-sound-jeopardy`, {
+        headers: { 'user-agent': 'WhatsApp/2.23.20.0 A' },
+      });
+
+      expect(logger.info).toHaveBeenCalledWith(
+        { slug: 'the-sound-jeopardy', found: true, crawler: true },
+        'album page served',
+      );
+    });
+
+    it('logs an unknown album as not found', async () => {
+      await fetch(`${baseUrl}/album/no-such-album`, { headers: { 'user-agent': PHONE } });
+
+      expect(logger.info).toHaveBeenCalledWith(
+        { slug: 'no-such-album', found: false, crawler: false },
+        'album page served',
+      );
+    });
+
+    it('logs nothing for a malformed slug or a failed lookup', async () => {
+      await fetch(`${baseUrl}/album/Bad%20Slug`);
+      albums.findBySlug = vi.fn().mockRejectedValue(new Error('connection refused'));
+      await fetch(`${baseUrl}/album/the-sound-jeopardy`);
+
+      expect(logger.info).not.toHaveBeenCalledWith(expect.anything(), 'album page served');
+    });
+  });
+
   describe('the address in the tags', () => {
     it('ignores a trailing slash on PUBLIC_URL', async () => {
       process.env.PUBLIC_URL = 'https://plinth.example///';

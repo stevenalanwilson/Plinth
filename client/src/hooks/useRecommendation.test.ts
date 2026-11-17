@@ -121,4 +121,21 @@ describe('useRecommendation', () => {
     await waitFor(() => expect(result.current.artworkResponse).toEqual(artwork));
     expect(mockFetchArtwork).toHaveBeenCalledWith(recommendation);
   });
+
+  it('marks the first pick of a visit that began on a shared link, and only that one', async () => {
+    sessionStorage.setItem('plinth-visit-entry', 'shared-link');
+    mockFetchRecommendation.mockResolvedValue(recommendation);
+    const { result } = renderHook(() => useRecommendation());
+
+    await act(async () => {
+      await result.current.fetchRecommendation();
+    });
+    await act(async () => {
+      await result.current.fetchRecommendation();
+    });
+
+    expect(mockFetchRecommendation.mock.calls[0][0].entry).toBe('shared-link');
+    expect(mockFetchRecommendation.mock.calls[1][0].entry).toBeUndefined();
+    sessionStorage.clear();
+  });
 });
