@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createRequestSpacer, escapeLucene, musicBrainzFetch } from './musicBrainzClient';
+import {
+  createRequestSpacer,
+  escapeLucene,
+  musicBrainzFetch,
+  musicBrainzTtlSeconds,
+} from './musicBrainzClient';
+import { createInMemoryCacheStore } from './inMemoryCacheStore';
+import { configureLookupCache } from './lookupCache';
 
 describe('createRequestSpacer', () => {
   it('spaces back-to-back requests by the interval', () => {
@@ -26,6 +33,49 @@ describe('createRequestSpacer', () => {
     now += 400;
 
     expect(reserve()).toBe(600);
+  });
+});
+
+const DAY_SECONDS = 24 * 60 * 60;
+const ARTIST_ID = '3b4e2fb8-7a6f-3c1b-9a33-1f0c7d3f6a01';
+
+describe('musicBrainzTtlSeconds', () => {
+  const results = { 'release-groups': [{ id: 'rg-1' }] };
+
+  it('keeps a lookup by ID for 30 days, since a record rarely changes', () => {
+    expect(musicBrainzTtlSeconds(`artist/${ARTIST_ID}?inc=artist-rels&fmt=json`, {})).toBe(
+      30 * DAY_SECONDS,
+    );
+  });
+
+  it('keeps a lookup by ID for 30 days even when its lists are empty', () => {
+    expect(
+      musicBrainzTtlSeconds(`artist/${ARTIST_ID}?inc=artist-rels&fmt=json`, { relations: [] }),
+    ).toBe(30 * DAY_SECONDS);
+  });
+
+  it('keeps searches and browses with results for 7 days', () => {
+    expect(musicBrainzTtlSeconds('release-group?query=a&fmt=json', results)).toBe(7 * DAY_SECONDS);
+    expect(
+      musicBrainzTtlSeconds(`release-group?artist=${ARTIST_ID}&type=album&fmt=json`, results),
+    ).toBe(7 * DAY_SECONDS);
+  });
+
+  it('keeps an empty search for a day, so a new artist is found soon after it is added', () => {
+    expect(musicBrainzTtlSeconds('artist?query=a&fmt=json', { artists: [], count: 0 })).toBe(
+      DAY_SECONDS,
+    );
+    expect(
+      musicBrainzTtlSeconds(`release-group?artist=${ARTIST_ID}&fmt=json`, {
+        'release-groups': [],
+        'release-group-count': 0,
+      }),
+    ).toBe(DAY_SECONDS);
+  });
+
+  it('does not mistake a body with no lists for an empty result', () => {
+    expect(musicBrainzTtlSeconds('artist?query=a&fmt=json', { count: 0 })).toBe(7 * DAY_SECONDS);
+    expect(musicBrainzTtlSeconds('artist?query=a&fmt=json', null)).toBe(7 * DAY_SECONDS);
   });
 });
 
@@ -156,5 +206,87 @@ describe('musicBrainzFetch', () => {
         headers: { 'User-Agent': 'AlbumRecommender/1.0 ( me@example.org )' },
       }),
     );
+  });
+
+  describe('caching', () => {
+    const budget = new AbortController().signal;
+    const RESULTS = { 'release-groups': [{ id: 'rg-1' }] };
+
+    function jsonResponse(body: unknown, status = 200): Response {
+      return new Response(JSON.stringify(body), { status });
+    }
+
+    beforeEach(() => {
+      configureLookupCache(createInMemoryCacheStore());
+    });
+
+    afterEach(() => {
+      configureLookupCache(null);
+    });
+
+    it('serves a repeat request from the cache, with no request and no rate-limit wait', async () => {
+      mockFetch.mockResolvedValue(jsonResponse(RESULTS));
+      const first = musicBrainzFetch('release-group?query=jeopardy&fmt=json', budget);
+      await vi.runAllTimersAsync();
+      await first;
+      const timersBefore = vi.getTimerCount();
+
+      // No timers are advanced: a request that waited for a slot would never resolve.
+      const second = await musicBrainzFetch('release-group?query=jeopardy&fmt=json', budget);
+
+      expect(await second.json()).toEqual(RESULTS);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(timersBefore);
+    });
+
+    it('treats different paths as different requests', async () => {
+      mockFetch.mockImplementation(async () => jsonResponse(RESULTS));
+
+      const requests = [
+        musicBrainzFetch('release-group?query=a&fmt=json', budget),
+        musicBrainzFetch('release-group?query=b&fmt=json', budget),
+      ];
+      await vi.runAllTimersAsync();
+      await Promise.all(requests);
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not keep a 503, so the next request tries again', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ error: 'busy' }, 503));
+      const busy = musicBrainzFetch('artist?query=a&fmt=json', budget);
+      await vi.runAllTimersAsync();
+      expect((await busy).status).toBe(503);
+      mockFetch.mockClear();
+      mockFetch.mockResolvedValue(jsonResponse({ artists: [{ id: 'x' }] }));
+
+      const retry = musicBrainzFetch('artist?query=a&fmt=json', budget);
+      await vi.runAllTimersAsync();
+
+      expect((await retry).status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not keep other errors either', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ error: 'Not Found' }, 404));
+
+      const first = musicBrainzFetch(`artist/${ARTIST_ID}?fmt=json`, budget);
+      await vi.runAllTimersAsync();
+      await first;
+      const second = musicBrainzFetch(`artist/${ARTIST_ID}?fmt=json`, budget);
+      await vi.runAllTimersAsync();
+      await second;
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('still lets the caller read the body of a response it cached', async () => {
+      mockFetch.mockResolvedValue(jsonResponse(RESULTS));
+
+      const request = musicBrainzFetch('release-group?query=a&fmt=json', budget);
+      await vi.runAllTimersAsync();
+
+      expect(await (await request).json()).toEqual(RESULTS);
+    });
   });
 });

@@ -18,11 +18,16 @@ import { migrate } from './db/migrate';
 import { AlbumRepository } from './repositories/albumRepository';
 import { createPostgresAlbumRepository } from './repositories/postgresAlbumRepository';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
+import { CacheStore } from './repositories/cacheStore';
+import { createPostgresCacheStore } from './repositories/postgresCacheStore';
+import { createInMemoryCacheStore } from './repositories/inMemoryCacheStore';
+import { configureLookupCache, startCacheCleanup } from './repositories/lookupCache';
 
 const port = process.env.PORT ?? '3001';
 
 interface Storage {
   readonly albums: AlbumRepository;
+  readonly cache: CacheStore;
   readonly pool: Pool | null;
 }
 
@@ -36,17 +41,27 @@ async function connectStorage(): Promise<Storage> {
       throw new Error('DATABASE_URL is required in production');
     }
     logger.warn('DATABASE_URL is not set: albums are stored in memory and lost on restart');
-    return { albums: createInMemoryAlbumRepository(), pool: null };
+    return {
+      albums: createInMemoryAlbumRepository(),
+      cache: createInMemoryCacheStore(),
+      pool: null,
+    };
   }
 
   const pool = createPool(databaseUrl);
   const applied = await migrate(pool);
   if (applied.length > 0) logger.info({ applied }, 'database migrations applied');
-  return { albums: createPostgresAlbumRepository(pool), pool };
+  return {
+    albums: createPostgresAlbumRepository(pool),
+    cache: createPostgresCacheStore(pool),
+    pool,
+  };
 }
 
 async function start(): Promise<void> {
-  const { albums, pool } = await connectStorage();
+  const { albums, cache, pool } = await connectStorage();
+  configureLookupCache(cache);
+  const stopCacheCleanup = startCacheCleanup(cache);
 
   const server = createApp({ albums }).listen(Number(port), () => {
     logger.info({ port }, 'Server running');
@@ -54,6 +69,7 @@ async function start(): Promise<void> {
 
   process.on('SIGTERM', () => {
     logger.info('SIGTERM received, shutting down gracefully');
+    stopCacheCleanup();
     server.close(() => {
       void (pool?.end() ?? Promise.resolve()).finally(() => {
         logger.info('Server closed');

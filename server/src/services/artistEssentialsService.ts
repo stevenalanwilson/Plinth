@@ -2,6 +2,7 @@ import { ArtistEssentialsRequest, ArtistEssentialsResponse, EssentialAlbum } fro
 import { completeJson } from '../repositories/claudeClient';
 import { logger } from '../logger';
 import { normaliseName } from '../utils/musicNames';
+import { readCache, writeCache } from '../repositories/lookupCache';
 import {
   ArtistAlbumsLookup,
   findArtistAlbums,
@@ -211,7 +212,53 @@ function logVerification(artist: string, attempt: number, result: VerifiedEssent
   );
 }
 
+// A list takes a Claude call and several MusicBrainz lookups to make, and an artist's essential
+// albums don't change, so a verified list keeps for a month.
+const ESSENTIALS_CACHE_SECONDS = 30 * 24 * 60 * 60;
+// Bump when ArtistEssentialsResponse changes shape, so entries from before are left behind.
+const ESSENTIALS_CACHE_VERSION = 'v1';
+
+/** True for a list where every album was matched in MusicBrainz, the only kind worth keeping. */
+function isVerifiedEssentials(value: unknown): value is ArtistEssentialsResponse {
+  if (typeof value !== 'object' || value === null) return false;
+  const { artist, albums } = value as Partial<ArtistEssentialsResponse>;
+  return (
+    typeof artist === 'string' &&
+    Array.isArray(albums) &&
+    albums.length > 0 &&
+    albums.every(
+      (entry: unknown) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof (entry as EssentialAlbum).album === 'string' &&
+        typeof (entry as EssentialAlbum).year === 'string' &&
+        typeof (entry as EssentialAlbum).reason === 'string' &&
+        typeof (entry as EssentialAlbum).releaseGroupId === 'string',
+    )
+  );
+}
+
+/**
+ * Returns an artist's essential albums, from the cache when a verified list is kept. A list that
+ * went out unchecked (MusicBrainz was down) is never kept, so it can't outlive the outage.
+ */
 export async function getArtistEssentials(
+  request: ArtistEssentialsRequest,
+): Promise<ArtistEssentialsResponse> {
+  const key = `${ESSENTIALS_CACHE_VERSION}:${normaliseName(request.artist)}`;
+
+  const cached = await readCache('essentials', key);
+  if (isVerifiedEssentials(cached)) return cached;
+  if (cached !== null) logger.warn({ key }, 'cached essentials discarded');
+
+  const essentials = await buildEssentials(request);
+  if (isVerifiedEssentials(essentials)) {
+    await writeCache('essentials', key, essentials, ESSENTIALS_CACHE_SECONDS);
+  }
+  return essentials;
+}
+
+async function buildEssentials(
   request: ArtistEssentialsRequest,
 ): Promise<ArtistEssentialsResponse> {
   // The MusicBrainz lookup only needs the typed name, so it runs while Claude answers.

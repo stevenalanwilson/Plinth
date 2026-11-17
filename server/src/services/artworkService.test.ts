@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./albumMatchService', () => ({ findAlbum: vi.fn() }));
 vi.mock('../logger', () => ({
@@ -8,6 +8,8 @@ vi.mock('../logger', () => ({
 import { fetchArtwork } from './artworkService';
 import { findAlbum } from './albumMatchService';
 import { logger } from '../logger';
+import { createInMemoryCacheStore } from '../repositories/inMemoryCacheStore';
+import { configureLookupCache } from '../repositories/lookupCache';
 
 const mockFindAlbum = vi.mocked(findAlbum);
 const mockFetch = vi.fn();
@@ -181,5 +183,79 @@ describe('fetchArtwork', () => {
       expect.objectContaining({ source: 'cover-art-archive', releaseGroupId: 'abc-123' }),
       'artwork source',
     );
+  });
+});
+
+describe('fetchArtwork iTunes cache', () => {
+  const ITUNES_ALBUM = {
+    collectionName: 'Mezzanine',
+    artistName: 'Massive Attack',
+    collectionViewUrl: 'https://music.apple.com/gb/album/mezzanine/123456',
+    artworkUrl100: 'https://is1-ssl.mzstatic.com/image/100x100bb.jpg',
+  };
+
+  function itunesCalls(): number {
+    return mockFetch.mock.calls.filter(([url]) => String(url).includes('itunes.apple.com')).length;
+  }
+
+  // Cover Art Archive has nothing; iTunes answers with the given response each time it is asked.
+  function serve(itunes: () => Response): void {
+    mockFetch.mockImplementation(async (url: string) =>
+      url.includes('itunes.apple.com') ? itunes() : new Response('{}', { status: 404 }),
+    );
+  }
+
+  beforeEach(() => {
+    configureLookupCache(createInMemoryCacheStore());
+  });
+
+  afterEach(() => {
+    configureLookupCache(null);
+  });
+
+  it('asks iTunes once for an album and serves repeat lookups from the cache', async () => {
+    serve(() => new Response(JSON.stringify({ results: [ITUNES_ALBUM] }), { status: 200 }));
+
+    const first = await fetchArtwork('Massive Attack', 'Mezzanine', 'known-id');
+    const second = await fetchArtwork('Massive Attack', 'Mezzanine', 'known-id');
+
+    expect(itunesCalls()).toBe(1);
+    expect(second).toEqual(first);
+    expect(second.appleMusicUrl).toBe(ITUNES_ALBUM.collectionViewUrl);
+  });
+
+  it('asks again for a different album', async () => {
+    serve(() => new Response(JSON.stringify({ results: [ITUNES_ALBUM] }), { status: 200 }));
+
+    await fetchArtwork('Massive Attack', 'Mezzanine', 'known-id');
+    await fetchArtwork('Massive Attack', 'Protection', 'other-id');
+
+    expect(itunesCalls()).toBe(2);
+  });
+
+  it('does not keep an iTunes failure, so the next lookup tries again', async () => {
+    let healthy = false;
+    serve(() =>
+      healthy
+        ? new Response(JSON.stringify({ results: [ITUNES_ALBUM] }), { status: 200 })
+        : new Response('busy', { status: 503 }),
+    );
+
+    const failed = await fetchArtwork('Massive Attack', 'Mezzanine', 'known-id');
+    healthy = true;
+    const recovered = await fetchArtwork('Massive Attack', 'Mezzanine', 'known-id');
+
+    expect(failed.appleMusicUrl).toBeNull();
+    expect(recovered.appleMusicUrl).toBe(ITUNES_ALBUM.collectionViewUrl);
+    expect(itunesCalls()).toBe(2);
+  });
+
+  it('keeps an iTunes search that found nothing, since the album is not there', async () => {
+    serve(() => new Response(JSON.stringify({ results: [] }), { status: 200 }));
+
+    await fetchArtwork('Obscure Band', 'Demo Tape', 'known-id');
+    await fetchArtwork('Obscure Band', 'Demo Tape', 'known-id');
+
+    expect(itunesCalls()).toBe(1);
   });
 });
