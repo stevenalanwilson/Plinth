@@ -131,4 +131,36 @@ describe('RecommendationCard', () => {
     const link = screen.getByText('Open in Apple Music').closest('a');
     expect(link).toHaveAttribute('href', 'https://music.apple.com/gb/album/mezzanine/123456');
   });
+
+  it('offers to share a pick that has its own page', () => {
+    render(
+      <RecommendationCard
+        recommendation={{ ...mockRec, slug: 'massive-attack-mezzanine', hook: 'A hook.' }}
+        artworkResponse={mockArtwork}
+        artistRelations={[]}
+        isLoadingRelations={false}
+        isLoading={false}
+        error={null}
+        onSeedArtist={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument();
+  });
+
+  it('does not offer to share a pick with no page of its own', () => {
+    render(
+      <RecommendationCard
+        recommendation={mockRec}
+        artworkResponse={mockArtwork}
+        artistRelations={[]}
+        isLoadingRelations={false}
+        isLoading={false}
+        error={null}
+        onSeedArtist={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+  });
 });
