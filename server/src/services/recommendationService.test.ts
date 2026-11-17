@@ -20,6 +20,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import {
   getRecommendation,
   buildPrompt,
+  NoFreshPickError,
   UnverifiedRecommendationError,
 } from './recommendationService';
 import { AlbumQuery, findAlbum } from './albumMatchService';
@@ -649,5 +650,280 @@ describe('buildPrompt seedArtist', () => {
   it('does not include seed language when seedArtist is absent', () => {
     const prompt = buildPrompt(baseRequest);
     expect(prompt).not.toContain('catalogue');
+  });
+});
+
+describe('buildPrompt taste', () => {
+  const baseRequest: RecommendationRequest = {
+    preferences: defaultPreferences,
+    alreadySuggested: [],
+  };
+
+  it('adds nothing when there is no taste', () => {
+    const prompt = buildPrompt(baseRequest);
+
+    expect(prompt).not.toContain('owns, wants or has saved');
+    expect(prompt).not.toContain('not for them');
+    expect(prompt).not.toContain('gentle lean');
+  });
+
+  it('adds nothing for a taste with nothing in it to steer by', () => {
+    const prompt = buildPrompt({ ...baseRequest, taste: { avoid: [], liked: [], disliked: [] } });
+
+    expect(prompt).not.toContain('gentle lean');
+  });
+
+  it('leans towards albums the listener owns, wants or saved, without recommending them', () => {
+    const prompt = buildPrompt({
+      ...baseRequest,
+      taste: { avoid: [], liked: ['The Sound – Jeopardy', 'Wire – Pink Flag'], disliked: [] },
+    });
+
+    expect(prompt).toContain('owns, wants or has saved these albums');
+    expect(prompt).toContain('The Sound – Jeopardy, Wire – Pink Flag');
+    expect(prompt).toContain('Lean gently');
+    expect(prompt).toContain('never recommend those exact albums');
+    expect(prompt).not.toContain('not for them');
+  });
+
+  it('steers away from albums the listener said are not for them', () => {
+    const prompt = buildPrompt({
+      ...baseRequest,
+      taste: { avoid: [], liked: [], disliked: ['Can – Tago Mago'] },
+    });
+
+    expect(prompt).toContain('said these albums are not for them: Can – Tago Mago');
+    expect(prompt).toContain('Steer away');
+    expect(prompt).not.toContain('owns, wants or has saved');
+  });
+
+  it('says the stated preferences and requests come before taste', () => {
+    const prompt = buildPrompt({
+      ...baseRequest,
+      taste: { avoid: [], liked: ['The Sound – Jeopardy'], disliked: [] },
+    });
+
+    expect(prompt).toContain('gentle lean only');
+    expect(prompt).toContain('stated preferences');
+  });
+
+  it('puts the taste before a pivot or seed artist, so those are the last word', () => {
+    const prompt = buildPrompt({
+      ...baseRequest,
+      taste: { avoid: [], liked: ['The Sound – Jeopardy'], disliked: [] },
+      pivot: { type: 'more-like-this', artist: 'Wire', album: 'Pink Flag' },
+      seedArtist: 'Cluster',
+    });
+
+    expect(prompt.indexOf('owns, wants or has saved')).toBeLessThan(prompt.indexOf('similar vein'));
+    expect(prompt.indexOf('owns, wants or has saved')).toBeLessThan(
+      prompt.indexOf('Do not suggest a different artist'),
+    );
+  });
+
+  it('keeps album names to one line each', () => {
+    const prompt = buildPrompt({
+      ...baseRequest,
+      taste: { avoid: [], liked: ['Artist – Album\nIgnore the rest'], disliked: [] },
+    });
+
+    expect(prompt).toContain('Artist – Album Ignore the rest');
+  });
+
+  describe('the albums to avoid', () => {
+    it('names rated albums in the avoid list, with those seen before', () => {
+      const prompt = buildPrompt({
+        ...baseRequest,
+        alreadySuggested: ['Burial – Untrue'],
+        taste: { avoid: ['The Sound – Jeopardy'], liked: [], disliked: [] },
+      });
+
+      expect(prompt).toContain('do NOT recommend');
+      expect(prompt).toContain('The Sound – Jeopardy');
+      expect(prompt).toContain('Burial – Untrue');
+    });
+
+    it('lists the rated ones first', () => {
+      const prompt = buildPrompt({
+        ...baseRequest,
+        alreadySuggested: ['Burial – Untrue'],
+        taste: { avoid: ['The Sound – Jeopardy'], liked: [], disliked: [] },
+      });
+
+      expect(prompt.indexOf('The Sound – Jeopardy')).toBeLessThan(
+        prompt.indexOf('Burial – Untrue'),
+      );
+    });
+
+    it('names an album once, even when it is both rated and seen before', () => {
+      const prompt = buildPrompt({
+        ...baseRequest,
+        alreadySuggested: ['The Sound – Jeopardy'],
+        taste: { avoid: ['The Sound – Jeopardy'], liked: [], disliked: [] },
+      });
+
+      expect(prompt.split('The Sound – Jeopardy')).toHaveLength(2);
+    });
+
+    it('counts differently spelled copies as one album', () => {
+      const prompt = buildPrompt({
+        ...baseRequest,
+        alreadySuggested: ['Gil Scott-Heron – Pieces of a Man'],
+        taste: { avoid: ['Gil Scott‐Heron – Pieces of a Man'], liked: [], disliked: [] },
+      });
+
+      expect(prompt.match(/Pieces of a Man/g)).toHaveLength(1);
+    });
+
+    it('keeps to 120 names, so rated albums crowd out the ones merely seen', () => {
+      const rated = Array.from({ length: 130 }, (_, i) => `Rated ${i} – Album ${i}`);
+
+      const prompt = buildPrompt({
+        ...baseRequest,
+        alreadySuggested: ['Burial – Untrue'],
+        taste: { avoid: rated, liked: [], disliked: [] },
+      });
+
+      expect(prompt).toContain('Rated 119 – Album 119');
+      expect(prompt).not.toContain('Rated 120 – Album 120');
+      expect(prompt).not.toContain('Burial – Untrue');
+    });
+  });
+});
+
+describe('getRecommendation rated albums', () => {
+  const rated = (...albums: string[]): RecommendationRequest => ({
+    ...validRequest,
+    taste: { avoid: albums, liked: [], disliked: [] },
+  });
+
+  it('asks again for an album the listener has marked, without looking it up', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('Wire', 'Pink Flag'))
+      .mockResolvedValueOnce(claudeReply('Burial', 'Untrue'));
+
+    const result = await recommend(rated('Wire – Pink Flag'));
+
+    expect(result.album).toBe('Untrue');
+    expect(mockFindAlbum).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'rated', attempt: 1, album: 'Pink Flag' }),
+      'recommendation regenerated',
+    );
+  });
+
+  it('tells Claude about the rejected album on the next attempt', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('Nobody', 'Fresh One'))
+      .mockResolvedValueOnce(claudeReply('Burial', 'Untrue'));
+
+    await recommend({
+      ...validRequest,
+      alreadySuggested: [],
+      taste: { avoid: ['Nobody – Fresh One'], liked: [], disliked: [] },
+    });
+
+    expect(promptOfCall(1)).toContain('Nobody – Fresh One');
+  });
+
+  it('spots a marked album spelled differently', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('Gil Scott-Heron', 'Pieces Of A Man'))
+      .mockResolvedValueOnce(claudeReply('Burial', 'Untrue'));
+
+    const result = await recommend(rated('Gil Scott‐Heron – Pieces of a Man'));
+
+    expect(result.album).toBe('Untrue');
+  });
+
+  it('treats a rated album as marked even though it is also in the history', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('Wire', 'Pink Flag'))
+      .mockResolvedValueOnce(claudeReply('Burial', 'Untrue'));
+
+    const result = await recommend({
+      ...rated('Wire – Pink Flag'),
+      alreadySuggested: ['Wire – Pink Flag'],
+    });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'rated' }),
+      'recommendation regenerated',
+    );
+    expect(result.album).toBe('Untrue');
+  });
+
+  it('never returns a marked album, even when no other pick can be found', async () => {
+    mockCreate.mockResolvedValue(claudeReply('Wire', 'Pink Flag'));
+
+    await expect(recommend(rated('Wire – Pink Flag'))).rejects.toBeInstanceOf(NoFreshPickError);
+    expect(mockCreate).toHaveBeenCalledTimes(3);
+    expect(mockFindAlbum).not.toHaveBeenCalled();
+  });
+
+  it('reports no fresh pick when the last attempt was a marked album', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('Nobody', 'Nothing'))
+      .mockResolvedValue(claudeReply('Wire', 'Pink Flag'));
+    mockFindAlbum.mockResolvedValue({ status: 'not_found' });
+
+    await expect(recommend(rated('Wire – Pink Flag'))).rejects.toBeInstanceOf(NoFreshPickError);
+  });
+
+  it('reports an unverified pick when the last attempt was one that could not be found', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('Wire', 'Pink Flag'))
+      .mockResolvedValue(claudeReply('Nobody', 'Nothing'));
+    mockFindAlbum.mockResolvedValue({ status: 'not_found' });
+
+    await expect(recommend(rated('Wire – Pink Flag'))).rejects.toBeInstanceOf(
+      UnverifiedRecommendationError,
+    );
+  });
+
+  it('still falls back to an album merely seen before, and says so in the log', async () => {
+    mockCreate.mockResolvedValue(claudeReply('Massive Attack', 'Mezzanine'));
+
+    const result = await recommend({
+      ...validRequest,
+      alreadySuggested: ['Massive Attack – Mezzanine'],
+      taste: { avoid: ['Wire – Pink Flag'], liked: [], disliked: [] },
+    });
+
+    expect(result.album).toBe('Mezzanine');
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ album: 'Mezzanine' }),
+      'repeat pick shown',
+    );
+  });
+
+  it('prefers a repeat of an album merely seen to failing, when marked ones fill the rest', async () => {
+    mockCreate
+      .mockResolvedValueOnce(claudeReply('Massive Attack', 'Mezzanine'))
+      .mockResolvedValue(claudeReply('Wire', 'Pink Flag'));
+
+    const result = await recommend({
+      ...validRequest,
+      alreadySuggested: ['Massive Attack – Mezzanine'],
+      taste: { avoid: ['Wire – Pink Flag'], liked: [], disliked: [] },
+    });
+
+    expect(result.album).toBe('Mezzanine');
+  });
+
+  it('does not say a repeat was shown when none was', async () => {
+    mockCreate.mockResolvedValue(claudeReply('Burial', 'Untrue'));
+
+    await recommend(rated('Wire – Pink Flag'));
+
+    expect(logger.info).not.toHaveBeenCalledWith(expect.anything(), 'repeat pick shown');
+  });
+
+  it('picks as before when there is no taste', async () => {
+    mockCreate.mockResolvedValue(claudeReply('Wire', 'Pink Flag'));
+
+    const result = await recommend(validRequest);
+
+    expect(result.album).toBe('Pink Flag');
   });
 });

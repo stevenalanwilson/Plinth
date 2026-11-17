@@ -2,6 +2,7 @@ import {
   RecommendationRequest,
   RecommendationResponse,
   RecommendationPreferences,
+  TasteHint,
 } from '@shared/types';
 import { completeJson } from '../repositories/claudeClient';
 import { logger } from '../logger';
@@ -64,16 +65,54 @@ function formatAlbumList(albums: readonly string[]): string {
     .join(', ');
 }
 
+/**
+ * The albums the prompt tells Claude to avoid, with the ones the listener rated first: only the
+ * first 120 reach Claude, and those are the ones that must never come back. Code checks the
+ * full lists afterwards.
+ */
+function albumsToAvoid(request: RecommendationRequest): string[] {
+  const seenKeys = new Set<string>();
+  return [...(request.taste?.avoid ?? []), ...request.alreadySuggested].filter((album) => {
+    const key = normaliseName(album);
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+}
+
+function buildTasteStr(taste: TasteHint | undefined): string {
+  if (!taste) return '';
+  const parts: string[] = [];
+  if (taste.liked.length > 0) {
+    parts.push(
+      `The listener owns, wants or has saved these albums, which show their taste: ${formatAlbumList(taste.liked)}. Lean gently towards that territory, but never recommend those exact albums.`,
+    );
+  }
+  if (taste.disliked.length > 0) {
+    parts.push(
+      `The listener said these albums are not for them: ${formatAlbumList(taste.disliked)}. Steer away from albums like them.`,
+    );
+  }
+  if (parts.length === 0) return '';
+  parts.push(
+    "Treat the listener's taste as a gentle lean only: their stated preferences, their vibe, and any artist or album the user asks for in this brief come first.",
+  );
+  return `\n\n${parts.join('\n\n')}`;
+}
+
 export function buildPrompt(
   request: RecommendationRequest,
   notFound: readonly string[] = [],
 ): string {
   const summary = buildPreferencesSummary(request.preferences);
 
+  const toAvoid = albumsToAvoid(request);
   const avoidStr =
-    request.alreadySuggested.length > 0
-      ? `\n\nIMPORTANT — do NOT recommend any of these previously suggested albums (format is "Artist – Album"): ${formatAlbumList(request.alreadySuggested)}`
+    toAvoid.length > 0
+      ? `\n\nIMPORTANT — do NOT recommend any of these albums, which the listener has already been shown or has marked (format is "Artist – Album"): ${formatAlbumList(toAvoid)}`
       : '';
+
+  const tasteStr = buildTasteStr(request.taste);
 
   const notFoundStr =
     notFound.length > 0
@@ -102,7 +141,7 @@ export function buildPrompt(
 
   return `Recommend ONE album for someone with the following preferences: ${summary}.${vibeStr}
 
-Pick something genuinely interesting — a deep cut or overlooked gem rather than an obvious classic. It must be a real, released album.${avoidStr}${notFoundStr}${pivotStr}${seedStr}
+Pick something genuinely interesting — a deep cut or overlooked gem rather than an obvious classic. It must be a real, released album.${avoidStr}${tasteStr}${notFoundStr}${pivotStr}${seedStr}
 
 Respond with ONLY this JSON:
 {
@@ -165,11 +204,11 @@ function albumKey(rec: RecommendationResponse): string {
   return `${rec.artist} – ${rec.album}`;
 }
 
-function isDuplicate(rec: RecommendationResponse, alreadySuggested: readonly string[]): boolean {
+function isAmong(rec: RecommendationResponse, albums: readonly string[]): boolean {
   // History holds MusicBrainz spellings ("Gil Scott‐Heron") while Claude writes its own
   // ("Gil Scott-Heron"), so compare normalised names rather than raw strings.
   const key = normaliseName(albumKey(rec));
-  return alreadySuggested.some((s) => normaliseName(s) === key);
+  return albums.some((s) => normaliseName(s) === key);
 }
 
 type MatchedRecommendation = RecommendationResponse & { readonly releaseGroupId: string };
@@ -210,6 +249,14 @@ async function withPermalink(
       'album save failed',
     );
     return rec;
+  }
+}
+
+/** Every pick Claude offered was an album the listener has already marked. */
+export class NoFreshPickError extends Error {
+  constructor() {
+    super('Every pick was an album the listener has already marked');
+    this.name = 'NoFreshPickError';
   }
 }
 
@@ -261,19 +308,34 @@ export async function getRecommendation(
   // Accumulate rejected picks across attempts so each retry prompt is stricter.
   const seen = [...request.alreadySuggested];
   const notFound: string[] = [];
-  let lastDuplicate: RecommendationResponse | null = null;
+  // Albums the listener has marked are never shown again. Ones merely seen before may be, as a
+  // last resort, so that a listener who has seen nearly everything still gets an answer.
+  const rated = request.taste?.avoid ?? [];
+  let lastRepeat: RecommendationResponse | null = null;
+  let lastRejection: 'rated' | 'not_found' | null = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const rec = await requestRecommendation(
       buildPrompt({ ...request, alreadySuggested: seen }, notFound),
     );
 
-    if (isDuplicate(rec, request.alreadySuggested)) {
+    // Checked first: a rated album is also in the history sent as alreadySuggested.
+    if (isAmong(rec, rated)) {
+      logger.info(
+        { reason: 'rated', attempt, artist: rec.artist, album: rec.album },
+        'recommendation regenerated',
+      );
+      lastRejection = 'rated';
+      seen.push(albumKey(rec));
+      continue;
+    }
+
+    if (isAmong(rec, request.alreadySuggested)) {
       logger.info(
         { reason: 'duplicate', attempt, artist: rec.artist, album: rec.album },
         'recommendation regenerated',
       );
-      lastDuplicate = rec;
+      lastRepeat = rec;
       seen.push(albumKey(rec));
       continue;
     }
@@ -287,11 +349,19 @@ export async function getRecommendation(
       { reason: 'not_found', attempt, artist: rec.artist, album: rec.album },
       'recommendation regenerated',
     );
+    lastRejection = 'not_found';
     notFound.push(albumKey(rec));
   }
 
-  // A duplicate passed this check when it was first suggested, so it is still worth showing.
-  if (lastDuplicate) return lastDuplicate;
+  // A repeat passed this check when it was first suggested, so it is still worth showing.
+  if (lastRepeat) {
+    logger.info({ artist: lastRepeat.artist, album: lastRepeat.album }, 'repeat pick shown');
+    return lastRepeat;
+  }
+  if (lastRejection === 'rated') {
+    logger.warn({ rated: true }, 'no fresh recommendation');
+    throw new NoFreshPickError();
+  }
   logger.warn({ notFound }, 'no verified recommendation');
   throw new UnverifiedRecommendationError();
 }

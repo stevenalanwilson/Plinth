@@ -1,6 +1,10 @@
 export const SLIDER_MIN = 1;
 export const SLIDER_MAX = 10;
 export const MAX_PREFERENCE_ARRAY_LENGTH = 50;
+// Every album the listener has rated is checked in code, so this is generous; the samples that
+// steer the prompt are kept short.
+export const MAX_TASTE_AVOID = 500;
+export const MAX_TASTE_SAMPLE = 12;
 
 export const ERA_VALUES = ['pre-80s', '80s-90s', '00s-10s', 'recent', 'any'] as const;
 export type Era = (typeof ERA_VALUES)[number];
@@ -34,12 +38,26 @@ export interface ArtistRelationsResponse {
   readonly relations: readonly ArtistRelation[];
 }
 
+/**
+ * What the listener has said about albums, so a pick can lean towards their taste and never
+ * repeat what they have rated. Every album is written "Artist – Album".
+ */
+export interface TasteHint {
+  /** Every album they have given a verdict on: never picked again, even as a last resort. */
+  readonly avoid: readonly string[];
+  /** Albums they own, want or saved: a gentle lean. */
+  readonly liked: readonly string[];
+  /** Albums they said are not for them: steer away from similar ones. */
+  readonly disliked: readonly string[];
+}
+
 export interface RecommendationRequest {
   readonly preferences: RecommendationPreferences;
   readonly alreadySuggested: readonly string[];
   readonly pivot?: PivotHint;
   readonly seedArtist?: string;
   readonly vibeQuery?: string;
+  readonly taste?: TasteHint;
   /**
    * Set on the first pick of a visit that began on a shared album link, so the server can count
    * how many of those visitors go on to try a pick of their own. Carries nothing about them.
