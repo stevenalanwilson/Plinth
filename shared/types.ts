@@ -71,6 +71,50 @@ export interface AlbumResponse {
   readonly appleMusicUrl: string | null;
 }
 
+export interface AlbumTrack {
+  /** As printed on the release: "A1" on vinyl, "3" on a CD. */
+  readonly number: string;
+  readonly title: string;
+  readonly lengthSeconds: number | null;
+}
+
+export interface AlbumDisc {
+  readonly position: number;
+  /** A disc's own title, e.g. "Bonus disc"; null for most. */
+  readonly title: string | null;
+  /** e.g. '12" Vinyl', "CD". */
+  readonly format: string | null;
+  readonly tracks: readonly AlbumTrack[];
+}
+
+/** The earliest official release of an album, which is usually the original pressing. */
+export interface AlbumReleaseInfo {
+  /** "1980", "1980-11" or "1980-11-21", as precisely as MusicBrainz knows it. */
+  readonly date: string | null;
+  /** A MusicBrainz country code, including "XW" (worldwide) and "XE" (Europe). */
+  readonly country: string | null;
+  readonly label: string | null;
+  readonly catalogueNumber: string | null;
+}
+
+export interface RelatedAlbum {
+  readonly title: string;
+  readonly year: string | null;
+}
+
+/** From GET /api/v1/albums/:slug/details. */
+export interface AlbumDetailsResponse {
+  readonly release: AlbumReleaseInfo | null;
+  /** Every format the album has been released on, e.g. '12" Vinyl', "CD", "Digital Media". */
+  readonly formats: readonly string[];
+  readonly discs: readonly AlbumDisc[];
+  /** Null when the artist's other albums couldn't be looked up. */
+  readonly moreFromArtist: {
+    readonly artist: string;
+    readonly albums: readonly RelatedAlbum[];
+  } | null;
+}
+
 export interface ArtworkResponse {
   readonly artworkUrl: string | null;
   readonly year: string | null;

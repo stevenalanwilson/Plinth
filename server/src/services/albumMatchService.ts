@@ -193,7 +193,7 @@ export type ArtistAlbumsLookup =
   | { readonly status: 'not_found' }
   | { readonly status: 'lookup_failed' };
 
-async function browseAlbums(
+export async function browseArtistAlbums(
   artistId: string,
   budgetSignal: AbortSignal,
 ): Promise<ReleaseGroupCandidate[] | null> {
@@ -241,7 +241,7 @@ export async function findArtistAlbums(
       return { status: 'not_found' };
     }
 
-    const albums = await browseAlbums(found.id, budgetSignal);
+    const albums = await browseArtistAlbums(found.id, budgetSignal);
     if (!albums) {
       logger.warn({ artist, outcome: 'lookup_failed' }, 'artist albums');
       return { status: 'lookup_failed' };
