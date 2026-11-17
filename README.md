@@ -227,6 +227,6 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/), wit
 │       └── routes/
 │   └── migrations/  # Plain SQL, applied in filename order at startup
 ├── shared/          # Types shared between client and server
-├── docs/            # ROADMAP.md and architecture decision records
+├── docs/            # ROADMAP.md, architecture decision records, and tuning notes
 └── docker-compose.yml
 ```

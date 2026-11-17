@@ -2,6 +2,9 @@ import { HistoryEntry } from '../../types/history';
 import { FeedbackStatus } from '../../types/feedback';
 import { getDecadeBucket } from './statsUtils';
 
+// The numbers below are starting guesses. docs/taste-summary.md says what each one does, which way
+// to turn it, and which tests to update when you do.
+//
 // How much each album says about the listener's taste. Owning or wanting one says the most; a pick
 // that was never answered is a weak signal; one marked "Not for me" says nothing in its favour.
 // Keyed on the statuses, so adding one without a weight fails the type check.
