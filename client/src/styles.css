@@ -636,3 +636,150 @@ body::before {
 }
 
 .essentials-link:hover { color: var(--text); border-color: var(--border2); }
+
+/* ─── Empty result and example pick ───────────────────── */
+
+.empty-result {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 48px 28px;
+  text-align: center;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.empty-result-mark {
+  font-family: var(--serif);
+  font-size: 36px;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.empty-result p { font-size: 13px; line-height: 1.6; }
+
+.example-album {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+  animation: fadeUp 0.4s ease both;
+}
+
+.example-album-label {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.example-album-body {
+  display: flex;
+  gap: 20px;
+  padding: 16px;
+}
+
+.example-album-cover {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.example-album-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.example-album-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.example-album-title {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.2;
+  margin-bottom: 6px;
+}
+
+.example-album-artist {
+  font-size: 14px;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+}
+
+.example-album-year {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.example-album-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.example-album-link:hover { color: var(--accent); }
+
+.example-album-hook {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.example-album-prompt {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+@media (min-width: 431px) {
+  .example-album-body { padding: 22px; gap: 24px; }
+  .example-album-cover { width: 140px; height: 140px; }
+  .example-album-label,
+  .example-album-hook,
+  .example-album-prompt { padding-left: 22px; padding-right: 22px; }
+}
+
+@media (min-width: 769px) {
+  .example-album-cover { width: 160px; height: 160px; }
+}
+
+/* On a phone the page is one column, with every control before the result panel. Someone who
+   hasn't had a pick yet sees the example first instead; once they have, the order is as before. */
+@media (max-width: 768px) {
+  .app-layout[data-first-visit='true'] {
+    display: flex;
+    flex-direction: column;
+  }
+  .app-layout[data-first-visit='true'] > .app-header { order: -2; }
+  .app-layout[data-first-visit='true'] > .app-main { order: -1; }
+}

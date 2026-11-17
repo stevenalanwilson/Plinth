@@ -9,6 +9,7 @@ import {
 import { ServiceLinks } from '../../components/ServiceLinks';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
 import { ShareButton } from '../../components/ShareButton';
+import { EmptyResult } from '../example/EmptyResult';
 
 interface RecommendationCardProps {
   recommendation: RecommendationResponse | null;
@@ -97,37 +98,7 @@ export function RecommendationCard({
     );
   }
 
-  if (!recommendation) {
-    return (
-      <div
-        style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          padding: '48px 28px',
-          textAlign: 'center',
-          color: 'var(--muted)',
-          marginBottom: 16,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: 'var(--serif)',
-            fontSize: 36,
-            color: 'var(--accent)',
-            marginBottom: 12,
-          }}
-        >
-          ♪
-        </div>
-        <p style={{ fontSize: 13, lineHeight: 1.6 }}>
-          Your next favourite album is waiting.
-          <br />
-          Set your preferences and hit the button.
-        </p>
-      </div>
-    );
-  }
+  if (!recommendation) return <EmptyResult />;
 
   const year =
     recommendation.year.length > 0 ? recommendation.year : (artworkResponse?.year ?? '—');

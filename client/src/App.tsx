@@ -45,6 +45,8 @@ export default function App(): React.ReactElement {
     selectFromHistory,
     importHistory,
   } = useRecommendation();
+  // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives.
+  const [isFirstVisit] = useState(recommendation === null);
 
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
     const file = e.target.files?.[0];
@@ -60,7 +62,7 @@ export default function App(): React.ReactElement {
   }
 
   return (
-    <div className="app-layout">
+    <div className="app-layout" data-first-visit={isFirstVisit}>
       <header className="app-header">
         <h1
           style={{
