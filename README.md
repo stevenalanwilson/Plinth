@@ -26,6 +26,10 @@ Language models sometimes invent albums and mix up covers, so every pick is chec
 - **The cover has to be right.** Artwork comes only from a confident match, and Plinth shows a styled placeholder sleeve instead of a wrong image.
 - **No repeats.** Albums you've already been shown aren't suggested again.
 
+### Album pages and sharing
+
+Every pick MusicBrainz confirms gets its own page, such as `/album/the-sound-jeopardy`, with the cover, a one-line hook, the release details, the tracklist (numbered as on the record, so `A1` and `B3` on vinyl), the formats it has come out on and the artist's other albums. A **Share** button copies the link, or opens the share sheet on a phone, and the link shows a proper preview card in WhatsApp, Slack, Bluesky and the like.
+
 ### Artist Essentials
 
 Name an artist and get the albums to start with, each with a reason. Every album is checked against that artist's real catalogue.
@@ -96,6 +100,8 @@ Slow, rate-limited or paid lookups are cached in the `cache_entries` table (in m
 | iTunes searches                   | 1 day                                                                 |
 | Artist Essentials, by artist name | 30 days, only when every album was matched in MusicBrainz             |
 
+Album pages (`/album/:slug`) are served by the server with that album's title, description and cover in the page head, because link-preview crawlers don't run JavaScript. The cover is served through `/api/v1/image` on this site, and an album with no cover gets `og-default.png` (source: `docs/og-default.svg`). Set `PUBLIC_URL` in production, as previews need absolute URLs. This only applies to a production build; in development Vite serves the page, so there are no tags.
+
 Failures are never cached, a cache error just means a miss, and expired rows are removed hourly. Each lookup logs `cache hit` or `cache miss` with a `namespace`, so hits ÷ (hits + misses) is the hit rate.
 
 The API is versioned under `/api/v1`. Only add to it — released apps keep calling old versions for years. `/api/health` stays unversioned because the Railway and Docker health checks use it.
@@ -155,6 +161,7 @@ Then open [http://localhost:5173](http://localhost:5173).
 | `ANTHROPIC_API_KEY`   | ✅       | —                       | Anthropic API key — powers album recommendations                                       |
 | `PORT`                |          | `3001`                  | Server port                                                                            |
 | `CORS_ORIGIN`         |          | `http://localhost:5173` | Allowed client origin                                                                  |
+| `PUBLIC_URL`          | In prod  | the request's address   | Public address of the app, for shared-link preview cards                               |
 | `DATABASE_URL`        | In prod  | — (in memory)           | Postgres connection for stored albums; the server won't start without it in production |
 | `MUSICBRAINZ_CONTACT` |          | —                       | Email or URL sent in the MusicBrainz User-Agent, as their etiquette asks               |
 | `VITE_API_URL`        |          | `''` (same origin)      | Client → server base URL (local dev without Docker)                                    |
