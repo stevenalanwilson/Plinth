@@ -204,6 +204,23 @@ describe('getExampleAlbum', () => {
     expect(findRecent).toHaveBeenCalledWith(50);
   });
 
+  it('prefers albums whose hook was not cut short', async () => {
+    await storeWithCover({ ...PORNOGRAPHY, hook: 'The Cure at their most claustrophobic and…' });
+    await storeWithCover(JEOPARDY);
+    const chooseIndex = vi.fn(() => 0);
+
+    const example = await getExampleAlbum(albums, chooseIndex);
+
+    expect(chooseIndex).toHaveBeenCalledWith(1);
+    expect(example?.slug).toBe('the-sound-jeopardy');
+  });
+
+  it('still shows an album with a cut hook when it is the only one', async () => {
+    await storeWithCover({ ...PORNOGRAPHY, hook: 'The Cure at their most claustrophobic and…' });
+
+    expect((await getExampleAlbum(albums, () => 0))?.slug).toBe('the-cure-pornography');
+  });
+
   it('returns null when no album has both a cover and a hook', async () => {
     await saveAlbum(albums, JEOPARDY);
     await storeWithCover({ ...PORNOGRAPHY, hook: null });

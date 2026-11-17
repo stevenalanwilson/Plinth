@@ -432,6 +432,33 @@ describe('getRecommendation permalinks', () => {
     );
   });
 
+  it('asks for a short hook, so it rarely needs cutting', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: withHook('A hook.') }] });
+
+    await recommend(validRequest);
+
+    const params = mockCreate.mock.calls[0][0] as { messages: { content: string }[] };
+    expect(params.messages[0].content).toMatch(/"hook": "One short sentence, 20 words at most/);
+  });
+
+  it('ends a long hook at a full sentence rather than mid-word', async () => {
+    const first = 'Bristol at its most claustrophobic, all slow-motion dread and cavernous bass.';
+    mockCreate.mockResolvedValue({
+      content: [
+        {
+          type: 'text',
+          text: withHook(
+            `${first} It sounds like a city at four in the morning, lit by sodium lamps and the glow of the last night bus home.`,
+          ),
+        },
+      ],
+    });
+
+    const result = await recommend(validRequest);
+
+    expect(result.hook).toBe(first);
+  });
+
   it('caps a long hook at 160 characters', async () => {
     mockCreate.mockResolvedValue({
       content: [{ type: 'text', text: withHook(`${'word '.repeat(60)}end`) }],
