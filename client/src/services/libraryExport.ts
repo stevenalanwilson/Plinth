@@ -1,14 +1,17 @@
 import { HistoryEntry } from '../types/history';
+import { parseFeedback } from '../types/feedback';
+import { pruneLibrary } from './libraryRetention';
 
+// Version 2 added each album's feedback. Files without it (version 1) still import.
 export interface LibraryExportFile {
-  readonly version: 1;
+  readonly version: 2;
   readonly exportedAt: string;
   readonly history: HistoryEntry[];
 }
 
 export function buildLibraryExport(history: readonly HistoryEntry[]): LibraryExportFile {
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     history: [...history],
   };
@@ -27,6 +30,10 @@ export function downloadLibrary(history: readonly HistoryEntry[]): void {
   a.click();
 
   URL.revokeObjectURL(url);
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value !== '' ? value : undefined;
 }
 
 // Parses and validates a raw JSON string. Throws a descriptive Error on invalid input.
@@ -84,6 +91,12 @@ export function parseLibraryJson(json: string): HistoryEntry[] {
       ? (rec['genres'] as unknown[]).filter((g): g is string => typeof g === 'string')
       : undefined;
     const country = typeof rec['country'] === 'string' ? rec['country'] : undefined;
+    // The permalink, hook and MusicBrainz ID are what make a pick an album page and let its
+    // cover be found exactly, so they travel with the entry.
+    const slug = nonEmptyString(rec['slug']);
+    const hook = nonEmptyString(rec['hook']);
+    const releaseGroupId = nonEmptyString(rec['releaseGroupId']);
+    const feedback = parseFeedback(r['feedback']);
 
     entries.push({
       // Always generate a fresh UUID to avoid ID collisions with existing history
@@ -96,8 +109,12 @@ export function parseLibraryJson(json: string): HistoryEntry[] {
         reason: rec['reason'],
         ...(genres !== undefined && genres.length > 0 ? { genres } : {}),
         ...(country !== undefined ? { country } : {}),
+        ...(slug !== undefined ? { slug } : {}),
+        ...(hook !== undefined ? { hook } : {}),
+        ...(releaseGroupId !== undefined ? { releaseGroupId } : {}),
       },
       artworkResponse,
+      ...(feedback ? { feedback } : {}),
     });
   }
 
@@ -110,25 +127,47 @@ export async function parseLibraryFile(file: File): Promise<HistoryEntry[]> {
   return parseLibraryJson(text);
 }
 
-const HISTORY_MAX = 50;
+// The same album, whichever way it was recorded: by its MusicBrainz release group when the pick
+// was matched to one, and by name either way (older picks have no release group).
+function identityKeys(entry: HistoryEntry): string[] {
+  const { artist, album, releaseGroupId } = entry.recommendation;
+  const keys = [`name:${artist.toLowerCase()}|${album.toLowerCase()}`];
+  if (releaseGroupId) keys.push(`release-group:${releaseGroupId}`);
+  return keys;
+}
+
+/** Keeps the entry's own details, but takes the other's verdict when it was given more recently. */
+function withNewerFeedback(kept: HistoryEntry, other: HistoryEntry): HistoryEntry {
+  if (!other.feedback) return kept;
+  if (kept.feedback && Date.parse(other.feedback.at) <= Date.parse(kept.feedback.at)) return kept;
+  return { ...kept, feedback: other.feedback };
+}
 
 export function mergeHistory(
   existing: readonly HistoryEntry[],
   imported: readonly HistoryEntry[],
 ): HistoryEntry[] {
-  // Existing entries take precedence — their key is registered first
-  const seen = new Set<string>();
+  // Existing entries take precedence — they are registered first. Only the verdict is
+  // merged, and the later one wins, so a rating made on another device isn't lost.
   const result: HistoryEntry[] = [];
+  const positionByKey = new Map<string, number>();
 
   for (const entry of [...existing, ...imported]) {
-    const key = `${entry.recommendation.artist.toLowerCase()}|${entry.recommendation.album.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const keys = identityKeys(entry);
+    const seenAt = keys.map((key) => positionByKey.get(key)).find((index) => index !== undefined);
+
+    if (seenAt !== undefined) {
+      result[seenAt] = withNewerFeedback(result[seenAt], entry);
+      keys.forEach((key) => positionByKey.set(key, seenAt));
+      continue;
+    }
+
+    keys.forEach((key) => positionByKey.set(key, result.length));
     result.push(entry);
   }
 
   // Sort by createdAt descending (newest first)
   result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  return result.slice(0, HISTORY_MAX);
+  return pruneLibrary(result);
 }
