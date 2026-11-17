@@ -1066,6 +1066,8 @@ body::before {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   pointer-events: none;
+  /* Above the card's overlay, which on a phone is always open and would hide the verdict. */
+  z-index: 1;
 }
 
 .feedback-badge[data-status='save'],
@@ -1076,3 +1078,117 @@ body::before {
 }
 
 .feedback-badge[data-status='not-for-me'] { color: var(--danger); }
+
+/* ─── Crate ───────────────────────────────────────────── */
+
+.crate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.crate-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 22px;
+}
+
+.crate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.crate-action {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.crate-action:hover:not(:disabled) { color: var(--text); border-color: var(--border2); }
+.crate-action:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.crate-action:focus-visible,
+.crate-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.crate-action-danger:hover:not(:disabled),
+.crate-action-danger[data-asking='true'] {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.crate-import-error {
+  margin-bottom: 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.crate-import-error button {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font: inherit;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.crate-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.crate-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 22px;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.crate-filter:hover { border-color: var(--accent); }
+
+.crate-filter[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0e0e0f;
+}
+
+.crate-filter-count {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.crate-empty {
+  padding: 40px 8px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}

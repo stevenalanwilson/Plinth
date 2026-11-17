@@ -1,34 +1,19 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { PivotHint } from '@shared/types';
-import { downloadLibrary, parseLibraryFile } from './services/libraryExport';
 import { useRecommendation } from './hooks/useRecommendation';
 import { PreferencesPanel, sectionLabelStyle } from './features/preferences/PreferencesPanel';
 import { RecommendationCard } from './features/recommendation/RecommendationCard';
 import { HistoryGrid } from './features/history/HistoryGrid';
+import { CratePage } from './features/crate/CratePage';
 import { InsightsPage } from './features/stats/InsightsPage';
 import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPanel';
 import { VibePresets } from './features/presets/VibePresets';
 import { useMoreLikeThisFromNavigation } from './features/recommendation/useMoreLikeThisFromNavigation';
 
-type Page = 'home' | 'insights' | 'essentials';
+type Page = 'home' | 'crate' | 'insights' | 'essentials';
 
 export default function App(): React.ReactElement {
   const [page, setPage] = useState<Page>('home');
-  const [importError, setImportError] = useState<string | null>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isMenuOpen) return;
-    function handleClickOutside(e: MouseEvent): void {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isMenuOpen]);
   const {
     preferences,
     updatePreferences,
@@ -56,19 +41,6 @@ export default function App(): React.ReactElement {
   // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives, and
   // the presets stay to hand for trying another.
   const [isFirstVisit] = useState(recommendation === null);
-
-  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImportError(null);
-    // Reset input so the same file can be re-selected if needed
-    e.target.value = '';
-    void parseLibraryFile(file)
-      .then((entries) => importHistory(entries))
-      .catch((err: unknown) => {
-        setImportError(err instanceof Error ? err.message : 'Failed to import file.');
-      });
-  }
 
   return (
     <div className="app-layout" data-first-visit={isFirstVisit}>
@@ -116,114 +88,38 @@ export default function App(): React.ReactElement {
             <button
               type="button"
               className="nav-tab"
+              data-active={page === 'crate' || page === 'insights'}
+              onClick={() => setPage('crate')}
+            >
+              Crate
+            </button>
+            <button
+              type="button"
+              className="nav-tab"
               data-active={page === 'essentials'}
               onClick={() => setPage('essentials')}
             >
               Artist Essentials
             </button>
           </nav>
-          <div ref={menuRef} style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className="nav-tab"
-              aria-haspopup="true"
-              aria-expanded={isMenuOpen}
-              aria-label="Open menu"
-              onClick={() => setIsMenuOpen((o) => !o)}
-            >
-              ···
-            </button>
-            {isMenuOpen && (
-              <div className="dropdown-menu" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="dropdown-item"
-                  onClick={() => {
-                    setPage('insights');
-                    setIsMenuOpen(false);
-                  }}
-                >
-                  {`Insights${history.length > 0 ? ` (${history.length})` : ''}`}
-                </button>
-                <hr className="dropdown-divider" />
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="dropdown-item"
-                  onClick={() => {
-                    fileInputRef.current?.click();
-                    setIsMenuOpen(false);
-                  }}
-                >
-                  Import
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="dropdown-item"
-                  disabled={history.length === 0}
-                  onClick={() => {
-                    downloadLibrary(history);
-                    setIsMenuOpen(false);
-                  }}
-                >
-                  Export
-                </button>
-                <hr className="dropdown-divider" />
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="dropdown-item dropdown-item-danger"
-                  disabled={history.length === 0}
-                  onClick={() => {
-                    clearHistory();
-                    setIsMenuOpen(false);
-                  }}
-                >
-                  Clear Library
-                </button>
-              </div>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              style={{ display: 'none' }}
-              onChange={handleImportFile}
-            />
-          </div>
         </div>
-        {importError !== null && (
-          <p
-            style={{
-              marginTop: 8,
-              fontSize: 11,
-              color: 'var(--danger)',
-              fontFamily: 'var(--mono)',
-            }}
-          >
-            {importError}{' '}
-            <button
-              type="button"
-              onClick={() => setImportError(null)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--danger)',
-                cursor: 'pointer',
-                fontSize: 11,
-                fontFamily: 'var(--mono)',
-                padding: 0,
-              }}
-            >
-              ✕
-            </button>
-          </p>
-        )}
       </header>
 
-      {page === 'insights' ? (
+      {page === 'crate' ? (
+        <div className="app-full">
+          <CratePage
+            history={history}
+            onSelect={(id) => {
+              selectFromHistory(id);
+              setPage('home');
+            }}
+            onRemove={removeFromHistory}
+            onClear={clearHistory}
+            onImport={importHistory}
+            onOpenInsights={() => setPage('insights')}
+          />
+        </div>
+      ) : page === 'insights' ? (
         <div className="app-full">
           <InsightsPage history={history} />
         </div>
