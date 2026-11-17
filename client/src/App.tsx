@@ -116,6 +116,7 @@ export default function App(): React.ReactElement {
             onRemove={removeFromHistory}
             onClear={clearHistory}
             onImport={importHistory}
+            onFeedback={setFeedback}
             onOpenInsights={() => setPage('insights')}
           />
         </div>

@@ -1,8 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { HistoryEntry } from '../../types/history';
+import { FeedbackStatus } from '../../types/feedback';
 import { downloadLibrary, parseLibraryFile } from '../../services/libraryExport';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { HistoryItem } from '../history/HistoryItem';
+import { WantList } from './WantList';
 import {
   countCrate,
   CRATE_FILTER_LABELS,
@@ -18,6 +20,8 @@ interface CratePageProps {
   readonly onRemove: (id: string) => void;
   readonly onClear: () => void;
   readonly onImport: (entries: HistoryEntry[]) => void;
+  /** Sets or clears the answer on an album. */
+  readonly onFeedback: (id: string, status: FeedbackStatus | null) => void;
   readonly onOpenInsights: () => void;
 }
 
@@ -25,7 +29,7 @@ const EMPTY_MESSAGES: Record<CrateFilter, string> = {
   all: 'Only albums marked Not for me so far.',
   save: 'Nothing saved yet.',
   own: 'No albums marked as owned yet.',
-  'want-vinyl': 'Nothing on your want list yet.',
+  'want-vinyl': 'Nothing on your want list yet. Tap Want on vinyl on a pick to add it.',
   heard: 'No albums marked as heard yet.',
   'not-for-me': 'Nothing marked Not for me.',
 };
@@ -37,6 +41,7 @@ export function CratePage({
   onRemove,
   onClear,
   onImport,
+  onFeedback,
   onOpenInsights,
 }: CratePageProps): React.ReactElement {
   const [filter, setFilter] = useState<CrateFilter>('all');
@@ -137,6 +142,8 @@ export function CratePage({
 
           {shown.length === 0 ? (
             <p className="crate-empty">{EMPTY_MESSAGES[filter]}</p>
+          ) : filter === 'want-vinyl' ? (
+            <WantList entries={shown} onSelect={onSelect} onGotIt={(id) => onFeedback(id, 'own')} />
           ) : (
             <div className="history-grid">
               {shown.map((entry) => (
