@@ -350,3 +350,77 @@ describe('useRecommendation library feedback and retention', () => {
     expect(result.current.currentEntry).toBeNull();
   });
 });
+
+describe('useRecommendation taste', () => {
+  const STORAGE_KEY = 'album-recommender-history';
+
+  function seed(entries: readonly unknown[]): void {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  }
+
+  function answered(index: number, status: string): Record<string, unknown> {
+    return {
+      ...storedEntry(index),
+      feedback: { status, at: new Date(Date.now() - index * 1000).toISOString() },
+    };
+  }
+
+  it('sends the albums the listener has answered, and what they like and dislike', async () => {
+    seed([answered(1, 'own'), answered(2, 'not-for-me'), answered(3, 'heard'), storedEntry(4)]);
+    mockFetchArtwork.mockResolvedValue(artwork);
+    const { result } = renderHook(() => useRecommendation());
+
+    await act(() => result.current.fetchRecommendation());
+
+    expect(mockFetchRecommendation.mock.calls[0][0].taste).toEqual({
+      avoid: ['Artist 1 – Album 1', 'Artist 2 – Album 2', 'Artist 3 – Album 3'],
+      liked: ['Artist 1 – Album 1'],
+      disliked: ['Artist 2 – Album 2'],
+    });
+  });
+
+  it('still sends every album it has been shown, answered or not', async () => {
+    seed([answered(1, 'own'), storedEntry(2)]);
+    mockFetchArtwork.mockResolvedValue(artwork);
+    const { result } = renderHook(() => useRecommendation());
+
+    await act(() => result.current.fetchRecommendation());
+
+    expect(mockFetchRecommendation.mock.calls[0][0].alreadySuggested).toEqual([
+      'Artist 1 – Album 1',
+      'Artist 2 – Album 2',
+    ]);
+  });
+
+  it('sends no taste before any album has been answered', async () => {
+    seed([storedEntry(1), storedEntry(2)]);
+    mockFetchArtwork.mockResolvedValue(artwork);
+    const { result } = renderHook(() => useRecommendation());
+
+    await act(() => result.current.fetchRecommendation());
+
+    expect(mockFetchRecommendation.mock.calls[0][0]).not.toHaveProperty('taste', expect.anything());
+  });
+
+  it('uses an answer given just before asking', async () => {
+    seed([storedEntry(1)]);
+    mockFetchArtwork.mockResolvedValue(artwork);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-1', 'want-vinyl'));
+    await act(() => result.current.fetchRecommendation());
+
+    expect(mockFetchRecommendation.mock.calls[0][0].taste?.liked).toEqual(['Artist 1 – Album 1']);
+  });
+
+  it('leaves out an answer that was taken back', async () => {
+    seed([answered(1, 'own')]);
+    mockFetchArtwork.mockResolvedValue(artwork);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-1', null));
+    await act(() => result.current.fetchRecommendation());
+
+    expect(mockFetchRecommendation.mock.calls[0][0].taste).toBeUndefined();
+  });
+});

@@ -3,7 +3,7 @@ import { HistoryEntry } from '../../types/history';
 import { getProxiedArtworkUrl } from '../../services/apiClient';
 import { ListeningLinks } from '../../components/ListeningLinks';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
-import { newestAnswerFirst } from './wantOrder';
+import { newestAnswerFirst } from '../../services/answerOrder';
 
 interface WantListProps {
   readonly entries: readonly HistoryEntry[];

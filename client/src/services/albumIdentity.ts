@@ -12,6 +12,11 @@ export function albumKeys({ artist, album, releaseGroupId }: NamedAlbum): string
   return keys;
 }
 
+/** The album as the server reads it in a request: "Artist – Album". */
+export function albumLabel({ artist, album }: Pick<NamedAlbum, 'artist' | 'album'>): string {
+  return `${artist} – ${album}`;
+}
+
 /** True when both are the same album, whichever way each was recorded. */
 export function isSameAlbum(first: NamedAlbum, second: NamedAlbum): boolean {
   const keys = new Set(albumKeys(first));

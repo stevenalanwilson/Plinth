@@ -15,7 +15,8 @@ import {
 import { mergeHistory } from '../services/libraryExport';
 import { takeSharedLinkEntry } from '../services/visitEntry';
 import { pruneLibrary } from '../services/libraryRetention';
-import { isSameAlbum } from '../services/albumIdentity';
+import { albumLabel, isSameAlbum } from '../services/albumIdentity';
+import { buildTaste } from '../services/taste';
 import { FeedbackStatus, parseFeedback } from '../types/feedback';
 
 const HISTORY_STORAGE_KEY = 'album-recommender-history';
@@ -313,9 +314,7 @@ export function useRecommendation(): UseRecommendationReturn {
       setIsLoading(true);
       setError(null);
 
-      const alreadySuggested = historyRef.current.map(
-        (e) => `${e.recommendation.artist} – ${e.recommendation.album}`,
-      );
+      const alreadySuggested = historyRef.current.map((e) => albumLabel(e.recommendation));
 
       try {
         const rec = await apiFetchRecommendation(
@@ -326,6 +325,7 @@ export function useRecommendation(): UseRecommendationReturn {
             seedArtist,
             vibeQuery: vibeQuery.trim() || undefined,
             entry: takeSharedLinkEntry(),
+            taste: buildTaste(historyRef.current),
           },
           controller.signal,
         );

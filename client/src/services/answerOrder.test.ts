@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { HistoryEntry } from '../../types/history';
-import { newestAnswerFirst } from './wantOrder';
+import { HistoryEntry } from '../types/history';
+import { newestAnswerFirst } from './answerOrder';
 
 function entry(album: string, at: string | null): HistoryEntry {
   return {
