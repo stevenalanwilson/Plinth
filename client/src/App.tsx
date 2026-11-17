@@ -7,6 +7,7 @@ import { RecommendationCard } from './features/recommendation/RecommendationCard
 import { HistoryGrid } from './features/history/HistoryGrid';
 import { InsightsPage } from './features/stats/InsightsPage';
 import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPanel';
+import { VibePresets } from './features/presets/VibePresets';
 
 type Page = 'home' | 'insights' | 'essentials';
 
@@ -45,7 +46,8 @@ export default function App(): React.ReactElement {
     selectFromHistory,
     importHistory,
   } = useRecommendation();
-  // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives.
+  // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives, and
+  // the presets stay to hand for trying another.
   const [isFirstVisit] = useState(recommendation === null);
 
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
@@ -230,6 +232,16 @@ export default function App(): React.ReactElement {
       ) : (
         <>
           <div className="app-sidebar">
+            {isFirstVisit && (
+              <VibePresets
+                preferences={preferences}
+                vibeQuery={vibeQuery}
+                onSelect={(preset) => {
+                  updatePreferences(preset.preferences);
+                  updateVibeQuery(preset.vibeQuery);
+                }}
+              />
+            )}
             <div style={{ marginBottom: 20 }}>
               <label style={sectionLabelStyle}>Describe your vibe</label>
               <textarea
