@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import {
   getRecommendation,
+  NoFreshPickError,
   UnverifiedRecommendationError,
 } from '../services/recommendationService';
 import {
@@ -11,6 +12,9 @@ import {
   SLIDER_MAX,
   ERA_VALUES,
   MAX_PREFERENCE_ARRAY_LENGTH,
+  MAX_TASTE_AVOID,
+  MAX_TASTE_SAMPLE,
+  TasteHint,
   VISIT_ENTRIES,
   VisitEntry,
 } from '@shared/types';
@@ -33,11 +37,26 @@ function isName(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '' && value.length <= MAX_NAME_LENGTH;
 }
 
-function isValidAlreadySuggested(value: unknown): value is string[] {
+function isAlbumList(value: unknown, maxLength: number): value is string[] {
   return (
     Array.isArray(value) &&
-    value.length <= MAX_ALREADY_SUGGESTED &&
+    value.length <= maxLength &&
     value.every((item) => typeof item === 'string' && item.length <= MAX_SUGGESTION_LENGTH)
+  );
+}
+
+function isValidAlreadySuggested(value: unknown): value is string[] {
+  return isAlbumList(value, MAX_ALREADY_SUGGESTED);
+}
+
+function isValidTaste(value: unknown): value is TasteHint | undefined {
+  if (value === undefined) return true;
+  if (typeof value !== 'object' || value === null) return false;
+  const taste = value as Record<string, unknown>;
+  return (
+    isAlbumList(taste.avoid, MAX_TASTE_AVOID) &&
+    isAlbumList(taste.liked, MAX_TASTE_SAMPLE) &&
+    isAlbumList(taste.disliked, MAX_TASTE_SAMPLE)
   );
 }
 
@@ -87,6 +106,16 @@ function isValidPreferences(value: unknown): value is RecommendationPreferences 
   );
 }
 
+function failureMessage(error: unknown): string {
+  if (error instanceof NoFreshPickError) {
+    return "We kept landing on albums you've already marked. Please try again.";
+  }
+  if (error instanceof UnverifiedRecommendationError) {
+    return "Couldn't find a pick we could verify. Please try again.";
+  }
+  return 'Failed to get recommendation. Please try again.';
+}
+
 export function createRecommendHandler(
   albums: AlbumRepository,
 ): (req: Request, res: Response) => Promise<void> {
@@ -125,6 +154,14 @@ async function handleRecommend(
     return;
   }
 
+  const { taste } = body;
+  if (!isValidTaste(taste)) {
+    res.status(400).json({
+      error: `taste must have avoid (at most ${MAX_TASTE_AVOID}), liked and disliked (at most ${MAX_TASTE_SAMPLE} each) lists of "Artist – Album" strings of ${MAX_SUGGESTION_LENGTH} characters or fewer`,
+    });
+    return;
+  }
+
   const { vibeQuery } = body;
   if (
     vibeQuery !== undefined &&
@@ -142,6 +179,13 @@ async function handleRecommend(
   // Counted when asked for, not when it succeeds: the question is whether people who arrive on
   // a shared link go on to try a pick, and a failed one still counts as trying.
   if (entry) logger.info({ entry }, 'pick requested after arriving');
+  // Counts only: how many albums a listener has rated shows whether the crate is being used.
+  if (taste) {
+    logger.info(
+      { avoid: taste.avoid.length, liked: taste.liked.length, disliked: taste.disliked.length },
+      'pick requested with taste',
+    );
+  }
 
   try {
     const recommendation = await getRecommendation(
@@ -151,6 +195,7 @@ async function handleRecommend(
         pivot: body.pivot,
         seedArtist,
         vibeQuery,
+        taste,
       },
       albums,
     );
@@ -159,10 +204,7 @@ async function handleRecommend(
     const message = error instanceof Error ? error.message : 'Internal server error';
     logger.error({ error: message }, 'recommendation request failed');
     res.status(502).json({
-      error:
-        error instanceof UnverifiedRecommendationError
-          ? "Couldn't find a pick we could verify. Please try again."
-          : 'Failed to get recommendation. Please try again.',
+      error: failureMessage(error),
     });
   }
 }

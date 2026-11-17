@@ -16,6 +16,7 @@ import { logger } from '../logger';
 import { createInMemoryAlbumRepository } from '../repositories/inMemoryAlbumRepository';
 import {
   getRecommendation,
+  NoFreshPickError,
   UnverifiedRecommendationError,
 } from '../services/recommendationService';
 
@@ -285,6 +286,18 @@ describe('handleRecommend', () => {
       });
     });
 
+    it('says so when every pick was an album the listener already marked', async () => {
+      mockGetRecommendation.mockRejectedValue(new NoFreshPickError());
+      const { res, status, json } = makeRes();
+
+      await handleRecommend(makeReq(validBody), res);
+
+      expect(status).toHaveBeenCalledWith(502);
+      expect(json).toHaveBeenCalledWith({
+        error: "We kept landing on albums you've already marked. Please try again.",
+      });
+    });
+
     it('returns a generic message when the error is not an Error instance', async () => {
       mockGetRecommendation.mockRejectedValue('string error');
       const { res, status, json } = makeRes();
@@ -358,6 +371,84 @@ describe('recommend handler: where the visit began', () => {
     const { res, status } = makeRes();
 
     await handleRecommend(makeReq({ ...body, entry }), res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(mockGetRecommendation).not.toHaveBeenCalled();
+  });
+});
+
+describe('recommend handler: taste', () => {
+  const albumsList = (count: number): string[] =>
+    Array.from({ length: count }, (_, i) => `Artist ${i} – Album ${i}`);
+  const taste = {
+    avoid: ['Wire – Pink Flag'],
+    liked: ['The Sound – Jeopardy'],
+    disliked: ['Can – Tago Mago'],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRecommendation.mockResolvedValue(mockRecommendation);
+  });
+
+  it('passes the listener’s taste on to the recommendation', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq({ ...validBody, taste }), res);
+
+    expect(mockGetRecommendation.mock.calls[0][0]).toMatchObject({ taste });
+  });
+
+  it('logs how many albums the listener has rated, and nothing else about them', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq({ ...validBody, taste }), res);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      { avoid: 1, liked: 1, disliked: 1 },
+      'pick requested with taste',
+    );
+  });
+
+  it('logs nothing about taste for a pick without any', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq(validBody), res);
+
+    expect(logger.info).not.toHaveBeenCalledWith(expect.anything(), 'pick requested with taste');
+  });
+
+  it('accepts the largest lists it allows', async () => {
+    const { res, status } = makeRes();
+
+    await handleRecommend(
+      makeReq({
+        ...validBody,
+        taste: { avoid: albumsList(500), liked: albumsList(12), disliked: albumsList(12) },
+      }),
+      res,
+    );
+
+    expect(status).not.toHaveBeenCalled();
+    expect(mockGetRecommendation).toHaveBeenCalled();
+  });
+
+  it.each([
+    ['avoid has too many albums', { ...taste, avoid: albumsList(501) }],
+    ['liked has too many albums', { ...taste, liked: albumsList(13) }],
+    ['disliked has too many albums', { ...taste, disliked: albumsList(13) }],
+    ['an album name is too long', { ...taste, liked: ['x'.repeat(1100)] }],
+    ['an entry is not a string', { ...taste, avoid: ['Wire – Pink Flag', 42] }],
+    ['avoid is missing', { liked: [], disliked: [] }],
+    ['liked is not a list', { ...taste, liked: 'The Sound – Jeopardy' }],
+    ['disliked is missing', { avoid: [], liked: [] }],
+    ['taste is a string', 'The Sound – Jeopardy'],
+    ['taste is null', null],
+    ['taste is a list', []],
+  ])('rejects a taste where %s', async (_problem, badTaste) => {
+    const { res, status } = makeRes();
+
+    await handleRecommend(makeReq({ ...validBody, taste: badTaste }), res);
 
     expect(status).toHaveBeenCalledWith(400);
     expect(mockGetRecommendation).not.toHaveBeenCalled();

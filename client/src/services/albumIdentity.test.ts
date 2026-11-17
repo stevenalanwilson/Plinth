@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { albumKeys, isSameAlbum } from './albumIdentity';
+import { albumKeys, albumLabel, isSameAlbum } from './albumIdentity';
 
 const JEOPARDY = { artist: 'The Sound', album: 'Jeopardy' };
 
@@ -47,5 +47,11 @@ describe('isSameAlbum', () => {
         { artist: 'Weezer', album: 'Weezer', releaseGroupId: 'rg-green' },
       ),
     ).toBe(true);
+  });
+});
+
+describe('albumLabel', () => {
+  it('writes the artist and album the way the server reads them', () => {
+    expect(albumLabel({ artist: 'The Sound', album: 'Jeopardy' })).toBe('The Sound – Jeopardy');
   });
 });
