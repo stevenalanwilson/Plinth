@@ -24,19 +24,24 @@ const mockGetRecommendation = vi.mocked(getRecommendation);
 const albums = createInMemoryAlbumRepository();
 const handleRecommend = createRecommendHandler(albums);
 
-function makeRes(): {
+function makeRes(locals: Record<string, unknown> = {}): {
   res: Response;
   json: ReturnType<typeof vi.fn>;
   status: ReturnType<typeof vi.fn>;
+  set: ReturnType<typeof vi.fn>;
 } {
   const json = vi.fn();
   const status = vi.fn().mockReturnValue({ json });
-  const res = { json, status } as unknown as Response;
-  return { res, json, status };
+  const set = vi.fn();
+  const res = { json, status, set, locals } as unknown as Response;
+  return { res, json, status, set };
 }
 
-function makeReq(body: unknown): Request {
-  return { body } as Request;
+function makeReq(body: unknown, headers: Record<string, string> = {}): Request {
+  const lowercased = Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]),
+  );
+  return { body, get: (name: string) => lowercased[name.toLowerCase()] } as unknown as Request;
 }
 
 const validPreferences: RecommendationPreferences = {
@@ -544,5 +549,142 @@ describe('recommend handler: how far into a visit', () => {
 
     expect(status).toHaveBeenCalledWith(400);
     expect(mockGetRecommendation).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleRecommend retries', () => {
+  const body = { preferences: validPreferences, alreadySuggested: [] };
+  const key = '3f2b8c1e-9d4a-4e6b-8a57-1c0d2e3f4a5b';
+  const withKey = { 'Idempotency-Key': key };
+
+  // A fresh handler for each test, so one test's remembered picks never answer another's.
+  let handle: (req: Request, res: Response) => Promise<void>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRecommendation.mockResolvedValue(mockRecommendation);
+    handle = createRecommendHandler(albums);
+  });
+
+  function pickRequestedLines(): unknown[] {
+    return vi.mocked(logger.info).mock.calls.filter(([, message]) => message === 'pick requested');
+  }
+
+  it('answers a retry with the first pick, and does not ask Claude again', async () => {
+    const first = makeRes();
+    const retry = makeRes();
+
+    await handle(makeReq(body, withKey), first.res);
+    await handle(makeReq(body, withKey), retry.res);
+
+    expect(mockGetRecommendation).toHaveBeenCalledTimes(1);
+    expect(retry.json).toHaveBeenCalledWith(mockRecommendation);
+  });
+
+  it('marks an answer that was replayed, and not the first one', async () => {
+    const first = makeRes();
+    const retry = makeRes();
+
+    await handle(makeReq(body, withKey), first.res);
+    await handle(makeReq(body, withKey), retry.res);
+
+    expect(first.set).not.toHaveBeenCalled();
+    expect(retry.set).toHaveBeenCalledWith('Idempotent-Replayed', 'true');
+  });
+
+  it('counts a pick once, however many times it is sent', async () => {
+    await handle(makeReq({ ...body, pickNumber: 2 }, withKey), makeRes().res);
+    await handle(makeReq({ ...body, pickNumber: 2 }, withKey), makeRes().res);
+
+    expect(pickRequestedLines()).toHaveLength(1);
+    expect(logger.info).toHaveBeenCalledWith('pick replayed for a retry');
+  });
+
+  it('gives a retry that arrives while the first is still running the same pick', async () => {
+    let finish: (value: typeof mockRecommendation) => void = () => {};
+    mockGetRecommendation.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const first = makeRes();
+    const retry = makeRes();
+
+    const firstDone = handle(makeReq(body, withKey), first.res);
+    const retryDone = handle(makeReq(body, withKey), retry.res);
+    finish(mockRecommendation);
+    await Promise.all([firstDone, retryDone]);
+
+    expect(mockGetRecommendation).toHaveBeenCalledTimes(1);
+    expect(first.json).toHaveBeenCalledWith(mockRecommendation);
+    expect(retry.json).toHaveBeenCalledWith(mockRecommendation);
+  });
+
+  it('treats a different key as a new pick', async () => {
+    await handle(makeReq(body, withKey), makeRes().res);
+    await handle(
+      makeReq(body, { 'Idempotency-Key': '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d' }),
+      makeRes().res,
+    );
+
+    expect(mockGetRecommendation).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks every time when no key is sent, as older clients do', async () => {
+    await handle(makeReq(body), makeRes().res);
+    await handle(makeReq(body), makeRes().res);
+
+    expect(mockGetRecommendation).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not keep a failure, so the retry gets a real second try', async () => {
+    mockGetRecommendation
+      .mockRejectedValueOnce(new Error('Claude is down'))
+      .mockResolvedValueOnce(mockRecommendation);
+    const failed = makeRes();
+    const retry = makeRes();
+
+    await handle(makeReq(body, withKey), failed.res);
+    await handle(makeReq(body, withKey), retry.res);
+
+    expect(failed.status).toHaveBeenCalledWith(502);
+    expect(retry.json).toHaveBeenCalledWith(mockRecommendation);
+    expect(mockGetRecommendation).toHaveBeenCalledTimes(2);
+  });
+
+  it("never answers one device with another device's pick", async () => {
+    await handle(makeReq(body, withKey), makeRes({ device: { id: 'device-a' } }).res);
+    await handle(makeReq(body, withKey), makeRes({ device: { id: 'device-b' } }).res);
+
+    expect(mockGetRecommendation).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers the same device from its own earlier pick', async () => {
+    await handle(makeReq(body, withKey), makeRes({ device: { id: 'device-a' } }).res);
+    await handle(makeReq(body, withKey), makeRes({ device: { id: 'device-a' } }).res);
+
+    expect(mockGetRecommendation).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['is not a UUID', 'not-a-uuid'],
+    ['is empty', ''],
+    ['is a UUID with something added', `${key}-extra`],
+    ['is two keys', `${key}, ${key}`],
+  ])('rejects a key that %s', async (_problem, badKey) => {
+    const { res, status } = makeRes();
+
+    await handle(makeReq(body, { 'Idempotency-Key': badKey }), res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(mockGetRecommendation).not.toHaveBeenCalled();
+  });
+
+  it('accepts a key in capitals', async () => {
+    const { res, status } = makeRes();
+
+    await handle(makeReq(body, { 'Idempotency-Key': key.toUpperCase() }), res);
+
+    expect(status).not.toHaveBeenCalled();
   });
 });

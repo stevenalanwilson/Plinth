@@ -14,15 +14,21 @@ import {
   MAX_PREFERENCE_ARRAY_LENGTH,
   MAX_TASTE_AVOID,
   MAX_TASTE_SAMPLE,
+  IDEMPOTENCY_KEY_HEADER,
   MAX_VISIT_COUNT,
+  RecommendationResponse,
   TasteHint,
   VISIT_ENTRIES,
   VisitEntry,
 } from '@shared/types';
 import { logger } from '../logger';
 import { AlbumRepository } from '../repositories/albumRepository';
+import { createIdempotencyCache, IdempotencyCache } from '../services/idempotencyCache';
+import { deviceOf } from '../middleware/deviceAuth';
 
 const VALID_ERAS = new Set<string>(ERA_VALUES);
+// A random UUID made by the client for each pick; anything else is a bug worth saying so about.
+const IDEMPOTENCY_KEY_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ALREADY_SUGGESTED = 150;
 // Generous because real album titles can run to hundreds of characters; the point is to
 // stop a single request stuffing a paid-for prompt with arbitrary text.
@@ -126,14 +132,16 @@ function failureMessage(error: unknown): string {
 
 export function createRecommendHandler(
   albums: AlbumRepository,
+  picks: IdempotencyCache<RecommendationResponse> = createIdempotencyCache(),
 ): (req: Request, res: Response) => Promise<void> {
-  return (req, res) => handleRecommend(req, res, albums);
+  return (req, res) => handleRecommend(req, res, albums, picks);
 }
 
 async function handleRecommend(
   req: Request,
   res: Response,
   albums: AlbumRepository,
+  picks: IdempotencyCache<RecommendationResponse>,
 ): Promise<void> {
   const body = req.body as Partial<RecommendationRequest>;
 
@@ -192,28 +200,39 @@ async function handleRecommend(
     res.status(400).json({ error: `entry must be one of: ${VISIT_ENTRIES.join(', ')}` });
     return;
   }
-  // Counted when asked for, not when it succeeds: the question is whether people who arrive on
-  // a shared link go on to try a pick, and a failed one still counts as trying.
-  if (entry) logger.info({ entry }, 'pick requested after arriving');
-  // One line for every pick asked for, so the log can say what share of picks were repeats, and
-  // how many picks into a visit the listener had answered something. Counts only, never who.
-  logger.info(
-    { pickNumber: pickNumber ?? null, ratedThisVisit: ratedThisVisit ?? null },
-    'pick requested',
-  );
-  // Counts only: how many albums a listener has rated shows whether the crate is being used.
-  if (taste) {
-    logger.info(
-      { avoid: taste.avoid.length, liked: taste.liked.length, disliked: taste.disliked.length },
-      'pick requested with taste',
-    );
+  // Read here, where the checks above have narrowed them, rather than inside the closure below.
+  const preferences = body.preferences;
+  const alreadySuggested = body.alreadySuggested;
+  const idempotencyKey = req.get(IDEMPOTENCY_KEY_HEADER);
+  if (idempotencyKey !== undefined && !IDEMPOTENCY_KEY_FORMAT.test(idempotencyKey)) {
+    res.status(400).json({ error: `${IDEMPOTENCY_KEY_HEADER} must be a UUID` });
+    return;
   }
 
-  try {
-    const recommendation = await getRecommendation(
+  // Everything that counts or costs something is in here, so a retry that is answered from an
+  // earlier request is neither counted as another pick nor paid for twice.
+  const askForPick = async (): Promise<RecommendationResponse> => {
+    // Counted when asked for, not when it succeeds: the question is whether people who arrive on
+    // a shared link go on to try a pick, and a failed one still counts as trying.
+    if (entry) logger.info({ entry }, 'pick requested after arriving');
+    // One line for every pick asked for, so the log can say what share of picks were repeats, and
+    // how many picks into a visit the listener had answered something. Counts only, never who.
+    logger.info(
+      { pickNumber: pickNumber ?? null, ratedThisVisit: ratedThisVisit ?? null },
+      'pick requested',
+    );
+    // Counts only: how many albums a listener has rated shows whether the crate is being used.
+    if (taste) {
+      logger.info(
+        { avoid: taste.avoid.length, liked: taste.liked.length, disliked: taste.disliked.length },
+        'pick requested with taste',
+      );
+    }
+
+    return getRecommendation(
       {
-        preferences: body.preferences,
-        alreadySuggested: body.alreadySuggested,
+        preferences,
+        alreadySuggested,
         pivot: body.pivot,
         seedArtist,
         vibeQuery,
@@ -221,7 +240,19 @@ async function handleRecommend(
       },
       albums,
     );
-    res.json(recommendation);
+  };
+
+  try {
+    // Scoped to the device, so one device's key can never answer for another's.
+    const outcome = idempotencyKey
+      ? await picks.run(`${deviceOf(res)?.id ?? 'anonymous'}:${idempotencyKey}`, askForPick)
+      : { value: await askForPick(), replayed: false };
+    if (outcome.replayed) {
+      // The saving made visible: each of these is a Claude call that wasn't paid for twice.
+      logger.info('pick replayed for a retry');
+      res.set('Idempotent-Replayed', 'true');
+    }
+    res.json(outcome.value);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     logger.error({ error: message }, 'recommendation request failed');
