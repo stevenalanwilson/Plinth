@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AlbumDetailsResponse, AlbumResponse } from '@shared/types';
@@ -195,11 +195,12 @@ describe('AlbumPage', () => {
 
     renderPage();
     await screen.findByRole('heading', { name: 'Jeopardy' });
-    expect(document.title).toBe('Jeopardy by The Sound · Plinth');
+    // The title is set in an effect, which can land a moment after the heading shows.
+    await waitFor(() => expect(document.title).toBe('Jeopardy by The Sound · Plinth'));
 
     await userEvent.click(screen.getByRole('link', { name: 'Or set your own vibe' }));
 
-    expect(document.title).toBe('Plinth');
+    await waitFor(() => expect(document.title).toBe('Plinth'));
   });
 
   it('takes you to Discover from the call to action and from the wordmark', async () => {
