@@ -8,10 +8,14 @@ import { handleArtwork } from '../controllers/artworkController';
 import { handleArtistRelations } from '../controllers/artistRelationsController';
 import { handleImage } from '../controllers/imageController';
 import { handleArtistEssentials } from '../controllers/artistEssentialsController';
+import { createRegisterDeviceHandler } from '../controllers/deviceController';
+import { createDeviceAuth } from '../middleware/deviceAuth';
 import { AlbumRepository } from '../repositories/albumRepository';
+import { DeviceRepository } from '../repositories/deviceRepository';
 
 export interface ApiDependencies {
   readonly albums: AlbumRepository;
+  readonly devices: DeviceRepository;
 }
 
 const recommendLimiter = rateLimit({
@@ -20,6 +24,16 @@ const recommendLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again in a minute.' },
+});
+
+// A token costs a row, and tokens are what daily limits will count by, so handing them out is
+// limited by address. Generous enough for a household or an office behind one address.
+const deviceLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
 });
 
 const artworkLimiter = rateLimit({
@@ -74,8 +88,11 @@ const albumDetailsLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
-export function createApiRouter({ albums }: ApiDependencies): Router {
+export function createApiRouter({ albums, devices }: ApiDependencies): Router {
   const router = Router();
+  // Before the check below, so a client holding a stale token can still ask for a new one.
+  router.post('/devices', deviceLimiter, createRegisterDeviceHandler(devices));
+  router.use(createDeviceAuth(devices));
   router.post('/recommend', recommendLimiter, createRecommendHandler(albums));
   router.get('/albums/:slug', albumLimiter, createAlbumHandler(albums));
   router.get('/albums/:slug/details', albumDetailsLimiter, createAlbumDetailsHandler(albums));

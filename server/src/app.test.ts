@@ -22,6 +22,7 @@ vi.mock('./routes/api', async () => {
 import { createApp } from './app';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { AlbumRepository } from './repositories/albumRepository';
+import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
 
 const TEMPLATE =
   '<html><head><title>Plinth</title></head><body><div id="root"></div></body></html>';
@@ -32,7 +33,12 @@ let albums: AlbumRepository;
 
 async function start(indexTemplate: string | null, trustProxyHops?: number): Promise<void> {
   albums = createInMemoryAlbumRepository();
-  server = createApp({ albums, indexTemplate, trustProxyHops }).listen(0);
+  server = createApp({
+    albums,
+    devices: createInMemoryDeviceRepository(),
+    indexTemplate,
+    trustProxyHops,
+  }).listen(0);
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
@@ -134,6 +140,7 @@ describe('createApp proxy trust', () => {
     for (const hops of [undefined, 0, 1, 2]) {
       const instance = createApp({
         albums: createInMemoryAlbumRepository(),
+        devices: createInMemoryDeviceRepository(),
         indexTemplate: TEMPLATE,
         trustProxyHops: hops,
       }).listen(0);

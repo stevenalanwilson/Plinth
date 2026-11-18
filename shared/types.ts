@@ -174,6 +174,11 @@ export interface DiscographyAlbum {
   readonly releaseGroupId: string;
 }
 
+/** From POST /api/v1/devices: the secret a browser or app sends from then on, shown only once. */
+export interface DeviceRegistrationResponse {
+  readonly token: string;
+}
+
 export interface ArtistEssentialsRequest {
   readonly artist: string;
 }

@@ -25,11 +25,16 @@ import { CacheStore } from './repositories/cacheStore';
 import { createPostgresCacheStore } from './repositories/postgresCacheStore';
 import { createInMemoryCacheStore } from './repositories/inMemoryCacheStore';
 import { configureLookupCache, startCacheCleanup } from './repositories/lookupCache';
+import { DeviceRepository } from './repositories/deviceRepository';
+import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
+import { createPostgresDeviceRepository } from './repositories/postgresDeviceRepository';
+import { startDeviceCleanup } from './services/deviceService';
 
 const port = process.env.PORT ?? '3001';
 
 interface Storage {
   readonly albums: AlbumRepository;
+  readonly devices: DeviceRepository;
   readonly cache: CacheStore;
   readonly pool: Pool | null;
 }
@@ -46,6 +51,7 @@ async function connectStorage(): Promise<Storage> {
     logger.warn('DATABASE_URL is not set: albums are stored in memory and lost on restart');
     return {
       albums: createInMemoryAlbumRepository(),
+      devices: createInMemoryDeviceRepository(),
       cache: createInMemoryCacheStore(),
       pool: null,
     };
@@ -56,6 +62,7 @@ async function connectStorage(): Promise<Storage> {
   if (applied.length > 0) logger.info({ applied }, 'database migrations applied');
   return {
     albums: createPostgresAlbumRepository(pool),
+    devices: createPostgresDeviceRepository(pool),
     cache: createPostgresCacheStore(pool),
     pool,
   };
@@ -66,9 +73,10 @@ async function start(): Promise<void> {
   const proxyHops = trustProxyHops(process.env);
   logger.info({ trustProxyHops: proxyHops }, 'trusting proxies for visitor addresses');
 
-  const { albums, cache, pool } = await connectStorage();
+  const { albums, devices, cache, pool } = await connectStorage();
   configureLookupCache(cache);
   const stopCacheCleanup = startCacheCleanup(cache);
+  const stopDeviceCleanup = startDeviceCleanup(devices);
 
   const indexTemplate = await loadIndexTemplate(path.join(__dirname, '..', 'public'));
   if (indexTemplate && !process.env.PUBLIC_URL) {
@@ -77,7 +85,7 @@ async function start(): Promise<void> {
     );
   }
 
-  const server = createApp({ albums, indexTemplate, trustProxyHops: proxyHops }).listen(
+  const server = createApp({ albums, devices, indexTemplate, trustProxyHops: proxyHops }).listen(
     Number(port),
     () => {
       logger.info({ port }, 'Server running');
@@ -87,6 +95,7 @@ async function start(): Promise<void> {
   process.on('SIGTERM', () => {
     logger.info('SIGTERM received, shutting down gracefully');
     stopCacheCleanup();
+    stopDeviceCleanup();
     server.close(() => {
       void (pool?.end() ?? Promise.resolve()).finally(() => {
         logger.info('Server closed');
