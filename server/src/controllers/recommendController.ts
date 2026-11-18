@@ -24,6 +24,12 @@ import {
 import { logger } from '../logger';
 import { AlbumRepository } from '../repositories/albumRepository';
 import { createIdempotencyCache, IdempotencyCache } from '../services/idempotencyCache';
+import {
+  DailyLimitError,
+  DailyPickLimiter,
+  secondsUntilNextDay,
+  Visitor,
+} from '../services/dailyLimitService';
 import { deviceOf } from '../middleware/deviceAuth';
 
 const VALID_ERAS = new Set<string>(ERA_VALUES);
@@ -130,17 +136,32 @@ function failureMessage(error: unknown): string {
   return 'Failed to get recommendation. Please try again.';
 }
 
+function limitMessage(error: DailyLimitError): string {
+  if (error.scope === 'global') {
+    return 'Plinth has reached its limit of picks for today, so new ones are paused until midnight UTC. Your crate is still here.';
+  }
+  return `You've used all ${error.limit} of today's picks. They come back at midnight UTC, and your crate is still here until then.`;
+}
+
+/** Who a pick is counted against: this device, or for a request without a token, its address. */
+function visitorOf(req: Request, res: Response): Visitor {
+  const device = deviceOf(res);
+  return device ? { kind: 'device', id: device.id } : { kind: 'address', address: req.ip ?? '' };
+}
+
 export function createRecommendHandler(
   albums: AlbumRepository,
+  dailyLimit: DailyPickLimiter,
   picks: IdempotencyCache<RecommendationResponse> = createIdempotencyCache(),
 ): (req: Request, res: Response) => Promise<void> {
-  return (req, res) => handleRecommend(req, res, albums, picks);
+  return (req, res) => handleRecommend(req, res, albums, dailyLimit, picks);
 }
 
 async function handleRecommend(
   req: Request,
   res: Response,
   albums: AlbumRepository,
+  dailyLimit: DailyPickLimiter,
   picks: IdempotencyCache<RecommendationResponse>,
 ): Promise<void> {
   const body = req.body as Partial<RecommendationRequest>;
@@ -212,6 +233,8 @@ async function handleRecommend(
   // Everything that counts or costs something is in here, so a retry that is answered from an
   // earlier request is neither counted as another pick nor paid for twice.
   const askForPick = async (): Promise<RecommendationResponse> => {
+    // Before anything is logged or paid for, so a request that is turned away is not a pick.
+    await dailyLimit.consume(visitorOf(req, res));
     // Counted when asked for, not when it succeeds: the question is whether people who arrive on
     // a shared link go on to try a pick, and a failed one still counts as trying.
     if (entry) logger.info({ entry }, 'pick requested after arriving');
@@ -254,6 +277,13 @@ async function handleRecommend(
     }
     res.json(outcome.value);
   } catch (error) {
+    if (error instanceof DailyLimitError) {
+      // Counts only: how often each limit is hit shows whether the numbers are about right.
+      logger.info({ scope: error.scope }, 'daily limit reached');
+      res.set('Retry-After', String(secondsUntilNextDay(new Date())));
+      res.status(429).json({ error: limitMessage(error) });
+      return;
+    }
     const message = error instanceof Error ? error.message : 'Internal server error';
     logger.error({ error: message }, 'recommendation request failed');
     res.status(502).json({

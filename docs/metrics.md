@@ -6,16 +6,17 @@ On Railway, open the service's logs and search for the message text (the `msg` f
 
 ## The log lines
 
-| Message                         | Fields                                 | Written when                                                                                                                                                                   | Phase |
-| ------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
-| `album page served`             | `slug`, `found`, `crawler`             | The server renders an album page. `crawler` is true for link-preview fetchers (WhatsApp, Slack, Bluesky and the like) and other bots.                                          | 2     |
-| `pick requested after arriving` | `entry`                                | A pick is asked for as the first pick of a visit that began on a shared album link.                                                                                            | 2     |
-| `pick requested`                | `pickNumber`, `ratedThisVisit`         | Every pick asked for, whether or not it succeeds.                                                                                                                              | 3     |
-| `pick replayed for a retry`     | none                                   | A pick was asked for again with the same key (the browser retrying after a dropped connection) and answered from the first result, so Claude wasn't called a second time.      | 4     |
-| `pick requested with taste`     | `avoid`, `liked`, `disliked`           | A pick is asked for by someone who has answered at least one album. These are counts of albums, never which ones.                                                              | 3     |
-| `recommendation regenerated`    | `reason`, `attempt`, `artist`, `album` | Claude's pick was thrown away and asked for again. `reason` is `duplicate` (seen before), `rated` (the listener had answered it) or `not_found` (MusicBrainz doesn't have it). | 0, 3  |
-| `repeat pick shown`             | `artist`, `album`                      | No fresh pick could be found, so the listener is shown an album they had been shown before, as a last resort.                                                                  | 3     |
-| `no fresh recommendation`       | `rated`                                | Every attempt was an album the listener had answered, so the request failed.                                                                                                   | 3     |
+| Message                         | Fields                                 | Written when                                                                                                                                                                                           | Phase |
+| ------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| `album page served`             | `slug`, `found`, `crawler`             | The server renders an album page. `crawler` is true for link-preview fetchers (WhatsApp, Slack, Bluesky and the like) and other bots.                                                                  | 2     |
+| `pick requested after arriving` | `entry`                                | A pick is asked for as the first pick of a visit that began on a shared album link.                                                                                                                    | 2     |
+| `pick requested`                | `pickNumber`, `ratedThisVisit`         | Every pick asked for, whether or not it succeeds.                                                                                                                                                      | 3     |
+| `pick replayed for a retry`     | none                                   | A pick was asked for again with the same key (the browser retrying after a dropped connection) and answered from the first result, so Claude wasn't called a second time.                              | 4     |
+| `daily limit reached`           | `scope`                                | A pick was turned away because a daily limit was used up. `scope` is `visitor` (that device's own limit) or `global` (the day's total). The request is not a pick: it writes no `pick requested` line. | 4     |
+| `pick requested with taste`     | `avoid`, `liked`, `disliked`           | A pick is asked for by someone who has answered at least one album. These are counts of albums, never which ones.                                                                                      | 3     |
+| `recommendation regenerated`    | `reason`, `attempt`, `artist`, `album` | Claude's pick was thrown away and asked for again. `reason` is `duplicate` (seen before), `rated` (the listener had answered it) or `not_found` (MusicBrainz doesn't have it).                         | 0, 3  |
+| `repeat pick shown`             | `artist`, `album`                      | No fresh pick could be found, so the listener is shown an album they had been shown before, as a last resort.                                                                                          | 3     |
+| `no fresh recommendation`       | `rated`                                | Every attempt was an album the listener had answered, so the request failed.                                                                                                                           | 3     |
 
 ### Retries
 
@@ -25,6 +26,15 @@ A browser that loses its connection while waiting for a pick asks once more with
 - **A retry after a failed first attempt counts again,** because a failure isn't kept and the retry is a real second try. That is a small overcount, only when a pick fails and the connection also drops.
 
 The keys are kept in the server's memory, so a restart forgets them.
+
+### Daily limits
+
+Picks are limited per visitor and for everyone together, both reset at midnight UTC. The numbers are `DAILY_PICK_LIMIT` (default 25) and `GLOBAL_DAILY_PICK_LIMIT` (default 1000), set on the server without a deploy; zero pauses picks.
+
+- **`daily limit reached` with `scope` `visitor`** shows how often people use up their picks. If it is common, the limit is too tight for how people use Plinth.
+- **`scope` `global`** means the day's total ran out: everyone was turned away until midnight. Seeing it is the sign to look at the limit, or at who is using it.
+- **Turned-away requests aren't picks.** They write no `pick requested` line, so they are in no share below.
+- A visitor is a device, or, for a browser that couldn't keep a device token, an address. Neither is written down as it is: the counts hold a device id or a hash of the address, and are removed within two days.
 
 ### The visit fields
 
