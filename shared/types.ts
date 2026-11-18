@@ -75,6 +75,9 @@ export interface RecommendationRequest {
 // A sanity limit on the visit counts below, not a target: a real visit never comes near it.
 export const MAX_VISIT_COUNT = 1000;
 
+/** Sent with a pick so the server can tell a retry from a new request. */
+export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
+
 export const VISIT_ENTRIES = ['shared-link'] as const;
 export type VisitEntry = (typeof VISIT_ENTRIES)[number];
 

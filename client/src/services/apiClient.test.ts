@@ -427,3 +427,172 @@ describe('apiClient device token', () => {
     expect(fetchMock.mock.calls[0][1]?.headers).toBeUndefined();
   });
 });
+
+describe('apiClient safe retries', () => {
+  const REC = { artist: 'The Sound', album: 'Jeopardy', year: '1980', reason: 'Fits.' };
+  const REQUEST = { alreadySuggested: ['a'] } as unknown as RecommendationRequest;
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+  function json(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), { status });
+  }
+
+  function headersOf(call: number): Record<string, string> {
+    return (fetchMock.mock.calls[call][1]?.headers ?? {}) as Record<string, string>;
+  }
+
+  function bodyOf(call: number): unknown {
+    return fetchMock.mock.calls[call][1]?.body;
+  }
+
+  // Behaves like fetch: rejects with an AbortError when the request's signal is aborted.
+  function hangUntilAborted(): Promise<Response> {
+    return new Promise((_resolve, reject) => {
+      const init = fetchMock.mock.calls[fetchMock.mock.calls.length - 1][1];
+      init?.signal?.addEventListener('abort', () =>
+        reject(new DOMException('Aborted', 'AbortError')),
+      );
+    });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sends a fresh key with every pick', async () => {
+    fetchMock.mockImplementation(async () => json(REC));
+
+    await fetchRecommendation(REQUEST);
+    await fetchRecommendation(REQUEST);
+
+    expect(headersOf(0)['Idempotency-Key']).toMatch(UUID);
+    expect(headersOf(1)['Idempotency-Key']).toMatch(UUID);
+    expect(headersOf(0)['Idempotency-Key']).not.toBe(headersOf(1)['Idempotency-Key']);
+  });
+
+  it('does not send one with Artist Essentials, which are not retried', async () => {
+    await fetchArtistEssentials('Can');
+
+    expect(headersOf(0)).not.toHaveProperty('Idempotency-Key');
+  });
+
+  it('tries once more when the connection drops, with the same key and the same pick', async () => {
+    vi.useFakeTimers();
+    fetchMock
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(json(REC));
+
+    const result = fetchRecommendation(REQUEST);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(await result).toEqual(REC);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(headersOf(1)['Idempotency-Key']).toBe(headersOf(0)['Idempotency-Key']);
+    expect(bodyOf(1)).toBe(bodyOf(0));
+  });
+
+  it('waits a moment first, so a connection that is coming back has time to', async () => {
+    vi.useFakeTimers();
+    fetchMock
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(json(REC));
+
+    const result = fetchRecommendation(REQUEST);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+
+    await result;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('tries once more after a timeout, since the server may well have finished by then', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementationOnce(async () => hangUntilAborted());
+    fetchMock.mockResolvedValueOnce(json(REC));
+
+    const result = fetchRecommendation(REQUEST);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(await result).toEqual(REC);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(headersOf(1)['Idempotency-Key']).toBe(headersOf(0)['Idempotency-Key']);
+  });
+
+  it('gives up after one more try, with the friendly message for a timeout', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(async () => hangUntilAborted());
+
+    const result = fetchRecommendation(REQUEST).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(30_000 + 1_000 + 30_000);
+
+    expect(await result).toMatchObject({ message: 'Request timed out. Please try again.' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up after one more try when the connection stays down', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const result = fetchRecommendation(REQUEST).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(await result).toBeInstanceOf(TypeError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry an answer from the server, even a failure', async () => {
+    fetchMock.mockImplementation(async () => json({ error: 'Failed to get recommendation.' }, 502));
+
+    await expect(fetchRecommendation(REQUEST)).rejects.toMatchObject({ status: 502 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry when the caller cancels', async () => {
+    fetchMock.mockImplementation(async () => hangUntilAborted());
+    const controller = new AbortController();
+
+    const result = fetchRecommendation(REQUEST, controller.signal).catch((error: unknown) => error);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    controller.abort();
+
+    expect(await result).toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops waiting to retry when the caller cancels', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    const controller = new AbortController();
+
+    const result = fetchRecommendation(REQUEST, controller.signal).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(500);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(await result).toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not retry other posts when the connection drops', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(fetchArtistEssentials('Can')).rejects.toBeInstanceOf(TypeError);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the same key when a stale device token is replaced', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ error: 'Invalid or expired device token.' }, 401))
+      .mockResolvedValueOnce(json({ token: 'pld_fresh' }, 201))
+      .mockResolvedValueOnce(json(REC));
+
+    await fetchRecommendation(REQUEST);
+
+    expect(headersOf(2)['Idempotency-Key']).toBe(headersOf(0)['Idempotency-Key']);
+  });
+});
