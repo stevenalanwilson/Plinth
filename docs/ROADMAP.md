@@ -54,9 +54,9 @@
 
 **Goal:** new visitors get a great result within seconds.
 
-- [ ] **P2.1 Vibe presets** — tappable presets in the empty state (e.g. "Rainy Sunday krautrock", "3am post-punk", "Ambient for deep work") that fill in the controls
-- [ ] **P2.2 Real example result** — show a real example in the empty result panel instead of placeholder text
-- [ ] **P2.3 Rework Artist Essentials** — lead with "Start here" (the two or three key albums and why), add cover art, then the rest of the discography in order
+- [x] **P2.1 Vibe presets** — tappable presets in the empty state (e.g. "Rainy Sunday krautrock", "3am post-punk", "Ambient for deep work") that fill in the controls
+- [x] **P2.2 Real example result** — show a real example in the empty result panel instead of placeholder text
+- [x] **P2.3 Rework Artist Essentials** — lead with "Start here" (the two or three key albums and why), add cover art, then the rest of the discography in order
 
 **Done when:** people who arrive from a shared link try at least one recommendation of their own.
 
@@ -66,11 +66,11 @@
 
 **Goal:** Plinth learns your taste — the thing a plain chatbot can't do.
 
-- [ ] **P3.1 Feedback on each pick** — Save · Own it · Want on vinyl · Heard it · Not for me
-- [ ] **P3.2 Visible Crate tab** — move the library out of the "···" menu into a "Crate" tab with a grid of covers, filterable by status
-- [ ] **P3.3 Want list** — "Want on vinyl" items form a persistent wishlist with buy/stream links
-- [ ] **P3.4 Feed taste back into the prompt** — never recommend albums you own or rated "Not for me"; weight towards saved and loved albums
-- [ ] **P3.5 Insights that describe taste** — a plain-English summary (e.g. "you lean toward early-80s UK post-punk with sparse arrangements") rather than counts
+- [x] **P3.1 Feedback on each pick** — Save · Own it · Want on vinyl · Heard it · Not for me
+- [x] **P3.2 Visible Crate tab** — move the library out of the "···" menu into a "Crate" tab with a grid of covers, filterable by status
+- [x] **P3.3 Want list** — "Want on vinyl" items form a persistent wishlist with buy/stream links
+- [x] **P3.4 Feed taste back into the prompt** — never recommend albums you own or rated "Not for me"; weight towards saved and loved albums
+- [x] **P3.5 Insights that describe taste** — a plain-English summary (e.g. "you lean toward early-80s UK post-punk with sparse arrangements") rather than counts
 
 **Done when:** returning users rate at least a few picks per session, and repeat picks drop to near zero.
 
@@ -164,6 +164,13 @@
 - **Album pages and permalinks (P1.1, P1.4, P1.7)** — Every pick MusicBrainz confirms is stored with a permanent slug and a one-line hook, and gets a page at `/album/:slug` with the cover, release details, formats, the tracklist numbered as on the record and the artist's other albums, loaded through one cached `GET /api/v1/albums/:slug`
 - **Shareable links (P1.2, P1.3)** — Album links carry the tags WhatsApp, Slack and Bluesky read to build a preview card (the server adds them, and a Plinth card stands in when there's no cover), and a Share button copies the link or opens the share sheet on a phone
 - **Lookup cache and versioned API (P1.5, P1.6)** — MusicBrainz, iTunes and verified Artist Essentials lookups are cached in Postgres, the API lives under `/api/v1`, and the rate limits now count each visitor behind Railway's proxy
+- **First-run example and vibe presets (P2.1, P2.2)** — A first-time visitor sees a real stored pick (cover, one-line hook and a link to its page, no Claude call) before asking for one, with six vibe presets that fill in the vibe box and every control; on a phone the example comes before the controls
+- **Artist Essentials leads with where to start (P2.3)** — The two or three albums to begin with come first, with covers and reasons, then the artist's studio albums in order; the list is checked against MusicBrainz, and bootleg-only releases are left out of the discography
+- **Shared links lead to a pick (Phase 2)** — Album pages offer "Find me something like this", which opens Discover and starts a "more like this" pick on that album at once
+- **Answers on each pick, and a Crate tab (P3.1, P3.2)** — Every pick can be marked Save, Own it, Want on vinyl, Heard it or Not for me, with a badge on rated albums; the Crate tab shows the library as a grid of covers filterable by answer, holds Import, Export and Clear (Clear now asks for a second tap, as does removing a rated album), and keeps every rated album for good, while picks nobody rated keep the old 50-pick, 90-day limits. On a phone the cards keep the cover clear, with links behind a tap
+- **Want list (P3.3)** — The Want on vinyl filter shows a list, newest first, with Apple Music, Spotify and Discogs links for each album and a Got it button that moves it to Own it
+- **Taste feeds the picks (P3.4)** — An album the listener has answered is never picked again (checked in code for up to 500 albums, not left to the prompt), and the albums they own, want or saved give picks a gentle lean towards their taste, while the ones marked Not for me are steered away from
+- **Taste summary (P3.5)** — Insights opens with a plain-English paragraph about the listener's taste, worked out in the browser from the genres, decades and countries of their albums, counting the ones they own or want most; it can't speak to tempo or density, because picks don't record the sliders they were made with. The numbers behind it are tunable: see `docs/taste-summary.md`
 
 ---
 
