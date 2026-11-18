@@ -11,10 +11,20 @@ On Railway, open the service's logs and search for the message text (the `msg` f
 | `album page served`             | `slug`, `found`, `crawler`             | The server renders an album page. `crawler` is true for link-preview fetchers (WhatsApp, Slack, Bluesky and the like) and other bots.                                          | 2     |
 | `pick requested after arriving` | `entry`                                | A pick is asked for as the first pick of a visit that began on a shared album link.                                                                                            | 2     |
 | `pick requested`                | `pickNumber`, `ratedThisVisit`         | Every pick asked for, whether or not it succeeds.                                                                                                                              | 3     |
+| `pick replayed for a retry`     | none                                   | A pick was asked for again with the same key (the browser retrying after a dropped connection) and answered from the first result, so Claude wasn't called a second time.      | 4     |
 | `pick requested with taste`     | `avoid`, `liked`, `disliked`           | A pick is asked for by someone who has answered at least one album. These are counts of albums, never which ones.                                                              | 3     |
 | `recommendation regenerated`    | `reason`, `attempt`, `artist`, `album` | Claude's pick was thrown away and asked for again. `reason` is `duplicate` (seen before), `rated` (the listener had answered it) or `not_found` (MusicBrainz doesn't have it). | 0, 3  |
 | `repeat pick shown`             | `artist`, `album`                      | No fresh pick could be found, so the listener is shown an album they had been shown before, as a last resort.                                                                  | 3     |
 | `no fresh recommendation`       | `rated`                                | Every attempt was an album the listener had answered, so the request failed.                                                                                                   | 3     |
+
+### Retries
+
+A browser that loses its connection while waiting for a pick asks once more with the same key, and the server answers from the first result for ten minutes. Only the first request writes the `pick requested` lines, so a retried pick is counted once. Two things follow:
+
+- **`pick replayed for a retry`** counts the Claude calls that weren't paid for twice. It isn't a pick: leave it out of every share below.
+- **A retry after a failed first attempt counts again,** because a failure isn't kept and the retry is a real second try. That is a small overcount, only when a pick fails and the connection also drops.
+
+The keys are kept in the server's memory, so a restart forgets them.
 
 ### The visit fields
 

@@ -1,5 +1,6 @@
 import {
   DeviceRegistrationResponse,
+  IDEMPOTENCY_KEY_HEADER,
   AlbumDetailsResponse,
   AlbumResponse,
   RecommendationRequest,
@@ -24,11 +25,26 @@ export class ApiError extends Error {
   }
 }
 
+/** The request never got an answer: the connection dropped, or it took too long. */
+class ConnectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConnectionError';
+  }
+}
+
+function isConnectionFailure(error: unknown): boolean {
+  // fetch rejects with a TypeError when it can't reach the server at all.
+  return error instanceof ConnectionError || error instanceof TypeError;
+}
+
 async function toApiError(res: Response): Promise<ApiError> {
   const data = (await res.json().catch(() => ({}))) as { error?: string };
   return new ApiError(data.error ?? `Request failed with status ${res.status}`, res.status);
 }
 const REQUEST_TIMEOUT_MS = 30_000;
+// Long enough for a connection that is coming back (a phone changing network) to be there again.
+const RETRY_DELAY_MS = 1_000;
 
 async function fetchWithTimeout(
   input: string,
@@ -48,13 +64,33 @@ async function fetchWithTimeout(
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       if (externalSignal?.aborted) throw err; // propagate cancellation as-is
-      throw new Error('Request timed out. Please try again.');
+      throw new ConnectionError('Request timed out. Please try again.');
     }
     throw err;
   } finally {
     clearTimeout(timeoutId);
     externalSignal?.removeEventListener('abort', cancel);
   }
+}
+
+/** Waits, but stops at once with an AbortError if the caller cancels. */
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    const finish = (): void => {
+      signal?.removeEventListener('abort', cancel);
+      resolve();
+    };
+    const cancel = (): void => {
+      clearTimeout(timeoutId);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    const timeoutId = setTimeout(finish, ms);
+    signal?.addEventListener('abort', cancel, { once: true });
+  });
 }
 
 /** Asks the server for this device's token. Sent without one, so a stale token can't block it. */
@@ -64,13 +100,23 @@ async function registerDevice(): Promise<string> {
   return ((await res.json()) as DeviceRegistrationResponse).token;
 }
 
+interface PostOptions {
+  /** Marks the request as safe to repeat: it is retried once if the connection fails. */
+  readonly idempotencyKey?: string;
+}
+
 /**
  * Posts as this device. The first costly request asks the server for a token, and every one after
  * carries it, so the server can tell one device from another without an account. Requests that
  * only read, and are cached or cheap, don't carry it.
  */
-async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const send = (token: string | null): Promise<Response> =>
+async function post<T>(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+  { idempotencyKey }: PostOptions = {},
+): Promise<T> {
+  const sendOnce = (token: string | null): Promise<Response> =>
     fetchWithTimeout(
       `${API_BASE}${path}`,
       {
@@ -78,11 +124,26 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(idempotencyKey ? { [IDEMPOTENCY_KEY_HEADER]: idempotencyKey } : {}),
         },
         body: JSON.stringify(body),
       },
       signal,
     );
+
+  // With a key, the server answers a repeat from the first result, so trying again after the
+  // connection drops can't cost a second pick. Without one a repeat could, so it isn't done.
+  const send = idempotencyKey
+    ? async (token: string | null): Promise<Response> => {
+        try {
+          return await sendOnce(token);
+        } catch (error) {
+          if (!isConnectionFailure(error)) throw error;
+          await pause(RETRY_DELAY_MS, signal);
+          return sendOnce(token);
+        }
+      }
+    : sendOnce;
 
   const token = await ensureDeviceToken(registerDevice);
   let res = await send(token);
@@ -120,7 +181,10 @@ export function fetchRecommendation(
   request: RecommendationRequest,
   signal?: AbortSignal,
 ): Promise<RecommendationResponse> {
-  return post<RecommendationResponse>(`${API_V1}/recommend`, request, signal);
+  // A new key for each pick, shared by the retry of that pick and by nothing else.
+  return post<RecommendationResponse>(`${API_V1}/recommend`, request, signal, {
+    idempotencyKey: crypto.randomUUID(),
+  });
 }
 
 export function fetchArtwork(
