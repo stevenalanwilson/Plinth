@@ -29,11 +29,14 @@ function pathAndQuery(url: string): string {
 beforeEach(() => {
   fetchMock.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
   vi.stubGlobal('fetch', fetchMock);
+  // A device that already has its token, so these tests see one request per call.
+  localStorage.setItem('plinth-device-token', 'pld_existing');
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   fetchMock.mockReset();
+  localStorage.clear();
 });
 
 describe('apiClient paths', () => {
@@ -277,5 +280,150 @@ describe('fetchAlbumDetails', () => {
       status: 502,
       message: "Couldn't load the album details. Please try again.",
     });
+  });
+});
+
+describe('apiClient device token', () => {
+  const REC = { artist: 'The Sound', album: 'Jeopardy', year: '1980', reason: 'Fits.' };
+
+  function json(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), { status });
+  }
+
+  function sentHeaders(call: number): Record<string, string> {
+    return (fetchMock.mock.calls[call][1]?.headers ?? {}) as Record<string, string>;
+  }
+
+  function sentMethod(call: number): string | undefined {
+    return fetchMock.mock.calls[call][1]?.method;
+  }
+
+  it('sends the stored token with a costly request, without asking for another', async () => {
+    fetchMock.mockResolvedValueOnce(json(REC));
+
+    await fetchRecommendation({} as RecommendationRequest);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sentHeaders(0).Authorization).toBe('Bearer pld_existing');
+  });
+
+  it('sends it with Artist Essentials requests too', async () => {
+    await fetchArtistEssentials('Can');
+
+    expect(sentHeaders(0).Authorization).toBe('Bearer pld_existing');
+  });
+
+  it('asks for a token the first time, and sends it from then on', async () => {
+    localStorage.clear();
+    fetchMock
+      .mockResolvedValueOnce(json({ token: 'pld_new' }, 201))
+      .mockResolvedValueOnce(json(REC));
+
+    await fetchRecommendation({} as RecommendationRequest);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(requestedUrl(0)).toBe('/api/v1/devices');
+    expect(sentMethod(0)).toBe('POST');
+    expect(sentHeaders(0)).not.toHaveProperty('Authorization');
+    expect(requestedUrl(1)).toBe('/api/v1/recommend');
+    expect(sentHeaders(1).Authorization).toBe('Bearer pld_new');
+    expect(localStorage.getItem('plinth-device-token')).toBe('pld_new');
+  });
+
+  it('asks for one token when two requests start together', async () => {
+    localStorage.clear();
+    fetchMock.mockImplementation(async (input) =>
+      String(input).endsWith('/devices') ? json({ token: 'pld_new' }, 201) : json(REC),
+    );
+
+    await Promise.all([
+      fetchRecommendation({} as RecommendationRequest),
+      fetchArtistEssentials('Can'),
+    ]);
+
+    const asked = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/devices'));
+    expect(asked).toHaveLength(1);
+    const posts = fetchMock.mock.calls.filter(([url]) => !String(url).endsWith('/devices'));
+    posts.forEach(([, init]) => {
+      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer pld_new');
+    });
+  });
+
+  it('replaces a token the server no longer knows, and tries once more', async () => {
+    localStorage.setItem('plinth-device-token', 'pld_old');
+    fetchMock
+      .mockResolvedValueOnce(json({ error: 'Invalid or expired device token.' }, 401))
+      .mockResolvedValueOnce(json({ token: 'pld_fresh' }, 201))
+      .mockResolvedValueOnce(json(REC));
+
+    const rec = await fetchRecommendation({} as RecommendationRequest);
+
+    expect(rec).toEqual(REC);
+    expect(sentHeaders(0).Authorization).toBe('Bearer pld_old');
+    expect(requestedUrl(1)).toBe('/api/v1/devices');
+    expect(sentHeaders(1)).not.toHaveProperty('Authorization');
+    expect(sentHeaders(2).Authorization).toBe('Bearer pld_fresh');
+    expect(localStorage.getItem('plinth-device-token')).toBe('pld_fresh');
+  });
+
+  it('gives up after one retry rather than looping', async () => {
+    fetchMock.mockResolvedValue(json({ error: 'Invalid or expired device token.' }, 401));
+    fetchMock.mockResolvedValueOnce(json({ error: 'nope' }, 401));
+    fetchMock.mockResolvedValueOnce(json({ token: 'pld_fresh' }, 201));
+
+    await expect(fetchRecommendation({} as RecommendationRequest)).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry a 401 for a request that sent no token', async () => {
+    localStorage.clear();
+    fetchMock
+      .mockResolvedValueOnce(json({ error: 'Too many requests' }, 429))
+      .mockResolvedValueOnce(json({ error: 'Unauthorised' }, 401));
+
+    await expect(fetchRecommendation({} as RecommendationRequest)).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('carries on anonymously when the server will not give a token', async () => {
+    localStorage.clear();
+    fetchMock
+      .mockResolvedValueOnce(json({ error: 'Too many requests' }, 429))
+      .mockResolvedValueOnce(json(REC));
+
+    const rec = await fetchRecommendation({} as RecommendationRequest);
+
+    expect(rec).toEqual(REC);
+    expect(sentHeaders(1)).not.toHaveProperty('Authorization');
+    expect(localStorage.getItem('plinth-device-token')).toBeNull();
+  });
+
+  it('carries on anonymously, without asking, when a token could not be kept', async () => {
+    localStorage.clear();
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    fetchMock.mockResolvedValueOnce(json(REC));
+
+    await fetchRecommendation({} as RecommendationRequest);
+    setItem.mockRestore();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(requestedUrl(0)).toBe('/api/v1/recommend');
+    expect(sentHeaders(0)).not.toHaveProperty('Authorization');
+  });
+
+  it('never sends a token, or asks for one, with a request that only reads', async () => {
+    localStorage.clear();
+    fetchMock.mockResolvedValueOnce(json({ slug: 'x' }));
+
+    await fetchAlbum('the-sound-jeopardy');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1]?.headers).toBeUndefined();
   });
 });

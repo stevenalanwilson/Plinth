@@ -1,4 +1,5 @@
 import {
+  DeviceRegistrationResponse,
   AlbumDetailsResponse,
   AlbumResponse,
   RecommendationRequest,
@@ -7,6 +8,7 @@ import {
   ArtistRelationsResponse,
   ArtistEssentialsResponse,
 } from '@shared/types';
+import { clearDeviceToken, ensureDeviceToken } from './deviceToken';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 const API_V1 = '/api/v1';
@@ -55,16 +57,42 @@ async function fetchWithTimeout(
   }
 }
 
+/** Asks the server for this device's token. Sent without one, so a stale token can't block it. */
+async function registerDevice(): Promise<string> {
+  const res = await fetchWithTimeout(`${API_BASE}${API_V1}/devices`, { method: 'POST' });
+  if (!res.ok) throw await toApiError(res);
+  return ((await res.json()) as DeviceRegistrationResponse).token;
+}
+
+/**
+ * Posts as this device. The first costly request asks the server for a token, and every one after
+ * carries it, so the server can tell one device from another without an account. Requests that
+ * only read, and are cached or cheap, don't carry it.
+ */
 async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const res = await fetchWithTimeout(
-    `${API_BASE}${path}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-    signal,
-  );
+  const send = (token: string | null): Promise<Response> =>
+    fetchWithTimeout(
+      `${API_BASE}${path}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(body),
+      },
+      signal,
+    );
+
+  const token = await ensureDeviceToken(registerDevice);
+  let res = await send(token);
+
+  // 401 means the server doesn't know the token (it expired, or the database was reset): get a
+  // new one and try once more, not forever.
+  if (res.status === 401 && token) {
+    clearDeviceToken();
+    res = await send(await ensureDeviceToken(registerDevice));
+  }
 
   if (!res.ok) throw await toApiError(res);
 
