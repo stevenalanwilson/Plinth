@@ -15,6 +15,7 @@ vi.mock('./services/recommendationService', async (importOriginal) => ({
 import { createApp } from './app';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
+import { inMemoryAuth } from './testing/inMemoryAuth';
 import { createInMemoryUsageRepository } from './repositories/inMemoryUsageRepository';
 import { getRecommendation } from './services/recommendationService';
 import { createDailyPickLimiter, DailyLimits } from './services/dailyLimitService';
@@ -48,6 +49,7 @@ async function start(limits: DailyLimits): Promise<void> {
     albums: createInMemoryAlbumRepository(),
     devices: createInMemoryDeviceRepository(),
     dailyLimit: createDailyPickLimiter({ usage: createInMemoryUsageRepository(), limits }),
+    ...inMemoryAuth(),
     trustProxyHops: 0,
   }).listen(0);
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));
@@ -81,7 +83,7 @@ async function newDeviceToken(): Promise<string> {
 
 describe('daily limits through the real API', () => {
   it('turns a device away after its picks, with a friendly message, and not another device', async () => {
-    await start({ perVisitor: 2, global: 100 });
+    await start({ perVisitor: 2, perAccount: 100, global: 100 });
     const tokenA = await newDeviceToken();
     const tokenB = await newDeviceToken();
 
@@ -98,7 +100,7 @@ describe('daily limits through the real API', () => {
   });
 
   it('stops every device once the day’s total is used', async () => {
-    await start({ perVisitor: 5, global: 2 });
+    await start({ perVisitor: 5, perAccount: 5, global: 2 });
     const tokens = [await newDeviceToken(), await newDeviceToken(), await newDeviceToken()];
 
     const statuses = [];
@@ -109,7 +111,7 @@ describe('daily limits through the real API', () => {
   });
 
   it('counts a request with no device token by its address', async () => {
-    await start({ perVisitor: 1, global: 100 });
+    await start({ perVisitor: 1, perAccount: 100, global: 100 });
 
     expect((await recommend()).status).toBe(200);
     expect((await recommend()).status).toBe(429);

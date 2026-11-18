@@ -7,17 +7,21 @@ const CLEANUP_INTERVAL_MS = DAY_MS;
 const GLOBAL_SUBJECT = 'global';
 
 export interface DailyLimits {
-  /** Picks one visitor can have in a day. */
+  /** Picks one visitor can have in a day, signed in or not. */
   readonly perVisitor: number;
+  /** Picks a signed-in account can have in a day, across all its devices. */
+  readonly perAccount: number;
   /** Picks everyone together can have in a day: the ceiling on what Plinth can spend. */
   readonly global: number;
 }
 
 /**
- * Who a pick is counted against: the device that asked, or, for a request that carries no device
- * token (storage blocked, or registration failed), the address it came from.
+ * Who a pick is counted against: the account the device is signed in to, so all of someone's
+ * devices share one allowance; else the device that asked; else, for a request that carries no
+ * device token (storage blocked, or registration failed), the address it came from.
  */
 export type Visitor =
+  | { readonly kind: 'account'; readonly id: string }
   | { readonly kind: 'device'; readonly id: string }
   | { readonly kind: 'address'; readonly address: string };
 
@@ -56,6 +60,7 @@ export function secondsUntilNextDay(now: Date): number {
 // The address is hashed so the table never holds one as it is. Addresses are few enough to guess
 // at, so this keeps them out of a casual look, not out of reach: the rows go within two days.
 function subjectOf(visitor: Visitor): string {
+  if (visitor.kind === 'account') return `account:${visitor.id}`;
   if (visitor.kind === 'device') return `device:${visitor.id}`;
   return `address:${createHash('sha256').update(visitor.address).digest('hex').slice(0, 32)}`;
 }
@@ -75,9 +80,10 @@ export function createDailyPickLimiter({
     async consume(visitor: Visitor): Promise<void> {
       const day = utcDay(now());
       const subject = subjectOf(visitor);
+      const own = visitor.kind === 'account' ? limits.perAccount : limits.perVisitor;
       try {
-        if (!(await usage.tryConsume(subject, day, limits.perVisitor))) {
-          throw new DailyLimitError('visitor', limits.perVisitor);
+        if (!(await usage.tryConsume(subject, day, own))) {
+          throw new DailyLimitError('visitor', own);
         }
         if (!(await usage.tryConsume(GLOBAL_SUBJECT, day, limits.global))) {
           // The visitor was counted first, so give it back: being turned away didn't use a pick.

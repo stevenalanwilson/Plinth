@@ -75,6 +75,19 @@ export interface RecommendationRequest {
 // A sanity limit on the visit counts below, not a target: a real visit never comes near it.
 export const MAX_VISIT_COUNT = 1000;
 
+export interface SignInLinkRequest {
+  readonly email: string;
+}
+
+export interface SignInVerifyRequest {
+  readonly token: string;
+}
+
+/** Who this device is signed in as, or null while it is anonymous. */
+export interface AccountResponse {
+  readonly account: { readonly email: string } | null;
+}
+
 /** Sent with a pick so the server can tell a retry from a new request. */
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
 

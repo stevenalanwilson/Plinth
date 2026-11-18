@@ -34,6 +34,14 @@ import { createPostgresUsageRepository } from './repositories/postgresUsageRepos
 import { UsageRepository } from './repositories/usageRepository';
 import { createDailyPickLimiter, startUsageCleanup } from './services/dailyLimitService';
 import { dailyPickLimits } from './utils/dailyLimits';
+import { AccountRepository } from './repositories/accountRepository';
+import { createInMemoryAccountRepository } from './repositories/inMemoryAccountRepository';
+import { createPostgresAccountRepository } from './repositories/postgresAccountRepository';
+import { SignInLinkRepository } from './repositories/signInLinkRepository';
+import { createInMemorySignInLinkRepository } from './repositories/inMemorySignInLinkRepository';
+import { createPostgresSignInLinkRepository } from './repositories/postgresSignInLinkRepository';
+import { startSignInLinkCleanup } from './services/signInService';
+import { signInChannel } from './utils/signInChannel';
 
 const port = process.env.PORT ?? '3001';
 
@@ -41,6 +49,8 @@ interface Storage {
   readonly albums: AlbumRepository;
   readonly devices: DeviceRepository;
   readonly usage: UsageRepository;
+  readonly accounts: AccountRepository;
+  readonly signInLinks: SignInLinkRepository;
   readonly cache: CacheStore;
   readonly pool: Pool | null;
 }
@@ -59,6 +69,8 @@ async function connectStorage(): Promise<Storage> {
       albums: createInMemoryAlbumRepository(),
       devices: createInMemoryDeviceRepository(),
       usage: createInMemoryUsageRepository(),
+      accounts: createInMemoryAccountRepository(),
+      signInLinks: createInMemorySignInLinkRepository(),
       cache: createInMemoryCacheStore(),
       pool: null,
     };
@@ -71,6 +83,8 @@ async function connectStorage(): Promise<Storage> {
     albums: createPostgresAlbumRepository(pool),
     devices: createPostgresDeviceRepository(pool),
     usage: createPostgresUsageRepository(pool),
+    accounts: createPostgresAccountRepository(pool),
+    signInLinks: createPostgresSignInLinkRepository(pool),
     cache: createPostgresCacheStore(pool),
     pool,
   };
@@ -84,11 +98,17 @@ async function start(): Promise<void> {
   const limits = dailyPickLimits(process.env);
   logger.info(limits, 'daily pick limits');
 
-  const { albums, devices, usage, cache, pool } = await connectStorage();
+  const { channel, missing } = signInChannel(process.env);
+  if (!channel) {
+    logger.warn({ missing }, 'sign-in is switched off: these settings are missing');
+  }
+
+  const { albums, devices, usage, accounts, signInLinks, cache, pool } = await connectStorage();
   configureLookupCache(cache);
   const stopCacheCleanup = startCacheCleanup(cache);
   const stopDeviceCleanup = startDeviceCleanup(devices);
   const stopUsageCleanup = startUsageCleanup(usage);
+  const stopSignInLinkCleanup = startSignInLinkCleanup(signInLinks);
 
   const indexTemplate = await loadIndexTemplate(path.join(__dirname, '..', 'public'));
   if (indexTemplate && !process.env.PUBLIC_URL) {
@@ -101,6 +121,9 @@ async function start(): Promise<void> {
     albums,
     devices,
     dailyLimit: createDailyPickLimiter({ usage, limits }),
+    accounts,
+    signInLinks,
+    signInChannel: channel,
     indexTemplate,
     trustProxyHops: proxyHops,
   }).listen(Number(port), () => {
@@ -112,6 +135,7 @@ async function start(): Promise<void> {
     stopCacheCleanup();
     stopDeviceCleanup();
     stopUsageCleanup();
+    stopSignInLinkCleanup();
     server.close(() => {
       void (pool?.end() ?? Promise.resolve()).finally(() => {
         logger.info('Server closed');

@@ -10,6 +10,7 @@ vi.mock('./logger', async () => {
 import { createApp } from './app';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
+import { inMemoryAuth } from './testing/inMemoryAuth';
 import { generousDailyLimit } from './testing/generousDailyLimit';
 
 // The real routes: tokens are asked for at /api/v1/devices and checked on everything after it.
@@ -24,6 +25,7 @@ async function start(trustProxyHops = 0): Promise<string> {
     albums: createInMemoryAlbumRepository(),
     devices: createInMemoryDeviceRepository(),
     dailyLimit: generousDailyLimit(),
+    ...inMemoryAuth(),
     trustProxyHops,
   }).listen(0);
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));

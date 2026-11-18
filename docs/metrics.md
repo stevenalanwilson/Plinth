@@ -13,6 +13,10 @@ On Railway, open the service's logs and search for the message text (the `msg` f
 | `pick requested`                | `pickNumber`, `ratedThisVisit`         | Every pick asked for, whether or not it succeeds.                                                                                                                                                      | 3     |
 | `pick replayed for a retry`     | none                                   | A pick was asked for again with the same key (the browser retrying after a dropped connection) and answered from the first result, so Claude wasn't called a second time.                              | 4     |
 | `daily limit reached`           | `scope`                                | A pick was turned away because a daily limit was used up. `scope` is `visitor` (that device's own limit) or `global` (the day's total). The request is not a pick: it writes no `pick requested` line. | 4     |
+| `sign-in link requested`        | none                                   | A sign-in link was emailed. The address is never logged.                                                                                                                                               | 4     |
+| `signed in`                     | `newAccount`                           | Someone opened a link and signed in. `newAccount` is true the first time that address has been used.                                                                                                   | 4     |
+| `signed out`                    | none                                   | A signed-in device signed out.                                                                                                                                                                         | 4     |
+| `account deleted`               | none                                   | Someone deleted their account.                                                                                                                                                                         | 4     |
 | `pick requested with taste`     | `avoid`, `liked`, `disliked`           | A pick is asked for by someone who has answered at least one album. These are counts of albums, never which ones.                                                                                      | 3     |
 | `recommendation regenerated`    | `reason`, `attempt`, `artist`, `album` | Claude's pick was thrown away and asked for again. `reason` is `duplicate` (seen before), `rated` (the listener had answered it) or `not_found` (MusicBrainz doesn't have it).                         | 0, 3  |
 | `repeat pick shown`             | `artist`, `album`                      | No fresh pick could be found, so the listener is shown an album they had been shown before, as a last resort.                                                                                          | 3     |
@@ -35,6 +39,15 @@ Picks are limited per visitor and for everyone together, both reset at midnight 
 - **`scope` `global`** means the day's total ran out: everyone was turned away until midnight. Seeing it is the sign to look at the limit, or at who is using it.
 - **Turned-away requests aren't picks.** They write no `pick requested` line, so they are in no share below.
 - A visitor is a device, or, for a browser that couldn't keep a device token, an address. Neither is written down as it is: the counts hold a device id or a hash of the address, and are removed within two days.
+
+### Accounts
+
+Signing in is optional, and the logs say how it is going without saying who anyone is: addresses and tokens are never written to them.
+
+- **`sign-in link requested`** against **`signed in`** shows how many links are opened. Many requests with few sign-ins means the email isn't arriving, or people give up on the extra step.
+- **`signed in` with `newAccount` true** counts new accounts.
+- **`account deleted`** counts people leaving.
+- A signed-in account has its own daily limit (`DAILY_SIGNED_IN_PICK_LIMIT`, default 100), shared by all its devices. `daily limit reached` with `scope` `visitor` covers it too.
 
 ### The visit fields
 
