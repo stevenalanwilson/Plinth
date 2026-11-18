@@ -10,6 +10,7 @@ vi.mock('./logger', async () => {
 import { createApp } from './app';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
+import { generousDailyLimit } from './testing/generousDailyLimit';
 
 // The real routes and their real rate limits. /api/v1/image allows 60 requests a minute, and a
 // request without a url answers 400 straight away, so it can be counted without any network.
@@ -21,6 +22,7 @@ async function start(trustProxyHops: number): Promise<string> {
   server = createApp({
     albums: createInMemoryAlbumRepository(),
     devices: createInMemoryDeviceRepository(),
+    dailyLimit: generousDailyLimit(),
     trustProxyHops,
   }).listen(0);
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));

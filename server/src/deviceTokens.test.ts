@@ -10,6 +10,7 @@ vi.mock('./logger', async () => {
 import { createApp } from './app';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
+import { generousDailyLimit } from './testing/generousDailyLimit';
 
 // The real routes: tokens are asked for at /api/v1/devices and checked on everything after it.
 // /api/v1/image answers 400 straight away without a url, so it shows whether a request got past
@@ -22,6 +23,7 @@ async function start(trustProxyHops = 0): Promise<string> {
   server = createApp({
     albums: createInMemoryAlbumRepository(),
     devices: createInMemoryDeviceRepository(),
+    dailyLimit: generousDailyLimit(),
     trustProxyHops,
   }).listen(0);
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));

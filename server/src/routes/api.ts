@@ -12,10 +12,12 @@ import { createRegisterDeviceHandler } from '../controllers/deviceController';
 import { createDeviceAuth } from '../middleware/deviceAuth';
 import { AlbumRepository } from '../repositories/albumRepository';
 import { DeviceRepository } from '../repositories/deviceRepository';
+import { DailyPickLimiter } from '../services/dailyLimitService';
 
 export interface ApiDependencies {
   readonly albums: AlbumRepository;
   readonly devices: DeviceRepository;
+  readonly dailyLimit: DailyPickLimiter;
 }
 
 const recommendLimiter = rateLimit({
@@ -88,12 +90,12 @@ const albumDetailsLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
-export function createApiRouter({ albums, devices }: ApiDependencies): Router {
+export function createApiRouter({ albums, devices, dailyLimit }: ApiDependencies): Router {
   const router = Router();
   // Before the check below, so a client holding a stale token can still ask for a new one.
   router.post('/devices', deviceLimiter, createRegisterDeviceHandler(devices));
   router.use(createDeviceAuth(devices));
-  router.post('/recommend', recommendLimiter, createRecommendHandler(albums));
+  router.post('/recommend', recommendLimiter, createRecommendHandler(albums, dailyLimit));
   router.get('/albums/:slug', albumLimiter, createAlbumHandler(albums));
   router.get('/albums/:slug/details', albumDetailsLimiter, createAlbumDetailsHandler(albums));
   router.get('/example-album', albumLimiter, createExampleAlbumHandler(albums));

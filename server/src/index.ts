@@ -29,12 +29,18 @@ import { DeviceRepository } from './repositories/deviceRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
 import { createPostgresDeviceRepository } from './repositories/postgresDeviceRepository';
 import { startDeviceCleanup } from './services/deviceService';
+import { createInMemoryUsageRepository } from './repositories/inMemoryUsageRepository';
+import { createPostgresUsageRepository } from './repositories/postgresUsageRepository';
+import { UsageRepository } from './repositories/usageRepository';
+import { createDailyPickLimiter, startUsageCleanup } from './services/dailyLimitService';
+import { dailyPickLimits } from './utils/dailyLimits';
 
 const port = process.env.PORT ?? '3001';
 
 interface Storage {
   readonly albums: AlbumRepository;
   readonly devices: DeviceRepository;
+  readonly usage: UsageRepository;
   readonly cache: CacheStore;
   readonly pool: Pool | null;
 }
@@ -52,6 +58,7 @@ async function connectStorage(): Promise<Storage> {
     return {
       albums: createInMemoryAlbumRepository(),
       devices: createInMemoryDeviceRepository(),
+      usage: createInMemoryUsageRepository(),
       cache: createInMemoryCacheStore(),
       pool: null,
     };
@@ -63,6 +70,7 @@ async function connectStorage(): Promise<Storage> {
   return {
     albums: createPostgresAlbumRepository(pool),
     devices: createPostgresDeviceRepository(pool),
+    usage: createPostgresUsageRepository(pool),
     cache: createPostgresCacheStore(pool),
     pool,
   };
@@ -73,10 +81,14 @@ async function start(): Promise<void> {
   const proxyHops = trustProxyHops(process.env);
   logger.info({ trustProxyHops: proxyHops }, 'trusting proxies for visitor addresses');
 
-  const { albums, devices, cache, pool } = await connectStorage();
+  const limits = dailyPickLimits(process.env);
+  logger.info(limits, 'daily pick limits');
+
+  const { albums, devices, usage, cache, pool } = await connectStorage();
   configureLookupCache(cache);
   const stopCacheCleanup = startCacheCleanup(cache);
   const stopDeviceCleanup = startDeviceCleanup(devices);
+  const stopUsageCleanup = startUsageCleanup(usage);
 
   const indexTemplate = await loadIndexTemplate(path.join(__dirname, '..', 'public'));
   if (indexTemplate && !process.env.PUBLIC_URL) {
@@ -85,17 +97,21 @@ async function start(): Promise<void> {
     );
   }
 
-  const server = createApp({ albums, devices, indexTemplate, trustProxyHops: proxyHops }).listen(
-    Number(port),
-    () => {
-      logger.info({ port }, 'Server running');
-    },
-  );
+  const server = createApp({
+    albums,
+    devices,
+    dailyLimit: createDailyPickLimiter({ usage, limits }),
+    indexTemplate,
+    trustProxyHops: proxyHops,
+  }).listen(Number(port), () => {
+    logger.info({ port }, 'Server running');
+  });
 
   process.on('SIGTERM', () => {
     logger.info('SIGTERM received, shutting down gracefully');
     stopCacheCleanup();
     stopDeviceCleanup();
+    stopUsageCleanup();
     server.close(() => {
       void (pool?.end() ?? Promise.resolve()).finally(() => {
         logger.info('Server closed');

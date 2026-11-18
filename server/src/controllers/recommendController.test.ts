@@ -14,6 +14,7 @@ vi.mock('../logger', () => ({
 import { createRecommendHandler } from './recommendController';
 import { logger } from '../logger';
 import { createInMemoryAlbumRepository } from '../repositories/inMemoryAlbumRepository';
+import { DailyLimitError, DailyPickLimiter, Visitor } from '../services/dailyLimitService';
 import {
   getRecommendation,
   NoFreshPickError,
@@ -22,7 +23,9 @@ import {
 
 const mockGetRecommendation = vi.mocked(getRecommendation);
 const albums = createInMemoryAlbumRepository();
-const handleRecommend = createRecommendHandler(albums);
+const consume = vi.fn<[Visitor], Promise<void>>();
+const dailyLimit: DailyPickLimiter = { consume };
+const handleRecommend = createRecommendHandler(albums, dailyLimit);
 
 function makeRes(locals: Record<string, unknown> = {}): {
   res: Response;
@@ -70,6 +73,7 @@ const mockRecommendation = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  consume.mockResolvedValue(undefined);
 });
 
 describe('handleRecommend', () => {
@@ -563,7 +567,7 @@ describe('handleRecommend retries', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRecommendation.mockResolvedValue(mockRecommendation);
-    handle = createRecommendHandler(albums);
+    handle = createRecommendHandler(albums, dailyLimit);
   });
 
   function pickRequestedLines(): unknown[] {
@@ -686,5 +690,118 @@ describe('handleRecommend retries', () => {
     await handle(makeReq(body, { 'Idempotency-Key': key.toUpperCase() }), res);
 
     expect(status).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleRecommend daily limits', () => {
+  const body = { preferences: validPreferences, alreadySuggested: [] };
+
+  // The retry tests above build their own handler; each of these gets a fresh one too, so a
+  // remembered pick from another test can't answer for one here.
+  let handle: (req: Request, res: Response) => Promise<void>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    consume.mockResolvedValue(undefined);
+    mockGetRecommendation.mockResolvedValue(mockRecommendation);
+    handle = createRecommendHandler(albums, dailyLimit);
+  });
+
+  function requestFrom(ip: string | undefined, headers: Record<string, string> = {}): Request {
+    return { ...makeReq(body, headers), ip } as Request;
+  }
+
+  it('counts the pick against the device that asked', async () => {
+    await handle(requestFrom('203.0.113.7'), makeRes({ device: { id: 'device-a' } }).res);
+
+    expect(consume).toHaveBeenCalledWith({ kind: 'device', id: 'device-a' });
+  });
+
+  it('counts a request with no device by its address', async () => {
+    await handle(requestFrom('203.0.113.7'), makeRes().res);
+
+    expect(consume).toHaveBeenCalledWith({ kind: 'address', address: '203.0.113.7' });
+  });
+
+  it('says so, with how long to wait, when the visitor has had their picks', async () => {
+    consume.mockRejectedValue(new DailyLimitError('visitor', 25));
+    const { res, status, json, set } = makeRes();
+
+    await handle(requestFrom('203.0.113.7'), res);
+
+    expect(status).toHaveBeenCalledWith(429);
+    expect(json).toHaveBeenCalledWith({
+      error: expect.stringContaining("all 25 of today's picks"),
+    });
+    expect(set).toHaveBeenCalledWith('Retry-After', expect.stringMatching(/^\d+$/));
+    expect(mockGetRecommendation).not.toHaveBeenCalled();
+  });
+
+  it('says so differently when it is the whole day’s total that is used up', async () => {
+    consume.mockRejectedValue(new DailyLimitError('global', 1000));
+    const { res, status, json } = makeRes();
+
+    await handle(requestFrom('203.0.113.7'), res);
+
+    expect(status).toHaveBeenCalledWith(429);
+    expect(json).toHaveBeenCalledWith({
+      error: expect.stringContaining('Plinth has reached its limit of picks for today'),
+    });
+  });
+
+  it('does not count a request that was turned away as a pick', async () => {
+    consume.mockRejectedValue(new DailyLimitError('visitor', 25));
+
+    await handle(requestFrom('203.0.113.7'), makeRes().res);
+
+    const pickLines = vi
+      .mocked(logger.info)
+      .mock.calls.filter(([, message]) => message === 'pick requested');
+    expect(pickLines).toHaveLength(0);
+    expect(logger.info).toHaveBeenCalledWith({ scope: 'visitor' }, 'daily limit reached');
+  });
+
+  it('does not log a limit as an error', async () => {
+    consume.mockRejectedValue(new DailyLimitError('visitor', 25));
+
+    await handle(requestFrom('203.0.113.7'), makeRes().res);
+
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('does not count a request that is not valid', async () => {
+    await handle({ ...makeReq({}), ip: '203.0.113.7' } as Request, makeRes().res);
+
+    expect(consume).not.toHaveBeenCalled();
+  });
+
+  it('counts a pick once, however many times it is retried', async () => {
+    const key = '3f2b8c1e-9d4a-4e6b-8a57-1c0d2e3f4a5b';
+    await handle(requestFrom('203.0.113.7', { 'Idempotency-Key': key }), makeRes().res);
+    await handle(requestFrom('203.0.113.7', { 'Idempotency-Key': key }), makeRes().res);
+
+    expect(consume).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts a retry again when the first attempt was turned away', async () => {
+    const key = '3f2b8c1e-9d4a-4e6b-8a57-1c0d2e3f4a5b';
+    consume.mockRejectedValueOnce(new DailyLimitError('visitor', 25));
+    const first = makeRes();
+    const retry = makeRes();
+
+    await handle(requestFrom('203.0.113.7', { 'Idempotency-Key': key }), first.res);
+    await handle(requestFrom('203.0.113.7', { 'Idempotency-Key': key }), retry.res);
+
+    expect(first.status).toHaveBeenCalledWith(429);
+    expect(retry.json).toHaveBeenCalledWith(mockRecommendation);
+  });
+
+  it('still answers 502 for a failure that is not a limit', async () => {
+    mockGetRecommendation.mockRejectedValue(new Error('Claude is down'));
+    const { res, status } = makeRes();
+
+    await handle(requestFrom('203.0.113.7'), res);
+
+    expect(status).toHaveBeenCalledWith(502);
   });
 });

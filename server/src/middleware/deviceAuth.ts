@@ -33,7 +33,8 @@ export function createDeviceAuth(devices: DeviceRepository): RequestHandler {
       }
       res.locals[DEVICE_KEY] = device;
     } catch (error) {
-      // Nothing depends on knowing the device yet, so a database problem shouldn't stop a pick.
+      // A database problem shouldn't stop a pick: the request carries on as one with no device,
+      // which the daily limit counts by address instead.
       logger.error(
         { error: error instanceof Error ? error.message : String(error) },
         'device lookup failed',

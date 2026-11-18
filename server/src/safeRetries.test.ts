@@ -15,6 +15,7 @@ vi.mock('./services/recommendationService', async (importOriginal) => ({
 import { createApp } from './app';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
+import { generousDailyLimit } from './testing/generousDailyLimit';
 import { getRecommendation } from './services/recommendationService';
 
 // The real routes and middleware, with only the Claude call replaced. The recommend route lets
@@ -48,6 +49,7 @@ beforeEach(async () => {
   server = createApp({
     albums: createInMemoryAlbumRepository(),
     devices: createInMemoryDeviceRepository(),
+    dailyLimit: generousDailyLimit(),
     trustProxyHops: 0,
   }).listen(0);
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));

@@ -23,6 +23,7 @@ import { createApp } from './app';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { AlbumRepository } from './repositories/albumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
+import { generousDailyLimit } from './testing/generousDailyLimit';
 
 const TEMPLATE =
   '<html><head><title>Plinth</title></head><body><div id="root"></div></body></html>';
@@ -36,6 +37,7 @@ async function start(indexTemplate: string | null, trustProxyHops?: number): Pro
   server = createApp({
     albums,
     devices: createInMemoryDeviceRepository(),
+    dailyLimit: generousDailyLimit(),
     indexTemplate,
     trustProxyHops,
   }).listen(0);
@@ -141,6 +143,7 @@ describe('createApp proxy trust', () => {
       const instance = createApp({
         albums: createInMemoryAlbumRepository(),
         devices: createInMemoryDeviceRepository(),
+        dailyLimit: generousDailyLimit(),
         indexTemplate: TEMPLATE,
         trustProxyHops: hops,
       }).listen(0);
