@@ -17,6 +17,7 @@ import { takeSharedLinkEntry } from '../services/visitEntry';
 import { pruneLibrary } from '../services/libraryRetention';
 import { albumLabel, isSameAlbum } from '../services/albumIdentity';
 import { buildTaste } from '../services/taste';
+import { recordRating, startPick } from '../services/visitActivity';
 import { FeedbackStatus, parseFeedback } from '../types/feedback';
 
 const HISTORY_STORAGE_KEY = 'album-recommender-history';
@@ -258,6 +259,8 @@ export function useRecommendation(): UseRecommendationReturn {
   }, []);
 
   const setFeedback = useCallback((id: string, status: FeedbackStatus | null): void => {
+    // Noted outside the update below, which React may run twice. Taking an answer back isn't one.
+    if (status !== null && historyRef.current.some((entry) => entry.id === id)) recordRating(id);
     const at = new Date().toISOString();
     setHistory((prev) =>
       prev.map((entry) => {
@@ -326,6 +329,7 @@ export function useRecommendation(): UseRecommendationReturn {
             vibeQuery: vibeQuery.trim() || undefined,
             entry: takeSharedLinkEntry(),
             taste: buildTaste(historyRef.current),
+            ...startPick(),
           },
           controller.signal,
         );

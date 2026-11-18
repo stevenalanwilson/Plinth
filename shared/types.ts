@@ -58,12 +58,22 @@ export interface RecommendationRequest {
   readonly seedArtist?: string;
   readonly vibeQuery?: string;
   readonly taste?: TasteHint;
+  /** Which pick this is in the visit (1 for the first), counted per browser tab session. */
+  readonly pickNumber?: number;
+  /**
+   * How many different albums the listener has answered in this visit. Only a count, so the
+   * server can see whether the crate is being used without knowing who is using it.
+   */
+  readonly ratedThisVisit?: number;
   /**
    * Set on the first pick of a visit that began on a shared album link, so the server can count
    * how many of those visitors go on to try a pick of their own. Carries nothing about them.
    */
   readonly entry?: VisitEntry;
 }
+
+// A sanity limit on the visit counts below, not a target: a real visit never comes near it.
+export const MAX_VISIT_COUNT = 1000;
 
 export const VISIT_ENTRIES = ['shared-link'] as const;
 export type VisitEntry = (typeof VISIT_ENTRIES)[number];

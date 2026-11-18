@@ -54,6 +54,7 @@ function storedEntry(index: number): HistoryEntry {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
   mockFetchRecommendation.mockResolvedValue(recommendation);
   mockFetchArtistRelations.mockResolvedValue({ relations: [] });
 });
@@ -422,5 +423,126 @@ describe('useRecommendation taste', () => {
     await act(() => result.current.fetchRecommendation());
 
     expect(mockFetchRecommendation.mock.calls[0][0].taste).toBeUndefined();
+  });
+});
+
+describe('useRecommendation visit activity', () => {
+  const STORAGE_KEY = 'album-recommender-history';
+
+  function seed(count: number): void {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(Array.from({ length: count }, (_, index) => storedEntry(index + 1))),
+    );
+  }
+
+  async function ask(result: { current: ReturnType<typeof useRecommendation> }): Promise<void> {
+    await act(() => result.current.fetchRecommendation());
+  }
+
+  function requestAt(index: number): { pickNumber?: number; ratedThisVisit?: number } {
+    return mockFetchRecommendation.mock.calls[index][0];
+  }
+
+  beforeEach(() => {
+    mockFetchArtwork.mockResolvedValue(artwork);
+  });
+
+  it('says it is the first pick of the visit, with nothing answered', async () => {
+    const { result } = renderHook(() => useRecommendation());
+
+    await ask(result);
+
+    expect(requestAt(0)).toMatchObject({ pickNumber: 1, ratedThisVisit: 0 });
+  });
+
+  it('counts each pick in the visit', async () => {
+    const { result } = renderHook(() => useRecommendation());
+
+    await ask(result);
+    await ask(result);
+    await ask(result);
+
+    expect([0, 1, 2].map((i) => requestAt(i).pickNumber)).toEqual([1, 2, 3]);
+  });
+
+  it('counts the albums answered during the visit', async () => {
+    seed(3);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-1', 'own'));
+    act(() => result.current.setFeedback('stored-2', 'not-for-me'));
+    await ask(result);
+
+    expect(requestAt(0)).toMatchObject({ pickNumber: 1, ratedThisVisit: 2 });
+  });
+
+  it('counts an album once when its answer changes', async () => {
+    seed(1);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-1', 'save'));
+    act(() => result.current.setFeedback('stored-1', 'own'));
+    await ask(result);
+
+    expect(requestAt(0).ratedThisVisit).toBe(1);
+  });
+
+  it('does not take away an answer that was taken back', async () => {
+    seed(1);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-1', 'own'));
+    act(() => result.current.setFeedback('stored-1', null));
+    await ask(result);
+
+    expect(requestAt(0).ratedThisVisit).toBe(1);
+  });
+
+  it('does not count taking back an answer that was never given', async () => {
+    seed(1);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('stored-1', null));
+    await ask(result);
+
+    expect(requestAt(0).ratedThisVisit).toBe(0);
+  });
+
+  it('does not count an album that is not in the library', async () => {
+    seed(1);
+    const { result } = renderHook(() => useRecommendation());
+
+    act(() => result.current.setFeedback('nope', 'own'));
+    await ask(result);
+
+    expect(requestAt(0).ratedThisVisit).toBe(0);
+  });
+
+  it('does not count albums answered in an earlier visit', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([
+        { ...storedEntry(1), feedback: { status: 'own', at: new Date().toISOString() } },
+      ]),
+    );
+    const { result } = renderHook(() => useRecommendation());
+
+    await ask(result);
+
+    expect(requestAt(0).ratedThisVisit).toBe(0);
+  });
+
+  it('sends neither count when the tab cannot keep them', async () => {
+    const blocked = vi.spyOn(window, 'sessionStorage', 'get').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+    const { result } = renderHook(() => useRecommendation());
+
+    await ask(result);
+    blocked.mockRestore();
+
+    expect(requestAt(0)).not.toHaveProperty('pickNumber');
+    expect(requestAt(0)).not.toHaveProperty('ratedThisVisit');
   });
 });

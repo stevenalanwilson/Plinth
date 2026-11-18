@@ -14,6 +14,7 @@ import {
   MAX_PREFERENCE_ARRAY_LENGTH,
   MAX_TASTE_AVOID,
   MAX_TASTE_SAMPLE,
+  MAX_VISIT_COUNT,
   TasteHint,
   VISIT_ENTRIES,
   VisitEntry,
@@ -82,6 +83,13 @@ function isValidPivot(value: unknown): value is PivotHint | undefined {
 
 function isVisitEntry(value: unknown): value is VisitEntry {
   return VISIT_ENTRIES.some((entry) => entry === value);
+}
+
+function isVisitCount(value: unknown, min: number): value is number | undefined {
+  if (value === undefined) return true;
+  return (
+    typeof value === 'number' && Number.isInteger(value) && value >= min && value <= MAX_VISIT_COUNT
+  );
 }
 
 function isValidPreferences(value: unknown): value is RecommendationPreferences {
@@ -154,6 +162,14 @@ async function handleRecommend(
     return;
   }
 
+  const { pickNumber, ratedThisVisit } = body;
+  if (!isVisitCount(pickNumber, 1) || !isVisitCount(ratedThisVisit, 0)) {
+    res.status(400).json({
+      error: `pickNumber (from 1) and ratedThisVisit (from 0) must be whole numbers of at most ${MAX_VISIT_COUNT}`,
+    });
+    return;
+  }
+
   const { taste } = body;
   if (!isValidTaste(taste)) {
     res.status(400).json({
@@ -179,6 +195,12 @@ async function handleRecommend(
   // Counted when asked for, not when it succeeds: the question is whether people who arrive on
   // a shared link go on to try a pick, and a failed one still counts as trying.
   if (entry) logger.info({ entry }, 'pick requested after arriving');
+  // One line for every pick asked for, so the log can say what share of picks were repeats, and
+  // how many picks into a visit the listener had answered something. Counts only, never who.
+  logger.info(
+    { pickNumber: pickNumber ?? null, ratedThisVisit: ratedThisVisit ?? null },
+    'pick requested',
+  );
   // Counts only: how many albums a listener has rated shows whether the crate is being used.
   if (taste) {
     logger.info(

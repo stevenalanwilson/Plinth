@@ -454,3 +454,95 @@ describe('recommend handler: taste', () => {
     expect(mockGetRecommendation).not.toHaveBeenCalled();
   });
 });
+
+describe('recommend handler: how far into a visit', () => {
+  const body = { preferences: validPreferences, alreadySuggested: [] };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRecommendation.mockResolvedValue(mockRecommendation);
+  });
+
+  it('logs which pick this is in the visit and how many albums have been answered', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, pickNumber: 3, ratedThisVisit: 2 }), res);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      { pickNumber: 3, ratedThisVisit: 2 },
+      'pick requested',
+    );
+  });
+
+  it('logs every pick, with nulls when the client did not say', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq(body), res);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      { pickNumber: null, ratedThisVisit: null },
+      'pick requested',
+    );
+  });
+
+  it('logs a pick once, even when it fails', async () => {
+    mockGetRecommendation.mockRejectedValue(new Error('Claude is down'));
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, pickNumber: 1, ratedThisVisit: 0 }), res);
+
+    const lines = vi
+      .mocked(logger.info)
+      .mock.calls.filter(([, message]) => message === 'pick requested');
+    expect(lines).toHaveLength(1);
+  });
+
+  it('keeps a visit that has answered nothing distinct from one that did not say', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, pickNumber: 1, ratedThisVisit: 0 }), res);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      { pickNumber: 1, ratedThisVisit: 0 },
+      'pick requested',
+    );
+  });
+
+  it('does not pass the visit counts on to the recommendation', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, pickNumber: 3, ratedThisVisit: 2 }), res);
+
+    expect(mockGetRecommendation.mock.calls[0][0]).not.toHaveProperty('pickNumber');
+    expect(mockGetRecommendation.mock.calls[0][0]).not.toHaveProperty('ratedThisVisit');
+  });
+
+  it('accepts the largest counts it allows', async () => {
+    const { res, status } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, pickNumber: 1000, ratedThisVisit: 1000 }), res);
+
+    expect(status).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['pickNumber is 0', { pickNumber: 0 }],
+    ['pickNumber is negative', { pickNumber: -1 }],
+    ['pickNumber is not whole', { pickNumber: 1.5 }],
+    ['pickNumber is a string', { pickNumber: '2' }],
+    ['pickNumber is null', { pickNumber: null }],
+    ['pickNumber is over the limit', { pickNumber: 1001 }],
+    ['ratedThisVisit is negative', { ratedThisVisit: -1 }],
+    ['ratedThisVisit is not whole', { ratedThisVisit: 1.5 }],
+    ['ratedThisVisit is a string', { ratedThisVisit: '3' }],
+    ['ratedThisVisit is null', { ratedThisVisit: null }],
+    ['ratedThisVisit is over the limit', { ratedThisVisit: 1001 }],
+  ])('rejects a request where %s', async (_problem, extra) => {
+    const { res, status } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, ...extra }), res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(mockGetRecommendation).not.toHaveBeenCalled();
+  });
+});
