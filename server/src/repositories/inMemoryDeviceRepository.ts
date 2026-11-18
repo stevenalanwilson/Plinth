@@ -9,7 +9,7 @@ export function createInMemoryDeviceRepository(): DeviceRepository {
     async create(tokenHash: string, now: Date): Promise<Device> {
       // Mirrors the unique constraint on devices.token_hash.
       if (byTokenHash.has(tokenHash)) throw new Error('Token hash already in use');
-      const device: Device = { id: randomUUID(), createdAt: now, lastSeenAt: now };
+      const device: Device = { id: randomUUID(), createdAt: now, lastSeenAt: now, accountId: null };
       byTokenHash.set(tokenHash, device);
       return device;
     },
@@ -22,6 +22,29 @@ export function createInMemoryDeviceRepository(): DeviceRepository {
       for (const [tokenHash, device] of byTokenHash) {
         if (device.id === id) byTokenHash.set(tokenHash, { ...device, lastSeenAt: now });
       }
+    },
+
+    async linkToAccount(id: string, accountId: string): Promise<void> {
+      for (const [tokenHash, device] of byTokenHash) {
+        if (device.id === id) byTokenHash.set(tokenHash, { ...device, accountId });
+      }
+    },
+
+    async unlinkFromAccount(id: string): Promise<void> {
+      for (const [tokenHash, device] of byTokenHash) {
+        if (device.id === id) byTokenHash.set(tokenHash, { ...device, accountId: null });
+      }
+    },
+
+    async unlinkAllFromAccount(accountId: string): Promise<number> {
+      let unlinked = 0;
+      for (const [tokenHash, device] of byTokenHash) {
+        if (device.accountId === accountId) {
+          byTokenHash.set(tokenHash, { ...device, accountId: null });
+          unlinked++;
+        }
+      }
+      return unlinked;
     },
 
     async deleteNotSeenSince(cutoff: Date): Promise<number> {

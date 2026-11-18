@@ -15,18 +15,27 @@ export interface TestDatabase {
 
 export async function createTestDatabase(): Promise<TestDatabase> {
   const schema = `test_${randomUUID().replace(/-/g, '')}`;
-  const admin = new Pool({ connectionString: testDatabaseUrl });
+  const admin = new Pool({ connectionString: testDatabaseUrl, max: 1 });
   await admin.query(`CREATE SCHEMA ${schema}`);
+  await admin.end();
 
-  const pool = new Pool({ connectionString: testDatabaseUrl, options: `-c search_path=${schema}` });
+  // A test's database lives until its file finishes, and a file makes one for every test, so
+  // idle connections are let go quickly: otherwise the files running side by side hold more
+  // connections than Postgres allows by default.
+  const pool = new Pool({
+    connectionString: testDatabaseUrl,
+    options: `-c search_path=${schema}`,
+    idleTimeoutMillis: 100,
+  });
   await migrate(pool);
 
   return {
     pool,
     async drop(): Promise<void> {
       await pool.end();
-      await admin.query(`DROP SCHEMA ${schema} CASCADE`);
-      await admin.end();
+      const cleanup = new Pool({ connectionString: testDatabaseUrl, max: 1 });
+      await cleanup.query(`DROP SCHEMA ${schema} CASCADE`);
+      await cleanup.end();
     },
   };
 }

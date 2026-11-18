@@ -3,6 +3,8 @@ export interface Device {
   readonly createdAt: Date;
   /** When the device last made a request, to the nearest day: see deviceService. */
   readonly lastSeenAt: Date;
+  /** The account this device is signed in to, or null while it is anonymous. */
+  readonly accountId: string | null;
 }
 
 /**
@@ -15,6 +17,12 @@ export interface DeviceRepository {
   findByTokenHash(tokenHash: string): Promise<Device | null>;
   /** Records that the device was seen at `now`. Does nothing for a device that isn't stored. */
   markSeen(id: string, now: Date): Promise<void>;
+  /** Signs the device in to the account. Does nothing for a device that isn't stored. */
+  linkToAccount(id: string, accountId: string): Promise<void>;
+  /** Signs the device out, leaving it anonymous. */
+  unlinkFromAccount(id: string): Promise<void>;
+  /** Signs every device out of the account, returning how many were signed in. */
+  unlinkAllFromAccount(accountId: string): Promise<number>;
   /** Removes devices last seen before `cutoff` and returns how many it removed. */
   deleteNotSeenSince(cutoff: Date): Promise<number>;
 }
