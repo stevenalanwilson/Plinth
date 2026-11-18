@@ -9,11 +9,14 @@ import { InsightsPage } from './features/stats/InsightsPage';
 import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPanel';
 import { VibePresets } from './features/presets/VibePresets';
 import { useMoreLikeThisFromNavigation } from './features/recommendation/useMoreLikeThisFromNavigation';
+import { AccountMenu } from './features/account/AccountMenu';
+import { useAccount } from './features/account/useAccount';
 
 type Page = 'home' | 'crate' | 'insights' | 'essentials';
 
 export default function App(): React.ReactElement {
   const [page, setPage] = useState<Page>('home');
+  const { account, isChecking, requestLink, signOut, deleteAccount } = useAccount();
   const {
     preferences,
     updatePreferences,
@@ -73,6 +76,8 @@ export default function App(): React.ReactElement {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
             marginTop: 16,
           }}
         >
@@ -102,6 +107,13 @@ export default function App(): React.ReactElement {
               Artist Essentials
             </button>
           </nav>
+          <AccountMenu
+            account={account}
+            isChecking={isChecking}
+            onRequestLink={requestLink}
+            onSignOut={signOut}
+            onDeleteAccount={deleteAccount}
+          />
         </div>
       </header>
 
@@ -267,6 +279,9 @@ export default function App(): React.ReactElement {
       )}
 
       <footer className="app-footer">
+        <a href="/privacy" className="footer-link">
+          Privacy
+        </a>
         {import.meta.env.VITE_MONZO_URL && (
           <a
             href={import.meta.env.VITE_MONZO_URL as string}

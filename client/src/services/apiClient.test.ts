@@ -9,7 +9,12 @@ import {
   fetchArtwork,
   fetchArtistRelations,
   fetchArtistEssentials,
+  fetchAccount,
+  deleteAccount,
   getProxiedArtworkUrl,
+  requestSignInLink,
+  signOut,
+  verifySignIn,
 } from './apiClient';
 import { AlbumResponse, RecommendationRequest, RecommendationResponse } from '@shared/types';
 
@@ -594,5 +599,125 @@ describe('apiClient safe retries', () => {
     await fetchRecommendation(REQUEST);
 
     expect(headersOf(2)['Idempotency-Key']).toBe(headersOf(0)['Idempotency-Key']);
+  });
+});
+
+describe('apiClient accounts', () => {
+  function json(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), { status });
+  }
+
+  function init(call = 0): RequestInit {
+    return fetchMock.mock.calls[call][1] ?? {};
+  }
+
+  function headers(call = 0): Record<string, string> {
+    return (init(call).headers ?? {}) as Record<string, string>;
+  }
+
+  it('asks for a sign-in link by posting the address', async () => {
+    fetchMock.mockResolvedValueOnce(json({}, 202));
+
+    await requestSignInLink('person@example.com');
+
+    expect(requestedUrl()).toBe('/api/v1/auth/sign-in');
+    expect(init().method).toBe('POST');
+    expect(JSON.parse(init().body as string)).toEqual({ email: 'person@example.com' });
+  });
+
+  it('shows the server’s reason when a link can’t be sent', async () => {
+    fetchMock.mockResolvedValueOnce(json({ error: 'Too many sign-in links.' }, 429));
+
+    await expect(requestSignInLink('person@example.com')).rejects.toMatchObject({
+      message: 'Too many sign-in links.',
+      status: 429,
+    });
+  });
+
+  it('signs in with the token from a link, as this device', async () => {
+    fetchMock.mockResolvedValueOnce(json({ account: { email: 'person@example.com' } }));
+
+    const result = await verifySignIn('pls_token');
+
+    expect(result).toEqual({ account: { email: 'person@example.com' } });
+    expect(requestedUrl()).toBe('/api/v1/auth/verify');
+    expect(JSON.parse(init().body as string)).toEqual({ token: 'pls_token' });
+    expect(headers().Authorization).toBe('Bearer pld_existing');
+  });
+
+  it('gets a device token first when signing in from a browser that has none', async () => {
+    localStorage.clear();
+    fetchMock
+      .mockResolvedValueOnce(json({ token: 'pld_new' }, 201))
+      .mockResolvedValueOnce(json({ account: { email: 'person@example.com' } }));
+
+    await verifySignIn('pls_token');
+
+    expect(requestedUrl(0)).toBe('/api/v1/devices');
+    expect(headers(1).Authorization).toBe('Bearer pld_new');
+  });
+
+  describe('fetchAccount', () => {
+    it('asks who this device is signed in as, carrying its token', async () => {
+      fetchMock.mockResolvedValueOnce(json({ account: { email: 'person@example.com' } }));
+
+      expect(await fetchAccount()).toEqual({ account: { email: 'person@example.com' } });
+
+      expect(requestedUrl()).toBe('/api/v1/auth/me');
+      expect(init().method).toBeUndefined();
+      expect(headers().Authorization).toBe('Bearer pld_existing');
+    });
+
+    it('does not ask, or get a token, for a browser that has none', async () => {
+      localStorage.clear();
+
+      expect(await fetchAccount()).toEqual({ account: null });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('says not signed in, and forgets the token, when the server does not know it', async () => {
+      fetchMock.mockResolvedValueOnce(json({ error: 'Invalid or expired device token.' }, 401));
+
+      expect(await fetchAccount()).toEqual({ account: null });
+
+      expect(localStorage.getItem('plinth-device-token')).toBeNull();
+    });
+
+    it('rejects on any other failure, rather than saying not signed in', async () => {
+      fetchMock.mockResolvedValueOnce(json({ error: 'Broken' }, 500));
+
+      await expect(fetchAccount()).rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  it('signs out, and copes with an answer that has no body', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(signOut()).resolves.toBeUndefined();
+
+    expect(requestedUrl()).toBe('/api/v1/auth/sign-out');
+    expect(init().method).toBe('POST');
+    expect(headers().Authorization).toBe('Bearer pld_existing');
+  });
+
+  it('deletes the account with a DELETE, and copes with an answer that has no body', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(deleteAccount()).resolves.toBeUndefined();
+
+    expect(requestedUrl()).toBe('/api/v1/auth/account');
+    expect(init().method).toBe('DELETE');
+    expect(headers().Authorization).toBe('Bearer pld_existing');
+    expect(headers()).not.toHaveProperty('Content-Type');
+  });
+
+  it('says why an account could not be deleted', async () => {
+    fetchMock.mockResolvedValueOnce(json({ error: "You're not signed in." }, 403));
+
+    await expect(deleteAccount()).rejects.toMatchObject({
+      message: "You're not signed in.",
+      status: 403,
+    });
   });
 });
