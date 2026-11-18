@@ -717,6 +717,15 @@ describe('handleRecommend daily limits', () => {
     expect(consume).toHaveBeenCalledWith({ kind: 'device', id: 'device-a' });
   });
 
+  it('counts the pick against the account a signed-in device belongs to, not the device', async () => {
+    await handle(
+      requestFrom('203.0.113.7'),
+      makeRes({ device: { id: 'device-a', accountId: 'account-1' } }).res,
+    );
+
+    expect(consume).toHaveBeenCalledWith({ kind: 'account', id: 'account-1' });
+  });
+
   it('counts a request with no device by its address', async () => {
     await handle(requestFrom('203.0.113.7'), makeRes().res);
 

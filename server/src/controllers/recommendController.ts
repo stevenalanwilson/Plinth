@@ -143,10 +143,15 @@ function limitMessage(error: DailyLimitError): string {
   return `You've used all ${error.limit} of today's picks. They come back at midnight UTC, and your crate is still here until then.`;
 }
 
-/** Who a pick is counted against: this device, or for a request without a token, its address. */
+/**
+ * Who a pick is counted against: the account the device is signed in to, else the device, else
+ * for a request without a token, its address.
+ */
 function visitorOf(req: Request, res: Response): Visitor {
   const device = deviceOf(res);
-  return device ? { kind: 'device', id: device.id } : { kind: 'address', address: req.ip ?? '' };
+  if (!device) return { kind: 'address', address: req.ip ?? '' };
+  if (device.accountId) return { kind: 'account', id: device.accountId };
+  return { kind: 'device', id: device.id };
 }
 
 export function createRecommendHandler(

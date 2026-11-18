@@ -23,6 +23,7 @@ import { createApp } from './app';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { AlbumRepository } from './repositories/albumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
+import { inMemoryAuth } from './testing/inMemoryAuth';
 import { generousDailyLimit } from './testing/generousDailyLimit';
 
 const TEMPLATE =
@@ -38,6 +39,7 @@ async function start(indexTemplate: string | null, trustProxyHops?: number): Pro
     albums,
     devices: createInMemoryDeviceRepository(),
     dailyLimit: generousDailyLimit(),
+    ...inMemoryAuth(),
     indexTemplate,
     trustProxyHops,
   }).listen(0);
@@ -144,6 +146,7 @@ describe('createApp proxy trust', () => {
         albums: createInMemoryAlbumRepository(),
         devices: createInMemoryDeviceRepository(),
         dailyLimit: generousDailyLimit(),
+        ...inMemoryAuth(),
         indexTemplate: TEMPLATE,
         trustProxyHops: hops,
       }).listen(0);

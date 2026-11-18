@@ -19,14 +19,19 @@ import { logger } from '../logger';
 
 const NOON = new Date('2026-11-18T12:00:00.000Z');
 const device = (id: string): Visitor => ({ kind: 'device', id });
+const account = (id: string): Visitor => ({ kind: 'account', id });
 const address = (value: string): Visitor => ({ kind: 'address', address: value });
 
 function limiterWith(
-  limits: { perVisitor: number; global: number },
+  limits: { perVisitor: number; perAccount?: number; global: number },
   usage: UsageRepository = createInMemoryUsageRepository(),
   now: () => Date = () => NOON,
 ): ReturnType<typeof createDailyPickLimiter> {
-  return createDailyPickLimiter({ usage, limits, now });
+  return createDailyPickLimiter({
+    usage,
+    limits: { perAccount: 1000, ...limits },
+    now,
+  });
 }
 
 async function scopeOf(promise: Promise<void>): Promise<string | null> {
@@ -62,6 +67,32 @@ describe('createDailyPickLimiter', () => {
 
     await expect(rejection).rejects.toBeInstanceOf(DailyLimitError);
     await expect(rejection).rejects.toMatchObject({ scope: 'visitor', limit: 2 });
+  });
+
+  it('gives a signed-in account its own, higher limit', async () => {
+    const limiter = limiterWith({ perVisitor: 1, perAccount: 3, global: 100 });
+
+    await limiter.consume(account('a'));
+    await limiter.consume(account('a'));
+    await expect(limiter.consume(account('a'))).resolves.toBeUndefined();
+
+    const rejection = limiter.consume(account('a'));
+    await expect(rejection).rejects.toMatchObject({ scope: 'visitor', limit: 3 });
+  });
+
+  it('counts an account once, whichever of its devices asks', async () => {
+    const limiter = limiterWith({ perVisitor: 1, perAccount: 2, global: 100 });
+    await limiter.consume(account('a'));
+    await limiter.consume(account('a'));
+
+    expect(await scopeOf(limiter.consume(account('a')))).toBe('visitor');
+  });
+
+  it('keeps an account apart from a device with the same id', async () => {
+    const limiter = limiterWith({ perVisitor: 1, perAccount: 1, global: 100 });
+    await limiter.consume(device('x'));
+
+    await expect(limiter.consume(account('x'))).resolves.toBeUndefined();
   });
 
   it('counts each device on its own', async () => {

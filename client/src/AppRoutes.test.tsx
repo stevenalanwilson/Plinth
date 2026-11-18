@@ -7,6 +7,13 @@ vi.mock('./features/album/AlbumPage', () => ({
   AlbumPage: () => <div>Album page</div>,
 }));
 
+vi.mock('./features/account/SignInPage', () => ({
+  SignInPage: () => <div>Sign-in page</div>,
+}));
+vi.mock('./features/privacy/PrivacyPage', () => ({
+  PrivacyPage: () => <div>Privacy page</div>,
+}));
+
 import { AppRoutes } from './AppRoutes';
 
 function renderAt(path: string): void {
@@ -34,6 +41,18 @@ describe('AppRoutes', () => {
     renderAt('/anything/else');
 
     expect(screen.getByText('Discover app')).toBeInTheDocument();
+  });
+
+  it('shows the sign-in page at /signin', () => {
+    renderAt('/signin');
+
+    expect(screen.getByText('Sign-in page')).toBeInTheDocument();
+  });
+
+  it('shows the privacy page at /privacy', () => {
+    renderAt('/privacy');
+
+    expect(screen.getByText('Privacy page')).toBeInTheDocument();
   });
 
   it('does not treat a bare /album as an album page', () => {

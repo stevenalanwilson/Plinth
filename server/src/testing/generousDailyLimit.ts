@@ -5,6 +5,6 @@ import { createDailyPickLimiter, DailyPickLimiter } from '../services/dailyLimit
 export function generousDailyLimit(): DailyPickLimiter {
   return createDailyPickLimiter({
     usage: createInMemoryUsageRepository(),
-    limits: { perVisitor: 100_000, global: 100_000 },
+    limits: { perVisitor: 100_000, perAccount: 100_000, global: 100_000 },
   });
 }

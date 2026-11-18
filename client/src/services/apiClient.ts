@@ -1,4 +1,5 @@
 import {
+  AccountResponse,
   DeviceRegistrationResponse,
   IDEMPOTENCY_KEY_HEADER,
   AlbumDetailsResponse,
@@ -9,7 +10,7 @@ import {
   ArtistRelationsResponse,
   ArtistEssentialsResponse,
 } from '@shared/types';
-import { clearDeviceToken, ensureDeviceToken } from './deviceToken';
+import { clearDeviceToken, ensureDeviceToken, getStoredToken } from './deviceToken';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 const API_V1 = '/api/v1';
@@ -110,7 +111,8 @@ interface PostOptions {
  * carries it, so the server can tell one device from another without an account. Requests that
  * only read, and are cached or cheap, don't carry it.
  */
-async function post<T>(
+async function sendAsDevice<T>(
+  method: 'POST' | 'DELETE',
   path: string,
   body: unknown,
   signal?: AbortSignal,
@@ -120,13 +122,13 @@ async function post<T>(
     fetchWithTimeout(
       `${API_BASE}${path}`,
       {
-        method: 'POST',
+        method,
         headers: {
-          'Content-Type': 'application/json',
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(idempotencyKey ? { [IDEMPOTENCY_KEY_HEADER]: idempotencyKey } : {}),
         },
-        body: JSON.stringify(body),
+        body: body === undefined ? undefined : JSON.stringify(body),
       },
       signal,
     );
@@ -157,7 +159,18 @@ async function post<T>(
 
   if (!res.ok) throw await toApiError(res);
 
+  // Nothing comes back from signing out or deleting an account.
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+function post<T>(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+  options?: PostOptions,
+): Promise<T> {
+  return sendAsDevice<T>('POST', path, body, signal, options);
 }
 
 async function get<T>(
@@ -253,6 +266,48 @@ export function fetchArtistEssentials(
   signal?: AbortSignal,
 ): Promise<ArtistEssentialsResponse> {
   return post<ArtistEssentialsResponse>(`${API_V1}/artist-essentials`, { artist }, signal);
+}
+
+/** Emails a one-use sign-in link to the address. */
+export async function requestSignInLink(email: string, signal?: AbortSignal): Promise<void> {
+  await post<unknown>(`${API_V1}/auth/sign-in`, { email }, signal);
+}
+
+/** Signs this browser in with the token from a sign-in link. */
+export function verifySignIn(token: string, signal?: AbortSignal): Promise<AccountResponse> {
+  return post<AccountResponse>(`${API_V1}/auth/verify`, { token }, signal);
+}
+
+/**
+ * Who this browser is signed in as. A browser with no device token can't be signed in, so it is
+ * not asked to get one just to find that out: unlike the other reads, this one carries the token.
+ */
+export async function fetchAccount(signal?: AbortSignal): Promise<AccountResponse> {
+  const token = getStoredToken();
+  if (!token) return { account: null };
+
+  const res = await fetchWithTimeout(
+    `${API_BASE}${API_V1}/auth/me`,
+    { headers: { Authorization: `Bearer ${token}` } },
+    signal,
+  );
+  if (res.status === 401) {
+    // The server doesn't know this token, so it can't be signed in. It gets a new one when it
+    // next makes a request that needs one.
+    clearDeviceToken();
+    return { account: null };
+  }
+  if (!res.ok) throw await toApiError(res);
+  return res.json() as Promise<AccountResponse>;
+}
+
+export async function signOut(signal?: AbortSignal): Promise<void> {
+  await post<void>(`${API_V1}/auth/sign-out`, undefined, signal);
+}
+
+/** Deletes the account this browser is signed in to, and signs every device out of it. */
+export async function deleteAccount(signal?: AbortSignal): Promise<void> {
+  await sendAsDevice<void>('DELETE', `${API_V1}/auth/account`, undefined, signal);
 }
 
 export function getProxiedArtworkUrl(artworkUrl: string): string {
