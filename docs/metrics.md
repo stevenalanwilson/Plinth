@@ -1,6 +1,6 @@
 # Reading the "Done when" numbers from the logs
 
-Plinth has no analytics service. The server writes a few log lines that carry counts and nothing about who a visitor is, and the roadmap's "Done when" checks for Phases 2 and 3 are read from those. This page says which lines, what each field means, and how to turn them into the numbers.
+Plinth has no analytics service. The server writes a few log lines that carry counts and nothing about who a visitor is, and the roadmap's "Done when" checks for Phases 2 and 3 are read from those. Phase 4's is a hands-on check, described below. This page says which lines, what each field means, and how to turn them into the numbers.
 
 On Railway, open the service's logs and search for the message text (the `msg` field) of each line below.
 
@@ -106,6 +106,20 @@ repeat rate = count of "repeat pick shown" ÷ count of "pick requested"
 
 - `recommendation regenerated` with `reason` `duplicate` shows how often Claude's first answer is something the listener has already been shown. Those are caught and replaced, so this is not a repeat reaching the listener.
 - `recommendation regenerated` with `reason` `rated` shows the code catching an album the listener has answered. If it is common, the prompt isn't naming enough of their answered albums. `no fresh recommendation` is the case where it caught three in a row.
+
+## Phase 4: does the crate follow someone to another device?
+
+> Done when: a user can sign in on their phone and see the crate they built on desktop.
+
+This one is a check you do, not a number from the logs, because the logs say nothing about which device is which. On the deployed site:
+
+1. On a desktop browser, answer a few picks (Own it, Want on vinyl), then open the Crate page and use **Sign in** from the note or the header, with an address you can read.
+2. Open the link from the email (on the desktop or on the phone) and tap Sign in. The menu should say "Your crate is saved to your account."
+3. On the phone, sign in with the same address. The crate page should show the same albums with the same answers, after a moment.
+4. Change an answer or remove an album on one device, and bring the other back into view. It should follow within a minute.
+5. Sign out on the phone. Its crate should leave that device and come back when you sign in again.
+
+The logs can show whether people are doing it. `sign-in link requested` against `signed in` says how many links are opened, `signed in` with `newAccount` true counts new accounts, and `library synced` counts saves and checks (see Accounts above). They can't say whether a crate arrived on a second device.
 
 ## What this can't tell you
 
