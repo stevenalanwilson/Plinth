@@ -13,6 +13,9 @@ interface AccountMenuProps {
    */
   readonly onSignOut: (options: { readonly discardUnsynced: boolean }) => Promise<void>;
   readonly onDeleteAccount: () => Promise<void>;
+  /** Whether the panel is showing. Held by the page, so something else can open it. */
+  readonly isOpen: boolean;
+  readonly onOpenChange: (isOpen: boolean) => void;
   /** How saving the crate to the account is going. */
   readonly sync: { readonly status: SyncStatus; readonly hasUnsynced: boolean };
 }
@@ -199,9 +202,9 @@ export function AccountMenu({
   onSignOut,
   onDeleteAccount,
   sync,
+  isOpen,
+  onOpenChange,
 }: AccountMenuProps): React.ReactElement | null {
-  const [isOpen, setIsOpen] = useState(false);
-
   // Not shown until it is known which to offer, so a signed-in person never sees "Sign in".
   if (isChecking) return null;
 
@@ -211,7 +214,7 @@ export function AccountMenu({
         type="button"
         className="nav-tab account-toggle"
         aria-expanded={isOpen}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => onOpenChange(!isOpen)}
       >
         {account ? account.email : 'Sign in'}
       </button>
@@ -223,11 +226,11 @@ export function AccountMenu({
               sync={sync}
               onSignOut={async (options) => {
                 await onSignOut(options);
-                setIsOpen(false);
+                onOpenChange(false);
               }}
               onDeleteAccount={async () => {
                 await onDeleteAccount();
-                setIsOpen(false);
+                onOpenChange(false);
               }}
             />
           ) : (
