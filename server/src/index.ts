@@ -40,6 +40,9 @@ import { createPostgresAccountRepository } from './repositories/postgresAccountR
 import { SignInLinkRepository } from './repositories/signInLinkRepository';
 import { createInMemorySignInLinkRepository } from './repositories/inMemorySignInLinkRepository';
 import { createPostgresSignInLinkRepository } from './repositories/postgresSignInLinkRepository';
+import { LibraryRepository } from './repositories/libraryRepository';
+import { createInMemoryLibraryRepository } from './repositories/inMemoryLibraryRepository';
+import { createPostgresLibraryRepository } from './repositories/postgresLibraryRepository';
 import { startSignInLinkCleanup } from './services/signInService';
 import { signInChannel } from './utils/signInChannel';
 
@@ -51,6 +54,7 @@ interface Storage {
   readonly usage: UsageRepository;
   readonly accounts: AccountRepository;
   readonly signInLinks: SignInLinkRepository;
+  readonly library: LibraryRepository;
   readonly cache: CacheStore;
   readonly pool: Pool | null;
 }
@@ -71,6 +75,7 @@ async function connectStorage(): Promise<Storage> {
       usage: createInMemoryUsageRepository(),
       accounts: createInMemoryAccountRepository(),
       signInLinks: createInMemorySignInLinkRepository(),
+      library: createInMemoryLibraryRepository(),
       cache: createInMemoryCacheStore(),
       pool: null,
     };
@@ -85,6 +90,7 @@ async function connectStorage(): Promise<Storage> {
     usage: createPostgresUsageRepository(pool),
     accounts: createPostgresAccountRepository(pool),
     signInLinks: createPostgresSignInLinkRepository(pool),
+    library: createPostgresLibraryRepository(pool),
     cache: createPostgresCacheStore(pool),
     pool,
   };
@@ -103,7 +109,8 @@ async function start(): Promise<void> {
     logger.warn({ missing }, 'sign-in is switched off: these settings are missing');
   }
 
-  const { albums, devices, usage, accounts, signInLinks, cache, pool } = await connectStorage();
+  const { albums, devices, usage, accounts, signInLinks, library, cache, pool } =
+    await connectStorage();
   configureLookupCache(cache);
   const stopCacheCleanup = startCacheCleanup(cache);
   const stopDeviceCleanup = startDeviceCleanup(devices);
@@ -123,6 +130,7 @@ async function start(): Promise<void> {
     dailyLimit: createDailyPickLimiter({ usage, limits }),
     accounts,
     signInLinks,
+    library,
     signInChannel: channel,
     indexTemplate,
     trustProxyHops: proxyHops,

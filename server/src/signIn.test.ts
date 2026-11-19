@@ -16,6 +16,7 @@ import { createApp } from './app';
 import { createInMemoryAccountRepository } from './repositories/inMemoryAccountRepository';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
+import { createInMemoryLibraryRepository } from './repositories/inMemoryLibraryRepository';
 import { createInMemorySignInLinkRepository } from './repositories/inMemorySignInLinkRepository';
 import { createInMemoryUsageRepository } from './repositories/inMemoryUsageRepository';
 import { getRecommendation } from './services/recommendationService';
@@ -60,6 +61,7 @@ async function start(options: { sender?: EmailSender | null } = {}): Promise<voi
     devices: createInMemoryDeviceRepository(),
     accounts: createInMemoryAccountRepository(),
     signInLinks: createInMemorySignInLinkRepository(),
+    library: createInMemoryLibraryRepository(),
     signInChannel: options.sender === null ? null : { sender, baseUrl: 'https://plinth.example' },
     dailyLimit: createDailyPickLimiter({
       usage: createInMemoryUsageRepository(),

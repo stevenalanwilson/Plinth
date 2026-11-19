@@ -17,6 +17,7 @@ On Railway, open the service's logs and search for the message text (the `msg` f
 | `signed in`                     | `newAccount`                           | Someone opened a link and signed in. `newAccount` is true the first time that address has been used.                                                                                                   | 4     |
 | `signed out`                    | none                                   | A signed-in device signed out.                                                                                                                                                                         | 4     |
 | `account deleted`               | none                                   | Someone deleted their account.                                                                                                                                                                         | 4     |
+| `library synced`                | `sent`, `removed`, `returned`          | A signed-in device saved its changes to the crate. Counts of albums and removals it sent, and of albums returned to it. Never what is in the crate.                                                    | 4     |
 | `pick requested with taste`     | `avoid`, `liked`, `disliked`           | A pick is asked for by someone who has answered at least one album. These are counts of albums, never which ones.                                                                                      | 3     |
 | `recommendation regenerated`    | `reason`, `attempt`, `artist`, `album` | Claude's pick was thrown away and asked for again. `reason` is `duplicate` (seen before), `rated` (the listener had answered it) or `not_found` (MusicBrainz doesn't have it).                         | 0, 3  |
 | `repeat pick shown`             | `artist`, `album`                      | No fresh pick could be found, so the listener is shown an album they had been shown before, as a last resort.                                                                                          | 3     |
@@ -47,6 +48,7 @@ Signing in is optional, and the logs say how it is going without saying who anyo
 - **`sign-in link requested`** against **`signed in`** shows how many links are opened. Many requests with few sign-ins means the email isn't arriving, or people give up on the extra step.
 - **`signed in` with `newAccount` true** counts new accounts.
 - **`account deleted`** counts people leaving.
+- **`library synced`** is a signed-in device saving or checking its crate. It happens when the crate changes and when a page comes back into view, so its count follows how often signed-in people use Plinth, not how many there are.
 - A signed-in account has its own daily limit (`DAILY_SIGNED_IN_PICK_LIMIT`, default 100), shared by all its devices. `daily limit reached` with `scope` `visitor` covers it too.
 
 ### The visit fields

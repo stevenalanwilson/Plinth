@@ -6,6 +6,7 @@ import { SignInLinkRepository } from '../repositories/signInLinkRepository';
 import { deviceOf } from '../middleware/deviceAuth';
 import {
   deleteAccount,
+  DeleteAccountDependencies,
   normaliseEmail,
   requestSignIn,
   SignInEmailError,
@@ -141,11 +142,7 @@ export function createSignOutHandler(devices: DeviceRepository): Handler {
   };
 }
 
-export function createDeleteAccountHandler(deps: {
-  readonly accounts: AccountRepository;
-  readonly devices: DeviceRepository;
-  readonly links: SignInLinkRepository;
-}): Handler {
+export function createDeleteAccountHandler(deps: DeleteAccountDependencies): Handler {
   return async (_req, res) => {
     noStore(res);
     const accountId = deviceOf(res)?.accountId;

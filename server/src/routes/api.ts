@@ -16,11 +16,13 @@ import {
   createSignOutHandler,
   createVerifySignInHandler,
 } from '../controllers/authController';
+import { createLibrarySyncHandler } from '../controllers/libraryController';
 import { createDeviceAuth } from '../middleware/deviceAuth';
 import { AlbumRepository } from '../repositories/albumRepository';
 import { DeviceRepository } from '../repositories/deviceRepository';
 import { AccountRepository } from '../repositories/accountRepository';
 import { SignInLinkRepository } from '../repositories/signInLinkRepository';
+import { LibraryRepository } from '../repositories/libraryRepository';
 import { DailyPickLimiter } from '../services/dailyLimitService';
 import { SignInChannel } from '../utils/signInChannel';
 
@@ -30,6 +32,7 @@ export interface ApiDependencies {
   readonly dailyLimit: DailyPickLimiter;
   readonly accounts: AccountRepository;
   readonly signInLinks: SignInLinkRepository;
+  readonly library: LibraryRepository;
   /** How sign-in links are sent, or null when sign-in isn't set up and the routes say so. */
   readonly signInChannel: SignInChannel | null;
 }
@@ -75,6 +78,16 @@ const verifyLimiter = rateLimit({
 const accountLimiter = rateLimit({
   windowMs: 60_000,
   max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' },
+});
+
+// A device saves when its crate changes and asks again when the page comes back into view, so
+// this is looser than the limits on things that cost money.
+const librarySyncLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again in a minute.' },
@@ -138,6 +151,7 @@ export function createApiRouter({
   dailyLimit,
   accounts,
   signInLinks,
+  library,
   signInChannel,
 }: ApiDependencies): Router {
   const router = Router();
@@ -155,8 +169,9 @@ export function createApiRouter({
   router.delete(
     '/auth/account',
     accountLimiter,
-    createDeleteAccountHandler({ accounts, devices, links: signInLinks }),
+    createDeleteAccountHandler({ accounts, devices, links: signInLinks, library }),
   );
+  router.post('/library/sync', librarySyncLimiter, createLibrarySyncHandler(library));
   router.post('/recommend', recommendLimiter, createRecommendHandler(albums, dailyLimit));
   router.get('/albums/:slug', albumLimiter, createAlbumHandler(albums));
   router.get('/albums/:slug/details', albumDetailsLimiter, createAlbumDetailsHandler(albums));
