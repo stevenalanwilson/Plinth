@@ -186,6 +186,11 @@ export interface LibrarySyncResponse {
   readonly items: readonly LibraryItem[];
   readonly deletions: readonly LibraryDeletion[];
   readonly cursor: string;
+  /**
+   * True when what the account holds is more than one answer carries: ask again, from `cursor`,
+   * for the rest. Absent when this is all of it.
+   */
+  readonly more?: boolean;
 }
 
 /** Sent with a pick so the server can tell a retry from a new request. */

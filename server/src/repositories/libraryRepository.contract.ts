@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LibraryItem } from '@shared/types';
-import { LibraryRecord, LibraryRepository } from './libraryRepository';
+import { LibraryFullError, LibraryRecord, LibraryRepository } from './libraryRepository';
 
 const T0 = new Date('2026-11-19T12:00:00.000Z');
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -45,13 +45,19 @@ export function describeLibraryRepository(
     function save(
       account: string,
       items: LibraryItem[],
-      options: { deletions?: { key: string; at: string }[]; since?: Date | null; now?: Date } = {},
+      options: {
+        deletions?: { key: string; at: string }[];
+        since?: Date | null;
+        now?: Date;
+        maxRecords?: number;
+      } = {},
     ): Promise<readonly LibraryRecord[]> {
       return library.sync(account, {
         items,
         deletions: (options.deletions ?? []).map(({ key, at }) => ({ key, at: new Date(at) })),
         since: options.since ?? null,
         now: options.now ?? T0,
+        maxRecords: options.maxRecords ?? 1_000,
       });
     }
 
@@ -217,6 +223,58 @@ export function describeLibraryRepository(
       const [record] = await save(accountId, []);
 
       expect(record).toMatchObject({ item: { feedback: { at: daysBefore(1) } } });
+    });
+
+    describe('the most an account can hold', () => {
+      it('refuses changes that would make the crate bigger than that, and saves none of them', async () => {
+        await save(accountId, [item('A'), item('B')], { maxRecords: 3 });
+
+        await expect(save(accountId, [item('C'), item('D')], { maxRecords: 3 })).rejects.toThrow(
+          LibraryFullError,
+        );
+
+        expect(keysOf(await save(accountId, [], { maxRecords: 3 }))).toEqual([
+          'artist|a',
+          'artist|b',
+        ]);
+      });
+
+      it('counts what has been removed too, since it is kept for a while', async () => {
+        await save(accountId, [item('A'), item('B')], { maxRecords: 3 });
+
+        await expect(
+          save(accountId, [], {
+            maxRecords: 3,
+            deletions: [
+              { key: 'artist|x', at: daysBefore(1) },
+              { key: 'artist|y', at: daysBefore(1) },
+            ],
+          }),
+        ).rejects.toThrow(LibraryFullError);
+      });
+
+      it('still accepts changes to what is already held, at the limit', async () => {
+        await save(accountId, [item('A'), item('B')], { maxRecords: 2 });
+
+        const saved = await save(
+          accountId,
+          [item('A', { feedback: { status: 'own', at: daysBefore(1) } })],
+          { maxRecords: 2 },
+        );
+
+        expect(saved).toHaveLength(2);
+      });
+
+      it('lets a crate that is over the limit shrink, so it can always be brought back down', async () => {
+        await save(accountId, [item('A'), item('B'), item('C')], { maxRecords: 10 });
+
+        const saved = await save(accountId, [], {
+          maxRecords: 2,
+          deletions: [{ key: 'artist|a', at: daysBefore(1) }],
+        });
+
+        expect(saved.filter((record) => record.kind === 'album')).toHaveLength(2);
+      });
     });
   });
 }

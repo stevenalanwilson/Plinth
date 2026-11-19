@@ -1,7 +1,12 @@
 import { Pool, PoolClient } from 'pg';
 import { LibraryItem } from '@shared/types';
-import { LibraryChanges, LibraryRecord, LibraryRepository } from './libraryRepository';
-import { expiredKeys, keyOfItem, planWrites } from '../services/libraryMerge';
+import {
+  LibraryChanges,
+  LibraryFullError,
+  LibraryRecord,
+  LibraryRepository,
+} from './libraryRepository';
+import { expiredKeys, keyOfItem, overfills, planWrites } from '../services/libraryMerge';
 
 interface LibraryRow {
   item_key: string;
@@ -23,6 +28,14 @@ function toRecord(row: LibraryRow): LibraryRecord {
 }
 
 const COLUMNS = 'item_key, item, removed_at, updated_at';
+
+async function countRecords(client: PoolClient, accountId: string): Promise<number> {
+  const { rows } = await client.query<{ total: number }>(
+    'SELECT count(*)::int AS total FROM library_items WHERE account_id = $1',
+    [accountId],
+  );
+  return rows[0].total;
+}
 
 async function inTransaction<T>(pool: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
@@ -47,6 +60,7 @@ export function createPostgresLibraryRepository(pool: Pool): LibraryRepository {
         // old row and overwrite the other's change. Held until the transaction ends.
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [accountId]);
 
+        const before = await countRecords(client, accountId);
         const touched = [
           ...changes.items.map(keyOfItem),
           ...changes.deletions.map(({ key }) => key),
@@ -86,6 +100,11 @@ export function createPostgresLibraryRepository(pool: Pool): LibraryRepository {
             'DELETE FROM library_items WHERE account_id = $1 AND item_key = ANY($2)',
             [accountId, expired],
           );
+        }
+
+        // Refused by throwing, which undoes everything this sync wrote.
+        if (overfills(before, await countRecords(client, accountId), changes.maxRecords)) {
+          throw new LibraryFullError(changes.maxRecords);
         }
 
         const { rows } = await client.query<LibraryRow>(

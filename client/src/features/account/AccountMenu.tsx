@@ -93,6 +93,12 @@ function SignInForm({
 }
 
 function syncNote(sync: AccountMenuProps['sync']): { text: string; isProblem: boolean } {
+  if (sync.status === 'full') {
+    return {
+      text: "Your crate is too big to save any more to your account. Remove some albums you don't need to make room.",
+      isProblem: true,
+    };
+  }
   if (sync.status === 'failed') {
     return {
       text: "Couldn't save your crate to your account just now. It will try again.",

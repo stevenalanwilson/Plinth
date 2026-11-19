@@ -111,6 +111,38 @@ async function sync(
   return (await res.json()) as LibrarySyncResponse;
 }
 
+describe('a large crate through the real API', () => {
+  it('reaches a new device a page at a time, every album once', async () => {
+    const phone = await signInDevice('person@example.com');
+    const laptop = await signInDevice('person@example.com');
+    for (let batch = 0; batch < 11; batch += 1) {
+      // Rated, since unrated picks are cut back to the newest few.
+      const items = Array.from({ length: 100 }, (_, index) =>
+        album(`Album ${batch * 100 + index}`, {
+          feedback: { status: 'own', at: new Date().toISOString() },
+        }),
+      );
+      await sync(phone, { items });
+    }
+
+    const seen: string[] = [];
+    let since: string | null = null;
+    let rounds = 0;
+    let more = true;
+    while (more) {
+      const response: LibrarySyncResponse = await sync(laptop, { since });
+      seen.push(...response.items.map((item) => item.recommendation.album));
+      since = response.cursor;
+      more = response.more === true;
+      rounds += 1;
+    }
+
+    expect(rounds).toBeGreaterThan(1);
+    expect(seen).toHaveLength(1100);
+    expect(new Set(seen).size).toBe(1100);
+  });
+});
+
 describe('saving a crate through the real API', () => {
   it('saves albums for an account and returns them to another device signed in to it', async () => {
     const phone = await signInDevice('person@example.com');
@@ -214,6 +246,7 @@ describe('saving a crate through the real API', () => {
       deletions: [],
       since: null,
       now: new Date(),
+      maxRecords: 1_000,
     });
     expect(left).toEqual([]);
   });
