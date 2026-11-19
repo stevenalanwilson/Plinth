@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'util';
-import { albumNameKey, Feedback, LibraryItem, pruneLibrary } from '@shared/types';
+import { albumNameKey, changedAt, Feedback, LibraryItem, pruneLibrary } from '@shared/types';
 import { LibraryChanges, LibraryRecord } from '../repositories/libraryRepository';
 
 /** How long a removal is remembered. A device away longer than this may bring the album back. */
@@ -9,12 +9,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function keyOfItem(item: LibraryItem): string {
   return albumNameKey(item.recommendation);
-}
-
-/** When the listener last did something to the album: picked it, or changed what they said. */
-export function changedAt(item: LibraryItem): number {
-  const picked = Date.parse(item.createdAt);
-  return item.feedback ? Math.max(picked, Date.parse(item.feedback.at)) : picked;
 }
 
 /** The verdict given more recently; a tie keeps the first. */

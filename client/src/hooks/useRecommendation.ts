@@ -4,6 +4,8 @@ import {
   RecommendationResponse,
   ArtworkResponse,
   ArtistRelation,
+  LibraryDeletion,
+  LibraryItem,
   PivotHint,
 } from '@shared/types';
 import { HistoryEntry } from '../types/history';
@@ -15,6 +17,8 @@ import {
 import { mergeHistory } from '../services/libraryExport';
 import { takeSharedLinkEntry } from '../services/visitEntry';
 import { pruneLibrary } from '../services/libraryRetention';
+import { applyServerChanges } from '../services/librarySync';
+import { recordRemovals } from '../services/librarySyncState';
 import { albumLabel, isSameAlbum } from '../services/albumIdentity';
 import { buildTaste } from '../services/taste';
 import { recordRating, startPick } from '../services/visitActivity';
@@ -96,6 +100,18 @@ interface UseRecommendationReturn {
   importHistory: (entries: HistoryEntry[]) => void;
   /** Sets the verdict on a library entry, or clears it with null. */
   setFeedback: (id: string, status: FeedbackStatus | null) => void;
+  /** The crate as it is this instant, for work that can't wait for the next draw. */
+  getHistory: () => readonly HistoryEntry[];
+  /** Folds in what a signed-in account holds: albums to add or update, and albums it dropped. */
+  mergeServerLibrary: (
+    items: readonly LibraryItem[],
+    deletions: readonly LibraryDeletion[],
+  ) => void;
+  /**
+   * Empties the crate on this device without telling the account, for when the crate belongs to
+   * an account this browser has left. Unlike clearHistory, which is the listener removing albums.
+   */
+  discardCrate: () => void;
 }
 
 export function useRecommendation(): UseRecommendationReturn {
@@ -233,7 +249,9 @@ export function useRecommendation(): UseRecommendationReturn {
     // replaces the oldest entry and the length stays the same.
   }, [history.length, history[0]?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const clearHistory = useCallback((): void => {
+  const emptyCrate = useCallback((): void => {
+    // Read straight away by a sync that starts next, before React has drawn again.
+    historyRef.current = [];
     setHistory([]);
     setRecommendation(null);
     setArtworkResponse(null);
@@ -241,7 +259,14 @@ export function useRecommendation(): UseRecommendationReturn {
     setIsLoadingRelations(false);
   }, []);
 
+  const clearHistory = useCallback((): void => {
+    recordRemovals(historyRef.current);
+    emptyCrate();
+  }, [emptyCrate]);
+
   const removeFromHistory = useCallback((id: string): void => {
+    const removed = historyRef.current.find((entry) => entry.id === id);
+    if (removed) recordRemovals([removed]);
     setHistory((prev) => {
       const next = prev.filter((e) => e.id !== id);
       if (prev[0]?.id === id) {
@@ -257,6 +282,28 @@ export function useRecommendation(): UseRecommendationReturn {
   const importHistory = useCallback((entries: HistoryEntry[]): void => {
     setHistory((prev) => mergeHistory(prev, entries));
   }, []);
+
+  const getHistory = useCallback((): readonly HistoryEntry[] => historyRef.current, []);
+
+  const mergeServerLibrary = useCallback(
+    (items: readonly LibraryItem[], deletions: readonly LibraryDeletion[]): void => {
+      // Worked out from the ref, not inside an update, because the sync that called this goes on
+      // to read the crate at once. The ref is current: it is only behind for a change made in
+      // the same instant, and this runs after a network request.
+      const current = historyRef.current;
+      const next = applyServerChanges(current, items, deletions) as HistoryEntry[];
+      if (next === current) return;
+      historyRef.current = next;
+      setHistory(next);
+      // A crate that has just arrived from the account has nothing on show yet.
+      const first = next[0];
+      if (first && current.length === 0) {
+        setRecommendation(first.recommendation);
+        setArtworkResponse(first.artworkResponse);
+      }
+    },
+    [],
+  );
 
   const setFeedback = useCallback((id: string, status: FeedbackStatus | null): void => {
     // Noted outside the update below, which React may run twice. Taking an answer back isn't one.
@@ -393,5 +440,8 @@ export function useRecommendation(): UseRecommendationReturn {
     selectFromHistory,
     importHistory,
     setFeedback,
+    getHistory,
+    mergeServerLibrary,
+    discardCrate: emptyCrate,
   };
 }

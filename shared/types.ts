@@ -121,6 +121,12 @@ export function isRated(album: Pick<RatableAlbum, 'feedback'>): boolean {
   return album.feedback?.status != null;
 }
 
+/** When the listener last did something to the album: picked it, or changed what they said. */
+export function changedAt(album: RatableAlbum): number {
+  const picked = Date.parse(album.createdAt);
+  return album.feedback ? Math.max(picked, Date.parse(album.feedback.at)) : picked;
+}
+
 /**
  * Applies the retention rules to a library kept newest first: every rated album stays, and of the
  * rest only the newest few, within the age limit. The order is left as it is.

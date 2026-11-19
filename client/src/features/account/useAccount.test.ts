@@ -122,4 +122,25 @@ describe('useAccount', () => {
 
     expect(result.current.requestLink).toBe(requestSignInLink);
   });
+  describe('refresh', () => {
+    it('asks again and follows the answer', async () => {
+      const { result } = renderHook(() => useAccount());
+      await waitFor(() => expect(result.current.account).not.toBeNull());
+      mockFetchAccount.mockResolvedValue({ account: null });
+
+      await act(() => result.current.refresh());
+
+      expect(result.current.account).toBeNull();
+    });
+
+    it('leaves things as they are when it cannot ask', async () => {
+      const { result } = renderHook(() => useAccount());
+      await waitFor(() => expect(result.current.account).not.toBeNull());
+      mockFetchAccount.mockRejectedValue(new Error('Failed to fetch'));
+
+      await act(() => result.current.refresh());
+
+      expect(result.current.account).toEqual({ email: 'person@example.com' });
+    });
+  });
 });

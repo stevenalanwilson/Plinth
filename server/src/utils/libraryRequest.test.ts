@@ -134,36 +134,37 @@ describe('parseLibrarySyncRequest', () => {
         ],
       },
     ],
-    [
-      'too many genres',
-      {
-        items: [
-          validItem({
-            recommendation: {
-              artist: 'A',
-              album: 'B',
-              year: '1',
-              reason: 'r',
-              genres: Array(21).fill('x'),
-            },
-          }),
-        ],
-      },
-    ],
-    [
-      'an over-long reason',
-      {
-        items: [
-          validItem({
-            recommendation: { artist: 'A', album: 'B', year: '1', reason: 'x'.repeat(4001) },
-          }),
-        ],
-      },
-    ],
     ['a removal with no key', { deletions: [{ at: '2026-11-03T10:00:00.000Z' }] }],
     ['a removal with a bad date', { deletions: [{ key: 'a|b', at: 'x' }] }],
   ])('refuses %s', (_name, body) => {
     expect(parse(body)).toHaveProperty('error');
+  });
+
+  it('cuts over-long text and too many genres to fit, so such a pick can still be saved', () => {
+    const item = validItem({
+      recommendation: {
+        artist: 'A',
+        album: 'B',
+        year: '1',
+        reason: 'x'.repeat(5000),
+        genres: Array(25).fill('rock'),
+      },
+    });
+
+    const [kept] = itemsOf(parse({ items: [item] })) as {
+      recommendation: { reason: string; genres: string[] };
+    }[];
+
+    expect(kept.recommendation.reason).toHaveLength(4000);
+    expect(kept.recommendation.genres).toHaveLength(20);
+  });
+
+  it('refuses an artist or album name that is too long, since cutting it would change its key', () => {
+    const item = validItem({
+      recommendation: { artist: 'A'.repeat(301), album: 'B', year: '1', reason: 'r' },
+    });
+
+    expect(parse({ items: [item] })).toHaveProperty('error');
   });
 
   it('refuses more albums than one request may carry', () => {

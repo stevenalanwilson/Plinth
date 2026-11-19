@@ -8,7 +8,9 @@ import {
   LibrarySyncRequest,
 } from '@shared/types';
 
-// Generous for anything real, and what stops one account storing a great deal in one album.
+// Generous for anything real, and what stops one account storing a great deal in one album. Names
+// are refused when too long, since they make the album's key and cutting one would change it.
+// Everything else is cut to fit, so a pick with unusually long text can't stop a crate saving.
 const MAX_NAME_LENGTH = 300;
 const MAX_REASON_LENGTH = 4000;
 const MAX_URL_LENGTH = 2000;
@@ -27,15 +29,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function text(
   value: unknown,
   maxLength: number,
-  options: { allowEmpty?: boolean } = {},
+  options: { allowEmpty?: boolean; cut?: boolean } = {},
 ): string | null {
-  if (typeof value !== 'string' || value.length > maxLength) return null;
-  return value === '' && !options.allowEmpty ? null : value;
+  if (typeof value !== 'string') return null;
+  const kept = options.cut ? value.slice(0, maxLength) : value;
+  if (kept.length > maxLength) return null;
+  return kept === '' && !options.allowEmpty ? null : kept;
 }
 
+/** Text that may be absent: undefined for none, null for something that isn't text. */
 function optionalText(value: unknown, maxLength: number): string | undefined | null {
   if (value === undefined || value === null) return undefined;
-  return text(value, maxLength);
+  return text(value, maxLength, { cut: true });
 }
 
 function nullableUrl(value: unknown): string | null | undefined {
@@ -46,7 +51,7 @@ function nullableUrl(value: unknown): string | null | undefined {
 
 function nullableText(value: unknown): string | null | undefined {
   if (value === null || value === undefined) return null;
-  return text(value, MAX_SHORT_LENGTH, { allowEmpty: true }) ?? undefined;
+  return text(value, MAX_SHORT_LENGTH, { allowEmpty: true, cut: true }) ?? undefined;
 }
 
 function isoDate(value: unknown): string | null {
@@ -60,8 +65,8 @@ function parseItem(raw: unknown): LibraryItem | null {
   const pick = raw.recommendation;
   const artist = text(pick.artist, MAX_NAME_LENGTH);
   const album = text(pick.album, MAX_NAME_LENGTH);
-  const year = text(pick.year, MAX_SHORT_LENGTH, { allowEmpty: true });
-  const reason = text(pick.reason, MAX_REASON_LENGTH, { allowEmpty: true });
+  const year = text(pick.year, MAX_SHORT_LENGTH, { allowEmpty: true, cut: true });
+  const reason = text(pick.reason, MAX_REASON_LENGTH, { allowEmpty: true, cut: true });
   const createdAt = isoDate(raw.createdAt);
   if (artist === null || album === null || year === null || reason === null || createdAt === null) {
     return null;
@@ -75,14 +80,12 @@ function parseItem(raw: unknown): LibraryItem | null {
 
   let genres: string[] | undefined;
   if (pick.genres !== undefined) {
-    if (
-      !Array.isArray(pick.genres) ||
-      pick.genres.length > MAX_GENRES ||
-      !pick.genres.every((genre) => text(genre, MAX_SHORT_LENGTH) !== null)
-    ) {
-      return null;
-    }
-    genres = pick.genres as string[];
+    if (!Array.isArray(pick.genres)) return null;
+    const cut = pick.genres
+      .slice(0, MAX_GENRES)
+      .map((genre) => text(genre, MAX_SHORT_LENGTH, { cut: true }));
+    if (cut.some((genre) => genre === null)) return null;
+    genres = cut as string[];
   }
 
   const artwork = isRecord(raw.artwork) ? raw.artwork : {};

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { LibraryItem, UNRATED_MAX_ENTRIES } from '@shared/types';
+import { changedAt, LibraryItem, UNRATED_MAX_ENTRIES } from '@shared/types';
 import { LibraryRecord } from '../repositories/libraryRepository';
-import { changedAt, expiredKeys, mergeItems, planWrites, REMOVAL_KEPT_DAYS } from './libraryMerge';
+import { expiredKeys, mergeItems, planWrites, REMOVAL_KEPT_DAYS } from './libraryMerge';
 
 const NOW = new Date('2026-11-19T12:00:00.000Z');
 const DAY_MS = 24 * 60 * 60 * 1000;
