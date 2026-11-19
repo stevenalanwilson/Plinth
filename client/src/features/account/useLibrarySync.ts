@@ -18,8 +18,10 @@ export class UnsyncedCrateError extends Error {
 
 // After the crate changes, a short wait so a run of changes (rating several albums) is one save.
 const SAVE_DELAY_MS = 1_500;
-// How often a page left open asks whether another device has changed the crate.
-const CHECK_INTERVAL_MS = 60_000;
+// How often a page left open asks whether another device has changed the crate. Short enough that
+// a pick saved on a phone shows up on a laptop about as fast as someone can look across to it. The
+// server allows 30 a minute from one address, so this leaves room for several devices at home.
+const CHECK_INTERVAL_MS = 15_000;
 // Coming back to the page asks again, but not if it has only just asked.
 const MIN_CHECK_GAP_MS = 10_000;
 
@@ -49,7 +51,8 @@ interface UseLibrarySyncReturn {
 
 /**
  * Keeps the crate and the signed-in account together: once when the browser signs in, when the
- * crate changes, when the page comes back into view or the connection returns, and now and then.
+ * crate changes, when the page comes back into view or focus or the connection returns, and every
+ * fifteen seconds while it is open.
  * One sync runs at a time, and a request that comes in during one makes it go round again.
  */
 export function useLibrarySync(options: UseLibrarySyncOptions): UseLibrarySyncReturn {
@@ -140,10 +143,13 @@ export function useLibrarySync(options: UseLibrarySyncOptions): UseLibrarySyncRe
     };
     const timer = setInterval(check, CHECK_INTERVAL_MS);
     document.addEventListener('visibilitychange', check);
+    // On a computer, switching windows leaves the page "visible", so only focus says it's back.
+    window.addEventListener('focus', check);
     window.addEventListener('online', check);
     return () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('focus', check);
       window.removeEventListener('online', check);
     };
   }, [email, sync]);
