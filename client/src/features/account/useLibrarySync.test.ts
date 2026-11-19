@@ -215,11 +215,24 @@ describe('useLibrarySync', () => {
       mockSync.mockClear();
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(61_000);
+        await vi.advanceTimersByTimeAsync(16_000);
       });
 
       expect(mockSync).toHaveBeenCalledTimes(1);
       expect(sentAlbums(0)).toEqual([]);
+    });
+
+    it('asks when the window is clicked back into, which a visible page does not report as a return', async () => {
+      const { hook } = setup([entry('A')]);
+      await waitFor(() => expect(hook.result.current.status).toBe('idle'));
+      mockSync.mockClear();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11_000);
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      expect(mockSync).toHaveBeenCalledTimes(1);
     });
 
     it('asks again when the connection comes back, but not straight after asking', async () => {

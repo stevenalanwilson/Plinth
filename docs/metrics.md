@@ -116,7 +116,7 @@ This one is a check you do, not a number from the logs, because the logs say not
 1. On a desktop browser, answer a few picks (Own it, Want on vinyl), then open the Crate page and use **Sign in** from the note or the header, with an address you can read.
 2. Open the link from the email (on the desktop or on the phone) and tap Sign in. The menu should say "Your crate is saved to your account."
 3. On the phone, sign in with the same address. The crate page should show the same albums with the same answers, after a moment.
-4. Change an answer or remove an album on one device, and bring the other back into view. It should follow within a minute.
+4. Change an answer or remove an album on one device, and bring the other back into view. It should follow within about fifteen seconds, or at once when you click back into that window.
 5. Sign out on the phone. Its crate should leave that device and come back when you sign in again.
 
 The logs can show whether people are doing it. `sign-in link requested` against `signed in` says how many links are opened, `signed in` with `newAccount` true counts new accounts, and `library synced` counts saves and checks (see Accounts above). They can't say whether a crate arrived on a second device.
