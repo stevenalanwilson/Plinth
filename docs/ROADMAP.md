@@ -80,13 +80,13 @@
 
 **Goal:** the crate survives cleared browser data and works across devices.
 
-- [ ] **P4.1 Optional magic-link sign-in** — local storage stays the default, so trying Plinth still needs no account
-- [ ] **P4.2 Merge local library on first sign-in** — keep import/export as a backup
-- [ ] **P4.3 Rate limits** — a daily cap for anonymous users and a higher one for signed-in users, counted per device or account rather than per IP (mobile carriers put many people behind one IP)
-- [ ] **P4.4 Server-side library** — the server database becomes the source of truth for the crate; each client keeps a local copy and syncs through idempotent endpoints with last-modified times and delete markers (last write wins)
-- [ ] **P4.5 Token-based auth for every client** — an anonymous device token first, upgraded to an account at sign-in; bearer tokens rather than cookies, so web and native share one path
-- [ ] **P4.6 Insights on the server** — compute the stats on the server once the library is synced, so every client shows the same numbers
-- [ ] **P4.7 Safe retries** — an idempotency key on `/recommend`, kept briefly on the server, so a retry after a dropped connection (common on mobile) doesn't pay for a second Claude call
+- [x] **P4.1 Optional magic-link sign-in** — local storage stays the default, so trying Plinth still needs no account
+- [x] **P4.2 Merge local library on first sign-in** — keep import/export as a backup
+- [x] **P4.3 Rate limits** — a daily cap for anonymous users and a higher one for signed-in users, counted per device or account rather than per IP (mobile carriers put many people behind one IP)
+- [x] **P4.4 Server-side library** — the server database becomes the source of truth for the crate; each client keeps a local copy and syncs through idempotent endpoints with last-modified times and delete markers (last write wins)
+- [x] **P4.5 Token-based auth for every client** — an anonymous device token first, upgraded to an account at sign-in; bearer tokens rather than cookies, so web and native share one path
+- [ ] **P4.6 Insights on the server** — compute the stats on the server once the library is synced, so every client shows the same numbers. **Not done, on purpose:** the browser works the stats out from the crate, and a synced crate is the same on every device, so every client already shows the same numbers. Move this to the server when a client that can't do the sums (the iOS app, P7.6) needs it
+- [x] **P4.7 Safe retries** — an idempotency key on `/recommend`, kept briefly on the server, so a retry after a dropped connection (common on mobile) doesn't pay for a second Claude call
 
 **Done when:** a user can sign in on their phone and see the crate they built on desktop.
 
@@ -171,6 +171,12 @@
 - **Want list (P3.3)** — The Want on vinyl filter shows a list, newest first, with Apple Music, Spotify and Discogs links for each album and a Got it button that moves it to Own it
 - **Taste feeds the picks (P3.4)** — An album the listener has answered is never picked again (checked in code for up to 500 albums, not left to the prompt), and the albums they own, want or saved give picks a gentle lean towards their taste, while the ones marked Not for me are steered away from
 - **Taste summary (P3.5)** — Insights opens with a plain-English paragraph about the listener's taste, worked out in the browser from the genres, decades and countries of their albums, counting the ones they own or want most; it can't speak to tempo or density, because picks don't record the sliders they were made with. The numbers behind it are tunable: see `docs/taste-summary.md`
+- **A token for every device (P4.5)** — The first pick or sign-in gives a browser a random device token, kept only in a scrambled form on the server and sent as a bearer token, never a cookie. A browser that can't keep it stays anonymous and is counted by a hash of its address. Signing in links the device to an account, so web and native clients share one path. Request logs no longer write the `Authorization` header (they had been, since the tokens arrived)
+- **Safe retries (P4.7)** — A pick carries an `Idempotency-Key`. If the connection drops, the browser asks once more with the same key and gets the same pick back within ten minutes, without a second Claude call; a repeat that arrives while the first is still running waits for it
+- **Daily limits (P4.3)** — A visitor gets 25 picks a day (a device, or an address for a browser with no token), a signed-in account 100 shared by all its devices, and everyone together 1000, resetting at midnight UTC. All three are set on the server without a deploy, and 0 pauses all picks. A visitor turned away sees a plain message and is not counted as a pick
+- **Optional sign-in (P4.1)** — A link emailed through Resend signs a browser in; it works once, for 15 minutes, and opens a page that waits for a tap because mail programs open links to look at them. The reply is the same for known and unknown addresses. Signing out and deleting the account are in the header menu, and `/privacy` says what is kept. Without the email settings in production, sign-in switches itself off and the log says what is missing
+- **The crate follows the account (P4.4)** — A signed-in browser saves its crate to the account when it changes, when the page comes back into view, and every minute, and takes what other devices changed. The newer answer to an album wins, and a removal is remembered for 60 days so other devices drop the album. Signing out saves first, warns before losing anything unsaved, then takes the crate off that device; deleting the account removes the saved crate but leaves the device's alone. Known edges: a removed album stays removed if an old backup is re-imported, one album under two spellings can be two rows, and a new device downloads the whole crate at once
+- **Keeping the crate (P4.2)** — Signing in adds the browser's crate to the account at once. Someone who isn't signed in and has an answered album sees a note on the Crate page saying it only lives in this browser, with Sign in and Not now; Import and Export stay as the backup
 
 ---
 
