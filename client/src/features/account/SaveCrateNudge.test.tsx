@@ -22,6 +22,7 @@ function renderNudge(
     history?: HistoryEntry[];
     isSignedIn?: boolean;
     isChecking?: boolean;
+    isSignInAvailable?: boolean;
   } = {},
 ): void {
   render(
@@ -29,6 +30,7 @@ function renderNudge(
       history={props.history ?? [entry('A', 'own')]}
       isSignedIn={props.isSignedIn ?? false}
       isChecking={props.isChecking ?? false}
+      isSignInAvailable={props.isSignInAvailable ?? true}
       onSignIn={onSignIn}
     />,
   );
@@ -69,6 +71,7 @@ describe('SaveCrateNudge', () => {
         history={[entry('A', 'own')]}
         isSignedIn={false}
         isChecking={false}
+        isSignInAvailable
         onSignIn={onSignIn}
       />,
     );
@@ -83,6 +86,12 @@ describe('SaveCrateNudge', () => {
 
   it('is not shown to someone who is signed in', () => {
     renderNudge({ isSignedIn: true });
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('is not shown when signing in is switched off, since it would offer something that fails', () => {
+    renderNudge({ isSignInAvailable: false });
 
     expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });

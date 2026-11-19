@@ -1,5 +1,6 @@
 import {
   AccountResponse,
+  AccountStatusResponse,
   DeviceRegistrationResponse,
   IDEMPOTENCY_KEY_HEADER,
   LibrarySyncRequest,
@@ -290,7 +291,7 @@ export function verifySignIn(token: string, signal?: AbortSignal): Promise<Accou
  * Who this browser is signed in as. A browser with no device token can't be signed in, so it is
  * not asked to get one just to find that out: unlike the other reads, this one carries the token.
  */
-export async function fetchAccount(signal?: AbortSignal): Promise<AccountResponse> {
+export async function fetchAccount(signal?: AbortSignal): Promise<AccountStatusResponse> {
   const token = getStoredToken();
   if (!token) return { account: null };
 
@@ -306,7 +307,7 @@ export async function fetchAccount(signal?: AbortSignal): Promise<AccountRespons
     return { account: null };
   }
   if (!res.ok) throw await toApiError(res);
-  return res.json() as Promise<AccountResponse>;
+  return res.json() as Promise<AccountStatusResponse>;
 }
 
 export async function signOut(signal?: AbortSignal): Promise<void> {

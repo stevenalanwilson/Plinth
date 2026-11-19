@@ -51,6 +51,22 @@ describe('useAccount', () => {
     expect(result.current.account).toBeNull();
   });
 
+  it('assumes signing in is available unless the server says it is not', async () => {
+    const { result } = renderHook(() => useAccount());
+
+    expect(result.current.isSignInAvailable).toBe(true);
+    await waitFor(() => expect(result.current.isChecking).toBe(false));
+    expect(result.current.isSignInAvailable).toBe(true);
+  });
+
+  it('knows when the server says signing in is switched off', async () => {
+    mockFetchAccount.mockResolvedValue({ account: null, signInAvailable: false });
+
+    const { result } = renderHook(() => useAccount());
+
+    await waitFor(() => expect(result.current.isSignInAvailable).toBe(false));
+  });
+
   it('treats not being able to ask as not being signed in, rather than failing', async () => {
     mockFetchAccount.mockRejectedValue(new Error('Failed to fetch'));
 

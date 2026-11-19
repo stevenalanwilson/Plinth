@@ -88,6 +88,14 @@ export interface AccountResponse {
   readonly account: { readonly email: string } | null;
 }
 
+/**
+ * Who this device is signed in as, and whether signing in is switched on at all. Absent means
+ * unknown, which is treated as on: an old server never says.
+ */
+export interface AccountStatusResponse extends AccountResponse {
+  readonly signInAvailable?: boolean;
+}
+
 export const FEEDBACK_STATUSES = ['save', 'own', 'want-vinyl', 'heard', 'not-for-me'] as const;
 export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
 

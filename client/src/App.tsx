@@ -42,12 +42,13 @@ export default function App(): React.ReactElement {
     mergeServerLibrary,
     discardCrate,
   } = useRecommendation();
-  const { account, isChecking, requestLink, signOut, deleteAccount, sync } = useAccountSession({
-    history,
-    getHistory,
-    applyRemote: mergeServerLibrary,
-    discardCrate,
-  });
+  const { account, isChecking, isSignInAvailable, requestLink, signOut, deleteAccount, sync } =
+    useAccountSession({
+      history,
+      getHistory,
+      applyRemote: mergeServerLibrary,
+      discardCrate,
+    });
   // An album page's "Find me something like this" lands here and starts the pick at once.
   useMoreLikeThisFromNavigation(
     useCallback((pivot: PivotHint) => void fetchRecommendation(pivot), [fetchRecommendation]),
@@ -137,6 +138,7 @@ export default function App(): React.ReactElement {
             history={history}
             isSignedIn={account !== null}
             isChecking={isChecking}
+            isSignInAvailable={isSignInAvailable}
             onSignIn={() => {
               // The menu is in the header, which may be out of sight on a long crate.
               window.scrollTo({ top: 0 });

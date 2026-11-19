@@ -164,7 +164,7 @@ export function createApiRouter({
     verifyLimiter,
     createVerifySignInHandler({ links: signInLinks, accounts, devices }),
   );
-  router.get('/auth/me', accountLimiter, createAccountHandler(accounts));
+  router.get('/auth/me', accountLimiter, createAccountHandler(accounts, signInChannel));
   router.post('/auth/sign-out', accountLimiter, createSignOutHandler(devices));
   router.delete(
     '/auth/account',
