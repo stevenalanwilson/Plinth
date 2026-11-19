@@ -79,6 +79,20 @@ describe('ArtistEssentialsPanel', () => {
     });
   });
 
+  it('shows the daily limit as a quiet note, not as an alert', async () => {
+    mockFetchEssentials.mockRejectedValue(
+      Object.assign(new Error("That's all 25 picks for today."), { code: 'daily-limit' }),
+    );
+    render(<ArtistEssentialsPanel />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByRole('textbox'), 'Talk Talk');
+    await user.click(screen.getByRole('button', { name: /get essentials/i }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent("That's all 25 picks for today.");
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('shows validation error when submitting with empty artist', async () => {
     render(<ArtistEssentialsPanel />);
     const user = userEvent.setup();

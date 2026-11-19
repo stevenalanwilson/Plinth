@@ -9,7 +9,8 @@ interface ArtistEssentialsPanelProps {
 export function ArtistEssentialsPanel({
   onSeedArtist,
 }: ArtistEssentialsPanelProps): React.ReactElement {
-  const { artist, setArtist, result, isLoading, error, fetchEssentials } = useArtistEssentials();
+  const { artist, setArtist, result, isLoading, error, isLimitReached, fetchEssentials } =
+    useArtistEssentials();
 
   function handleSubmit(e: React.FormEvent): void {
     e.preventDefault();
@@ -36,7 +37,14 @@ export function ArtistEssentialsPanel({
 
       {error !== null && (
         <p
-          style={{ marginTop: 12, fontSize: 12, color: 'var(--danger)', fontFamily: 'var(--mono)' }}
+          role={isLimitReached ? 'status' : 'alert'}
+          style={{
+            marginTop: 12,
+            fontSize: 12,
+            // Nothing has gone wrong when the day's picks are used up, so it isn't shown as a fault.
+            color: isLimitReached ? 'var(--muted)' : 'var(--danger)',
+            fontFamily: 'var(--mono)',
+          }}
         >
           {error}
         </p>

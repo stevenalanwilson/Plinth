@@ -740,7 +740,8 @@ describe('handleRecommend daily limits', () => {
 
     expect(status).toHaveBeenCalledWith(429);
     expect(json).toHaveBeenCalledWith({
-      error: expect.stringContaining("all 25 of today's picks"),
+      error: expect.stringContaining('all 25 picks for today'),
+      code: 'daily-limit',
     });
     expect(set).toHaveBeenCalledWith('Retry-After', expect.stringMatching(/^\d+$/));
     expect(mockGetRecommendation).not.toHaveBeenCalled();
@@ -754,7 +755,31 @@ describe('handleRecommend daily limits', () => {
 
     expect(status).toHaveBeenCalledWith(429);
     expect(json).toHaveBeenCalledWith({
-      error: expect.stringContaining('Plinth has reached its limit of picks for today'),
+      error: expect.stringContaining('Plinth has given out all its picks for today'),
+      code: 'daily-limit',
+    });
+  });
+
+  it('does not say "all 1" when the limit is a single pick', async () => {
+    consume.mockRejectedValue(new DailyLimitError('visitor', 1));
+    const { res, json } = makeRes();
+
+    await handle(requestFrom('203.0.113.7'), res);
+
+    const { error } = json.mock.calls[0][0] as { error: string };
+    expect(error).toContain("today's pick");
+    expect(error).not.toContain('all 1');
+  });
+
+  it('says picks are paused, not used up, when the limit is zero', async () => {
+    consume.mockRejectedValue(new DailyLimitError('visitor', 0));
+    const { res, json } = makeRes();
+
+    await handle(requestFrom('203.0.113.7'), res);
+
+    expect(json).toHaveBeenCalledWith({
+      error: expect.stringContaining('paused'),
+      code: 'daily-limit',
     });
   });
 

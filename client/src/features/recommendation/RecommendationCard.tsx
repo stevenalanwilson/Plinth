@@ -20,6 +20,8 @@ interface RecommendationCardProps {
   isLoadingRelations: boolean;
   isLoading: boolean;
   error: string | null;
+  /** The error is the day's picks being used up: shown calmly, as it isn't a fault. */
+  isLimitReached?: boolean;
   onSeedArtist: (name: string) => void;
   /** The verdict already given on this pick, or null for none. */
   feedback: FeedbackStatus | null;
@@ -33,6 +35,7 @@ export function RecommendationCard({
   isLoadingRelations,
   isLoading,
   error,
+  isLimitReached = false,
   onSeedArtist,
   feedback,
   onFeedback,
@@ -90,17 +93,28 @@ export function RecommendationCard({
           marginBottom: 16,
         }}
       >
-        <div
+        {!isLimitReached && (
+          <div
+            style={{
+              fontFamily: 'var(--serif)',
+              fontSize: 36,
+              color: 'var(--danger)',
+              marginBottom: 12,
+            }}
+          >
+            !
+          </div>
+        )}
+        <p
+          role={isLimitReached ? 'status' : 'alert'}
           style={{
-            fontFamily: 'var(--serif)',
-            fontSize: 36,
-            color: 'var(--danger)',
-            marginBottom: 12,
+            fontSize: 13,
+            color: isLimitReached ? 'var(--muted)' : 'var(--danger)',
+            lineHeight: 1.6,
           }}
         >
-          !
-        </div>
-        <p style={{ fontSize: 13, color: 'var(--danger)' }}>{error}</p>
+          {error}
+        </p>
       </div>
     );
   }

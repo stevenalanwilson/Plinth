@@ -20,6 +20,7 @@ import { pruneLibrary } from '../services/libraryRetention';
 import { applyServerChanges } from '../services/librarySync';
 import { recordRemovals } from '../services/librarySyncState';
 import { albumLabel, isSameAlbum } from '../services/albumIdentity';
+import { Failure, toFailure } from '../services/failure';
 import { buildTaste } from '../services/taste';
 import { recordRating, startPick } from '../services/visitActivity';
 import { FeedbackStatus, parseFeedback } from '../types/feedback';
@@ -93,6 +94,8 @@ interface UseRecommendationReturn {
   currentEntry: HistoryEntry | null;
   isLoading: boolean;
   error: string | null;
+  /** The day's picks are used up: shown calmly, as it isn't a fault. */
+  isLimitReached: boolean;
   fetchRecommendation: (pivot?: PivotHint, seedArtist?: string) => Promise<void>;
   clearHistory: () => void;
   removeFromHistory: (id: string) => void;
@@ -127,7 +130,9 @@ export function useRecommendation(): UseRecommendationReturn {
   const [isLoadingRelations, setIsLoadingRelations] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistoryFromStorage);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const error = failure?.message ?? null;
+  const isLimitReached = failure?.isLimitReached ?? false;
 
   // Found by album, not by position: importing a library can reorder it without changing the
   // pick on screen, and a rating must land on the album being shown.
@@ -331,7 +336,7 @@ export function useRecommendation(): UseRecommendationReturn {
     setRecommendation(entry.recommendation);
     setArtworkResponse(entry.artworkResponse);
     setIsLoading(false);
-    setError(null);
+    setFailure(null);
     setArtistRelations([]);
     setIsLoadingRelations(true);
 
@@ -362,7 +367,7 @@ export function useRecommendation(): UseRecommendationReturn {
       abortControllerRef.current = controller;
 
       setIsLoading(true);
-      setError(null);
+      setFailure(null);
 
       const alreadySuggested = historyRef.current.map((e) => albumLabel(e.recommendation));
 
@@ -411,7 +416,7 @@ export function useRecommendation(): UseRecommendationReturn {
         setHistory((prev) => pruneLibrary([newEntry, ...prev]));
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
-        setError(err instanceof Error ? err.message : 'Something went wrong.');
+        setFailure(toFailure(err, 'Something went wrong.'));
       } finally {
         if (!controller.signal.aborted) {
           setIsLoading(false);
@@ -434,6 +439,7 @@ export function useRecommendation(): UseRecommendationReturn {
     currentEntry,
     isLoading,
     error,
+    isLimitReached,
     fetchRecommendation,
     clearHistory,
     removeFromHistory,

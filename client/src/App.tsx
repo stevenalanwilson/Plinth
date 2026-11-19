@@ -31,6 +31,7 @@ export default function App(): React.ReactElement {
     currentEntry,
     isLoading,
     error,
+    isLimitReached,
     fetchRecommendation,
     clearHistory,
     removeFromHistory,
@@ -214,6 +215,7 @@ export default function App(): React.ReactElement {
               isLoadingRelations={isLoadingRelations}
               isLoading={isLoading}
               error={error}
+              isLimitReached={isLimitReached}
               onSeedArtist={(name) => void fetchRecommendation(undefined, name)}
               feedback={currentEntry?.feedback?.status ?? null}
               onFeedback={(status) => {

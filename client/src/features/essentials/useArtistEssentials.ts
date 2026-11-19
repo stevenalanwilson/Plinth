@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { ArtistEssentialsResponse } from '@shared/types';
 import { fetchArtistEssentials } from '../../services/apiClient';
+import { Failure, toFailure } from '../../services/failure';
 
 interface UseArtistEssentialsReturn {
   artist: string;
@@ -8,6 +9,8 @@ interface UseArtistEssentialsReturn {
   result: ArtistEssentialsResponse | null;
   isLoading: boolean;
   error: string | null;
+  /** The day's picks are used up: shown calmly, as it isn't a fault. */
+  isLimitReached: boolean;
   fetchEssentials: () => Promise<void>;
   clear: () => void;
 }
@@ -16,12 +19,14 @@ export function useArtistEssentials(): UseArtistEssentialsReturn {
   const [artist, setArtist] = useState('');
   const [result, setResult] = useState<ArtistEssentialsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const error = failure?.message ?? null;
+  const isLimitReached = failure?.isLimitReached ?? false;
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchEssentials = useCallback(async (): Promise<void> => {
     if (artist.trim() === '') {
-      setError('Please enter an artist name.');
+      setFailure({ message: 'Please enter an artist name.', isLimitReached: false });
       return;
     }
 
@@ -30,14 +35,14 @@ export function useArtistEssentials(): UseArtistEssentialsReturn {
     abortControllerRef.current = controller;
 
     setIsLoading(true);
-    setError(null);
+    setFailure(null);
 
     try {
       const data = await fetchArtistEssentials(artist.trim(), controller.signal);
       setResult(data);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setFailure(toFailure(err, 'Something went wrong. Please try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -47,9 +52,9 @@ export function useArtistEssentials(): UseArtistEssentialsReturn {
     abortControllerRef.current?.abort();
     setArtist('');
     setResult(null);
-    setError(null);
+    setFailure(null);
     setIsLoading(false);
   }, []);
 
-  return { artist, setArtist, result, isLoading, error, fetchEssentials, clear };
+  return { artist, setArtist, result, isLoading, error, isLimitReached, fetchEssentials, clear };
 }
