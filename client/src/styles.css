@@ -1564,3 +1564,24 @@ body::before {
   font-style: italic;
 }
 .privacy-lead { color: var(--muted); }
+
+.crate-nudge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.crate-nudge-text {
+  flex: 1 1 280px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.crate-nudge-actions { display: flex; gap: 8px; }

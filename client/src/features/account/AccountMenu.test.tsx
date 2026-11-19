@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AccountMenu } from './AccountMenu';
@@ -8,22 +9,45 @@ const onRequestLink = vi.fn<[string], Promise<void>>();
 const onSignOut = vi.fn<[{ discardUnsynced: boolean }], Promise<void>>();
 const onDeleteAccount = vi.fn<[], Promise<void>>();
 
-function renderMenu(
-  props: {
-    account?: { email: string } | null;
-    isChecking?: boolean;
-    status?: SyncStatus;
-    hasUnsynced?: boolean;
-  } = {},
-): void {
-  render(
+interface PageProps {
+  readonly account: { email: string } | null;
+  readonly isChecking: boolean;
+  readonly status: SyncStatus;
+  readonly hasUnsynced: boolean;
+  readonly startsOpen: boolean;
+}
+
+/** The page holds whether the panel is open, as App does. */
+function Page({
+  account,
+  isChecking,
+  status,
+  hasUnsynced,
+  startsOpen,
+}: PageProps): React.ReactElement {
+  const [isOpen, setIsOpen] = useState(startsOpen);
+  return (
     <AccountMenu
-      account={props.account ?? null}
-      isChecking={props.isChecking ?? false}
+      account={account}
+      isChecking={isChecking}
       onRequestLink={onRequestLink}
       onSignOut={onSignOut}
       onDeleteAccount={onDeleteAccount}
-      sync={{ status: props.status ?? 'idle', hasUnsynced: props.hasUnsynced ?? false }}
+      sync={{ status, hasUnsynced }}
+      isOpen={isOpen}
+      onOpenChange={setIsOpen}
+    />
+  );
+}
+
+function renderMenu(props: Partial<PageProps> = {}): void {
+  render(
+    <Page
+      account={props.account ?? null}
+      isChecking={props.isChecking ?? false}
+      status={props.status ?? 'idle'}
+      hasUnsynced={props.hasUnsynced ?? false}
+      startsOpen={props.startsOpen ?? false}
     />,
   );
 }
@@ -60,6 +84,12 @@ describe('AccountMenu signed out', () => {
     expect(screen.getByLabelText('Email me a sign-in link')).toBeInTheDocument();
     expect(screen.getByText(/saves your crate to your account/)).toBeInTheDocument();
     expect(screen.getByText(/more picks a day/)).toBeInTheDocument();
+  });
+
+  it('shows the form at once when the page has opened it', () => {
+    renderMenu({ startsOpen: true });
+
+    expect(screen.getByLabelText('Email me a sign-in link')).toBeInTheDocument();
   });
 
   it('asks for a link for the address, without stray spaces', async () => {

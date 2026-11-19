@@ -207,7 +207,8 @@ describe('useAccountSession', () => {
 
     const { hook } = setup();
 
+    // Who, then the save that is refused, then who again.
+    await waitFor(() => expect(mockFetchAccount).toHaveBeenCalledTimes(2), { timeout: 4000 });
     await waitFor(() => expect(hook.result.current.account).toBeNull());
-    expect(mockFetchAccount).toHaveBeenCalledTimes(2);
   });
 });

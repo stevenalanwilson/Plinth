@@ -10,12 +10,14 @@ import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPan
 import { VibePresets } from './features/presets/VibePresets';
 import { useMoreLikeThisFromNavigation } from './features/recommendation/useMoreLikeThisFromNavigation';
 import { AccountMenu } from './features/account/AccountMenu';
+import { SaveCrateNudge } from './features/account/SaveCrateNudge';
 import { useAccountSession } from './features/account/useAccountSession';
 
 type Page = 'home' | 'crate' | 'insights' | 'essentials';
 
 export default function App(): React.ReactElement {
   const [page, setPage] = useState<Page>('home');
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const {
     preferences,
     updatePreferences,
@@ -122,12 +124,24 @@ export default function App(): React.ReactElement {
             onSignOut={signOut}
             onDeleteAccount={deleteAccount}
             sync={sync}
+            isOpen={isAccountMenuOpen}
+            onOpenChange={setIsAccountMenuOpen}
           />
         </div>
       </header>
 
       {page === 'crate' ? (
         <div className="app-full">
+          <SaveCrateNudge
+            history={history}
+            isSignedIn={account !== null}
+            isChecking={isChecking}
+            onSignIn={() => {
+              // The menu is in the header, which may be out of sight on a long crate.
+              window.scrollTo({ top: 0 });
+              setIsAccountMenuOpen(true);
+            }}
+          />
           <CratePage
             history={history}
             onSelect={(id) => {
