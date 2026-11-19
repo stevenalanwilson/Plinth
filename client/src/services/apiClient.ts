@@ -22,6 +22,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** A machine-readable reason, when the server gave one. */
+    readonly code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -42,8 +44,12 @@ function isConnectionFailure(error: unknown): boolean {
 }
 
 async function toApiError(res: Response): Promise<ApiError> {
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  return new ApiError(data.error ?? `Request failed with status ${res.status}`, res.status);
+  const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+  return new ApiError(
+    data.error ?? `Request failed with status ${res.status}`,
+    res.status,
+    data.code,
+  );
 }
 const REQUEST_TIMEOUT_MS = 30_000;
 // Long enough for a connection that is coming back (a phone changing network) to be there again.

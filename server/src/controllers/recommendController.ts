@@ -24,12 +24,8 @@ import {
 import { logger } from '../logger';
 import { AlbumRepository } from '../repositories/albumRepository';
 import { createIdempotencyCache, IdempotencyCache } from '../services/idempotencyCache';
-import {
-  DailyLimitError,
-  DailyPickLimiter,
-  secondsUntilNextDay,
-  Visitor,
-} from '../services/dailyLimitService';
+import { DailyLimitError, DailyPickLimiter } from '../services/dailyLimitService';
+import { respondLimitReached, visitorOf } from './dailyLimitHandling';
 import { deviceOf } from '../middleware/deviceAuth';
 
 const VALID_ERAS = new Set<string>(ERA_VALUES);
@@ -134,24 +130,6 @@ function failureMessage(error: unknown): string {
     return "Couldn't find a pick we could verify. Please try again.";
   }
   return 'Failed to get recommendation. Please try again.';
-}
-
-function limitMessage(error: DailyLimitError): string {
-  if (error.scope === 'global') {
-    return 'Plinth has reached its limit of picks for today, so new ones are paused until midnight UTC. Your crate is still here.';
-  }
-  return `You've used all ${error.limit} of today's picks. They come back at midnight UTC, and your crate is still here until then.`;
-}
-
-/**
- * Who a pick is counted against: the account the device is signed in to, else the device, else
- * for a request without a token, its address.
- */
-function visitorOf(req: Request, res: Response): Visitor {
-  const device = deviceOf(res);
-  if (!device) return { kind: 'address', address: req.ip ?? '' };
-  if (device.accountId) return { kind: 'account', id: device.accountId };
-  return { kind: 'device', id: device.id };
 }
 
 export function createRecommendHandler(
@@ -283,10 +261,7 @@ async function handleRecommend(
     res.json(outcome.value);
   } catch (error) {
     if (error instanceof DailyLimitError) {
-      // Counts only: how often each limit is hit shows whether the numbers are about right.
-      logger.info({ scope: error.scope }, 'daily limit reached');
-      res.set('Retry-After', String(secondsUntilNextDay(new Date())));
-      res.status(429).json({ error: limitMessage(error) });
+      respondLimitReached(res, error);
       return;
     }
     const message = error instanceof Error ? error.message : 'Internal server error';

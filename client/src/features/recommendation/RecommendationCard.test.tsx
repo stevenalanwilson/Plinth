@@ -75,6 +75,46 @@ describe('RecommendationCard', () => {
     expect(screen.getByText('API error')).toBeInTheDocument();
   });
 
+  it('shows the daily limit as a quiet note, not as something that went wrong', () => {
+    render(
+      <RecommendationCard
+        recommendation={null}
+        artworkResponse={null}
+        artistRelations={[]}
+        isLoadingRelations={false}
+        isLoading={false}
+        error="That's all 25 picks for today."
+        isLimitReached
+        onSeedArtist={vi.fn()}
+        feedback={null}
+        onFeedback={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent("That's all 25 picks for today.");
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('!')).not.toBeInTheDocument();
+  });
+
+  it('still shows other errors as errors', () => {
+    render(
+      <RecommendationCard
+        recommendation={null}
+        artworkResponse={null}
+        artistRelations={[]}
+        isLoadingRelations={false}
+        isLoading={false}
+        error="API error"
+        onSeedArtist={vi.fn()}
+        feedback={null}
+        onFeedback={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('API error');
+    expect(screen.getByText('!')).toBeInTheDocument();
+  });
+
   it('renders a recommendation card', () => {
     render(
       <RecommendationCard
