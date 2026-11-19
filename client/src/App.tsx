@@ -10,13 +10,12 @@ import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPan
 import { VibePresets } from './features/presets/VibePresets';
 import { useMoreLikeThisFromNavigation } from './features/recommendation/useMoreLikeThisFromNavigation';
 import { AccountMenu } from './features/account/AccountMenu';
-import { useAccount } from './features/account/useAccount';
+import { useAccountSession } from './features/account/useAccountSession';
 
 type Page = 'home' | 'crate' | 'insights' | 'essentials';
 
 export default function App(): React.ReactElement {
   const [page, setPage] = useState<Page>('home');
-  const { account, isChecking, requestLink, signOut, deleteAccount } = useAccount();
   const {
     preferences,
     updatePreferences,
@@ -36,7 +35,16 @@ export default function App(): React.ReactElement {
     selectFromHistory,
     importHistory,
     setFeedback,
+    getHistory,
+    mergeServerLibrary,
+    discardCrate,
   } = useRecommendation();
+  const { account, isChecking, requestLink, signOut, deleteAccount, sync } = useAccountSession({
+    history,
+    getHistory,
+    applyRemote: mergeServerLibrary,
+    discardCrate,
+  });
   // An album page's "Find me something like this" lands here and starts the pick at once.
   useMoreLikeThisFromNavigation(
     useCallback((pivot: PivotHint) => void fetchRecommendation(pivot), [fetchRecommendation]),
@@ -113,6 +121,7 @@ export default function App(): React.ReactElement {
             onRequestLink={requestLink}
             onSignOut={signOut}
             onDeleteAccount={deleteAccount}
+            sync={sync}
           />
         </div>
       </header>

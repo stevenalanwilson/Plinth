@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { RecommendationResponse } from '@shared/types';
+import { LibraryItem, RecommendationResponse } from '@shared/types';
 import { HistoryEntry } from '../types/history';
 
 vi.mock('../services/apiClient', () => ({
@@ -14,6 +14,7 @@ import {
   fetchRecommendationArtwork,
   fetchArtistRelations,
 } from '../services/apiClient';
+import { loadSyncState, newSyncState, saveSyncState } from '../services/librarySyncState';
 import { useRecommendation } from './useRecommendation';
 
 const mockFetchRecommendation = vi.mocked(fetchRecommendation);
@@ -544,5 +545,141 @@ describe('useRecommendation visit activity', () => {
 
     expect(requestAt(0)).not.toHaveProperty('pickNumber');
     expect(requestAt(0)).not.toHaveProperty('ratedThisVisit');
+  });
+});
+
+describe('useRecommendation saving to an account', () => {
+  const STORAGE_KEY = 'album-recommender-history';
+
+  function seed(entries: readonly HistoryEntry[]): void {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  }
+
+  function accountItem(index: number, overrides: Record<string, unknown> = {}): LibraryItem {
+    const entry = storedEntry(index);
+    return {
+      recommendation: entry.recommendation,
+      artwork: entry.artworkResponse,
+      createdAt: new Date(Date.now() - index * 60_000).toISOString(),
+      ...overrides,
+    };
+  }
+
+  describe('noting removals', () => {
+    it('notes an album the listener removes, once this browser is signed in', () => {
+      seed([storedEntry(1), storedEntry(2)]);
+      saveSyncState(newSyncState('a@example.com'));
+      const { result } = renderHook(() => useRecommendation());
+
+      act(() => result.current.removeFromHistory('stored-2'));
+
+      expect(loadSyncState()?.removals).toEqual([
+        { key: 'artist 2|album 2', at: expect.any(String) },
+      ]);
+    });
+
+    it('notes every album when the listener clears the crate', () => {
+      seed([storedEntry(1), storedEntry(2)]);
+      saveSyncState(newSyncState('a@example.com'));
+      const { result } = renderHook(() => useRecommendation());
+
+      act(() => result.current.clearHistory());
+
+      expect(
+        loadSyncState()
+          ?.removals.map((removal) => removal.key)
+          .sort(),
+      ).toEqual(['artist 1|album 1', 'artist 2|album 2']);
+    });
+
+    it('notes nothing in a browser that is not signed in', () => {
+      seed([storedEntry(1)]);
+      const { result } = renderHook(() => useRecommendation());
+
+      act(() => result.current.removeFromHistory('stored-1'));
+
+      expect(loadSyncState()).toBeNull();
+    });
+  });
+
+  describe('discardCrate', () => {
+    it('empties the crate and what is on show, without noting removals', () => {
+      seed([storedEntry(1), storedEntry(2)]);
+      saveSyncState(newSyncState('a@example.com'));
+      const { result } = renderHook(() => useRecommendation());
+
+      act(() => result.current.discardCrate());
+
+      expect(result.current.history).toEqual([]);
+      expect(result.current.recommendation).toBeNull();
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null')).toEqual([]);
+      expect(loadSyncState()?.removals).toEqual([]);
+    });
+  });
+
+  describe('mergeServerLibrary', () => {
+    it('adds albums from the account', () => {
+      seed([storedEntry(1)]);
+      const { result } = renderHook(() => useRecommendation());
+
+      act(() => result.current.mergeServerLibrary([accountItem(2)], []));
+
+      expect(result.current.history.map((entry) => entry.recommendation.album)).toEqual([
+        'Album 1',
+        'Album 2',
+      ]);
+    });
+
+    it('shows the newest album when an empty crate fills from the account', () => {
+      const { result } = renderHook(() => useRecommendation());
+      expect(result.current.recommendation).toBeNull();
+
+      act(() => result.current.mergeServerLibrary([accountItem(3), accountItem(2)], []));
+
+      expect(result.current.recommendation?.album).toBe('Album 2');
+    });
+
+    it('leaves what is on show alone when the crate already had albums', () => {
+      seed([storedEntry(1)]);
+      const { result } = renderHook(() => useRecommendation());
+
+      act(() => result.current.mergeServerLibrary([accountItem(2)], []));
+
+      expect(result.current.recommendation?.album).toBe('Album 1');
+    });
+
+    it('removes an album the account says was removed', () => {
+      seed([storedEntry(1), storedEntry(2)]);
+      const { result } = renderHook(() => useRecommendation());
+
+      act(() =>
+        result.current.mergeServerLibrary(
+          [],
+          [{ key: 'artist 2|album 2', at: new Date(Date.now() + 1000).toISOString() }],
+        ),
+      );
+
+      expect(result.current.history.map((entry) => entry.recommendation.album)).toEqual([
+        'Album 1',
+      ]);
+    });
+
+    it('is not a change to the crate when the account has nothing new', () => {
+      seed([storedEntry(1)]);
+      const { result } = renderHook(() => useRecommendation());
+      const before = result.current.history;
+
+      act(() => result.current.mergeServerLibrary([accountItem(1)], []));
+
+      expect(result.current.history).toBe(before);
+    });
+
+    it('saves what it merged to the browser', () => {
+      const { result } = renderHook(() => useRecommendation());
+
+      act(() => result.current.mergeServerLibrary([accountItem(2)], []));
+
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')).toHaveLength(1);
+    });
   });
 });

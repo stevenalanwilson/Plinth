@@ -14,6 +14,7 @@ import {
   getProxiedArtworkUrl,
   requestSignInLink,
   signOut,
+  syncLibrary,
   verifySignIn,
 } from './apiClient';
 import { AlbumResponse, RecommendationRequest, RecommendationResponse } from '@shared/types';
@@ -718,6 +719,51 @@ describe('apiClient accounts', () => {
     await expect(deleteAccount()).rejects.toMatchObject({
       message: "You're not signed in.",
       status: 403,
+    });
+  });
+
+  describe('syncLibrary', () => {
+    const request = {
+      since: null,
+      items: [],
+      deletions: [{ key: 'can|tago mago', at: '2026-11-19T12:00:00.000Z' }],
+    };
+
+    it('posts the changes as this device, and returns what the account sent back', async () => {
+      const response = { items: [], deletions: [], cursor: '2026-11-19T12:00:00.000Z' };
+      fetchMock.mockResolvedValueOnce(json(response));
+
+      await expect(syncLibrary(request)).resolves.toEqual(response);
+
+      expect(requestedUrl()).toBe('/api/v1/library/sync');
+      expect(init().method).toBe('POST');
+      expect(headers().Authorization).toBe('Bearer pld_existing');
+      expect(JSON.parse(init().body as string)).toEqual(request);
+    });
+
+    it('sends no idempotency key, since asking again is how it is retried', async () => {
+      fetchMock.mockResolvedValueOnce(json({ items: [], deletions: [], cursor: 'c' }));
+
+      await syncLibrary(request);
+
+      expect(headers()).not.toHaveProperty('Idempotency-Key');
+    });
+
+    it('says why it failed, with the status, so a device that is not signed in can be told apart', async () => {
+      fetchMock.mockResolvedValueOnce(json({ error: "You're not signed in." }, 403));
+
+      await expect(syncLibrary(request)).rejects.toMatchObject({
+        message: "You're not signed in.",
+        status: 403,
+      });
+    });
+
+    it('does not retry when the connection drops', async () => {
+      fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+      await expect(syncLibrary(request)).rejects.toThrow('Failed to fetch');
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -18,6 +18,8 @@ interface UseAccountReturn {
   /** Emails a sign-in link. Rejects with a message fit to show. */
   readonly requestLink: (email: string) => Promise<void>;
   readonly signOut: () => Promise<void>;
+  /** Asks again who this browser is signed in as, for when something suggests it has changed. */
+  readonly refresh: () => Promise<void>;
   /** Deletes the account. Rejects with a message fit to show. */
   readonly deleteAccount: () => Promise<void>;
 }
@@ -40,6 +42,14 @@ export function useAccount(): UseAccountReturn {
     return () => controller.abort();
   }, []);
 
+  const refresh = useCallback(async (): Promise<void> => {
+    try {
+      setAccount((await fetchAccount()).account);
+    } catch {
+      // Not knowing leaves things as they are.
+    }
+  }, []);
+
   const signOut = useCallback(async (): Promise<void> => {
     await apiSignOut();
     setAccount(null);
@@ -50,5 +60,5 @@ export function useAccount(): UseAccountReturn {
     setAccount(null);
   }, []);
 
-  return { account, isChecking, requestLink: requestSignInLink, signOut, deleteAccount };
+  return { account, isChecking, requestLink: requestSignInLink, signOut, refresh, deleteAccount };
 }

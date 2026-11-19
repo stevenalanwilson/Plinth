@@ -20,6 +20,7 @@ import {
 import { EmailMessage, EmailSender } from './emailSender';
 import { createInMemoryAccountRepository } from '../repositories/inMemoryAccountRepository';
 import { createInMemoryDeviceRepository } from '../repositories/inMemoryDeviceRepository';
+import { createInMemoryLibraryRepository } from '../repositories/inMemoryLibraryRepository';
 import { createInMemorySignInLinkRepository } from '../repositories/inMemorySignInLinkRepository';
 import { logger } from '../logger';
 
@@ -31,6 +32,7 @@ function setup(): {
   links: ReturnType<typeof createInMemorySignInLinkRepository>;
   accounts: ReturnType<typeof createInMemoryAccountRepository>;
   devices: ReturnType<typeof createInMemoryDeviceRepository>;
+  library: ReturnType<typeof createInMemoryLibraryRepository>;
   sent: EmailMessage[];
   sender: EmailSender;
   request: (email: string, now?: Date) => Promise<void>;
@@ -39,6 +41,7 @@ function setup(): {
   const links = createInMemorySignInLinkRepository();
   const accounts = createInMemoryAccountRepository();
   const devices = createInMemoryDeviceRepository();
+  const library = createInMemoryLibraryRepository();
   const sent: EmailMessage[] = [];
   const sender: EmailSender = {
     send: async (message): Promise<void> => {
@@ -49,6 +52,7 @@ function setup(): {
     links,
     accounts,
     devices,
+    library,
     sent,
     sender,
     request: (email: string, now: Date = NOW): Promise<void> =>
@@ -351,6 +355,28 @@ describe('deleteAccount', () => {
 
     expect((await env.devices.findByTokenHash('hash-a'))?.accountId).toBeNull();
     expect((await env.devices.findByTokenHash('hash-b'))?.accountId).toBeNull();
+  });
+
+  it('removes the saved crate', async () => {
+    const { env, accountId } = await accountWithTwoDevices();
+    await env.library.sync(accountId, {
+      items: [
+        {
+          recommendation: { artist: 'A', album: 'B', year: '1999', reason: 'r' },
+          artwork: { artworkUrl: null, year: null, appleMusicUrl: null },
+          createdAt: NOW.toISOString(),
+        },
+      ],
+      deletions: [],
+      since: null,
+      now: NOW,
+    });
+
+    await deleteAccount(env, accountId);
+
+    expect(
+      await env.library.sync(accountId, { items: [], deletions: [], since: null, now: NOW }),
+    ).toEqual([]);
   });
 
   it('removes the links still waiting to be used', async () => {

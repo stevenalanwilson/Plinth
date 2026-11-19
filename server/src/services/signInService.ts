@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'crypto';
 import { AccountRepository } from '../repositories/accountRepository';
 import { DeviceRepository } from '../repositories/deviceRepository';
 import { SignInLinkRepository } from '../repositories/signInLinkRepository';
+import { LibraryRepository } from '../repositories/libraryRepository';
 import { EmailSender } from './emailSender';
 import { logger } from '../logger';
 
@@ -147,21 +148,23 @@ export interface DeleteAccountDependencies {
   readonly accounts: AccountRepository;
   readonly devices: DeviceRepository;
   readonly links: SignInLinkRepository;
+  readonly library: LibraryRepository;
 }
 
 /**
- * Removes an account and everything kept about it: every device is signed out, and the links
- * sent to its email are removed. The account itself goes last, so a failure part way can be
+ * Removes an account and everything kept about it: every device is signed out, its saved crate
+ * is removed, and the links sent to its email are removed. The account itself goes last, so a failure part way can be
  * tried again. Returns false if there was no such account.
  */
 export async function deleteAccount(
-  { accounts, devices, links }: DeleteAccountDependencies,
+  { accounts, devices, links, library }: DeleteAccountDependencies,
   accountId: string,
 ): Promise<boolean> {
   const account = await accounts.findById(accountId);
   if (!account) return false;
 
   await devices.unlinkAllFromAccount(accountId);
+  await library.removeAll(accountId);
   await links.deleteForEmail(account.email);
   return accounts.delete(accountId);
 }

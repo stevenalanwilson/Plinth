@@ -1,17 +1,7 @@
-export const FEEDBACK_STATUSES = ['save', 'own', 'want-vinyl', 'heard', 'not-for-me'] as const;
-export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
+import { Feedback, FEEDBACK_STATUSES, FeedbackStatus } from '@shared/types';
 
-/** What the listener said about an album. One status at a time; tapping it again clears it. */
-export interface Feedback {
-  /**
-   * Null once a rating has been cleared. The timestamp is kept, so that when libraries are later
-   * synced between devices, "cleared" can be told apart from "never rated" and a stale copy
-   * can't bring a cleared rating back.
-   */
-  readonly status: FeedbackStatus | null;
-  /** ISO 8601: when the status last changed, so the newer of two copies wins. */
-  readonly at: string;
-}
+export { FEEDBACK_STATUSES };
+export type { Feedback, FeedbackStatus };
 
 function isFeedbackStatus(value: unknown): value is FeedbackStatus {
   return FEEDBACK_STATUSES.some((status) => status === value);

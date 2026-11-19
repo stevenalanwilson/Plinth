@@ -1,13 +1,20 @@
 import React, { FormEvent, useState } from 'react';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { Account } from './useAccount';
+import { SyncStatus, UnsyncedCrateError } from './useLibrarySync';
 
 interface AccountMenuProps {
   readonly account: Account | null;
   readonly isChecking: boolean;
   readonly onRequestLink: (email: string) => Promise<void>;
-  readonly onSignOut: () => Promise<void>;
+  /**
+   * Signs out and takes the crate off this device. Rejects with UnsyncedCrateError, and does
+   * nothing, if changes haven't reached the account, unless told to go ahead without them.
+   */
+  readonly onSignOut: (options: { readonly discardUnsynced: boolean }) => Promise<void>;
   readonly onDeleteAccount: () => Promise<void>;
+  /** How saving the crate to the account is going. */
+  readonly sync: { readonly status: SyncStatus; readonly hasUnsynced: boolean };
 }
 
 type LinkStatus =
@@ -75,54 +82,109 @@ function SignInForm({
         </p>
       )}
       <p className="account-note">
-        Signing in is optional. For now it gives you more picks a day. Your crate stays on this
-        device.
+        Signing in is optional. It saves your crate to your account, so it&apos;s there on every
+        device you sign in on, and it gives you more picks a day.
       </p>
     </form>
   );
 }
 
+function syncNote(sync: AccountMenuProps['sync']): { text: string; isProblem: boolean } {
+  if (sync.status === 'failed') {
+    return {
+      text: "Couldn't save your crate to your account just now. It will try again.",
+      isProblem: true,
+    };
+  }
+  if (sync.status === 'syncing' || sync.hasUnsynced) {
+    return { text: 'Saving your crate…', isProblem: false };
+  }
+  return { text: 'Your crate is saved to your account.', isProblem: false };
+}
+
 function SignedInPanel({
   account,
+  sync,
   onSignOut,
   onDeleteAccount,
 }: {
   readonly account: Account;
-  readonly onSignOut: () => Promise<void>;
+  readonly sync: AccountMenuProps['sync'];
+  readonly onSignOut: AccountMenuProps['onSignOut'];
   readonly onDeleteAccount: () => Promise<void>;
 }): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
+  const [isLosingChanges, setIsLosingChanges] = useState(false);
 
   async function run(action: () => Promise<void>): Promise<void> {
     setError(null);
     try {
       await action();
     } catch (failure) {
+      if (failure instanceof UnsyncedCrateError) {
+        setIsLosingChanges(true);
+        return;
+      }
       setError(messageOf(failure));
     }
   }
 
+  const note = syncNote(sync);
+
   return (
     <div className="account-form">
       <p className="account-note">Signed in as {account.email}.</p>
-      <div className="account-form-row">
-        <button type="button" className="account-button" onClick={() => void run(onSignOut)}>
-          Sign out
-        </button>
-        <ConfirmButton
-          className="account-button account-button-danger"
-          label="Delete account"
-          confirmLabel="Tap again to delete"
-          onConfirm={() => void run(onDeleteAccount)}
-        />
-      </div>
+      <p className={note.isProblem ? 'account-error' : 'account-note'} role="status">
+        {note.text}
+      </p>
+      {isLosingChanges ? (
+        <>
+          <p className="account-error" role="alert">
+            Some changes to your crate haven&apos;t reached your account yet. If you sign out now,
+            they&apos;ll be lost from this device.
+          </p>
+          <div className="account-form-row">
+            <button
+              type="button"
+              className="account-button"
+              onClick={() => setIsLosingChanges(false)}
+            >
+              Stay signed in
+            </button>
+            <button
+              type="button"
+              className="account-button account-button-danger"
+              onClick={() => void run(() => onSignOut({ discardUnsynced: true }))}
+            >
+              Sign out anyway
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="account-form-row">
+          <button
+            type="button"
+            className="account-button"
+            onClick={() => void run(() => onSignOut({ discardUnsynced: false }))}
+          >
+            Sign out
+          </button>
+          <ConfirmButton
+            className="account-button account-button-danger"
+            label="Delete account"
+            confirmLabel="Tap again to delete"
+            onConfirm={() => void run(onDeleteAccount)}
+          />
+        </div>
+      )}
       {error && (
         <p className="account-error" role="alert">
           {error}
         </p>
       )}
       <p className="account-note">
-        Deleting removes your account and signs every device out of it. The crate on this device
+        Signing out takes the crate off this device; it stays in your account. Deleting removes your
+        account and the crate saved with it, and signs every device out. The crate on this device
         stays.
       </p>
     </div>
@@ -136,6 +198,7 @@ export function AccountMenu({
   onRequestLink,
   onSignOut,
   onDeleteAccount,
+  sync,
 }: AccountMenuProps): React.ReactElement | null {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -157,8 +220,9 @@ export function AccountMenu({
           {account ? (
             <SignedInPanel
               account={account}
-              onSignOut={async () => {
-                await onSignOut();
+              sync={sync}
+              onSignOut={async (options) => {
+                await onSignOut(options);
                 setIsOpen(false);
               }}
               onDeleteAccount={async () => {

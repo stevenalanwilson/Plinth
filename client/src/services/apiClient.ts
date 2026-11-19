@@ -2,6 +2,8 @@ import {
   AccountResponse,
   DeviceRegistrationResponse,
   IDEMPOTENCY_KEY_HEADER,
+  LibrarySyncRequest,
+  LibrarySyncResponse,
   AlbumDetailsResponse,
   AlbumResponse,
   RecommendationRequest,
@@ -308,6 +310,18 @@ export async function signOut(signal?: AbortSignal): Promise<void> {
 /** Deletes the account this browser is signed in to, and signs every device out of it. */
 export async function deleteAccount(signal?: AbortSignal): Promise<void> {
   await sendAsDevice<void>('DELETE', `${API_V1}/auth/account`, undefined, signal);
+}
+
+/**
+ * Saves this device's changes to the signed-in account's crate and returns what the account has
+ * changed since the device last heard. Safe to repeat, so there's no key and no retry here: the
+ * caller just asks again later.
+ */
+export function syncLibrary(
+  request: LibrarySyncRequest,
+  signal?: AbortSignal,
+): Promise<LibrarySyncResponse> {
+  return post<LibrarySyncResponse>(`${API_V1}/library/sync`, request, signal);
 }
 
 export function getProxiedArtworkUrl(artworkUrl: string): string {

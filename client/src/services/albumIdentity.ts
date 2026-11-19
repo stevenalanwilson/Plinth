@@ -1,4 +1,4 @@
-import { RecommendationResponse } from '@shared/types';
+import { albumNameKey, RecommendationResponse } from '@shared/types';
 
 type NamedAlbum = Pick<RecommendationResponse, 'artist' | 'album' | 'releaseGroupId'>;
 
@@ -7,7 +7,7 @@ type NamedAlbum = Pick<RecommendationResponse, 'artist' | 'album' | 'releaseGrou
  * one, and its name either way, since older picks have no release group.
  */
 export function albumKeys({ artist, album, releaseGroupId }: NamedAlbum): string[] {
-  const keys = [`name:${artist.toLowerCase()}|${album.toLowerCase()}`];
+  const keys = [`name:${albumNameKey({ artist, album })}`];
   if (releaseGroupId) keys.push(`release-group:${releaseGroupId}`);
   return keys;
 }

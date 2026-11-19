@@ -23,9 +23,9 @@ export function PrivacyPage(): React.ReactElement {
       <h2>On your device</h2>
       <p>
         Your crate (the picks you&apos;ve been given, your answers to them, and when) lives in your
-        browser and nowhere else. Your browser also keeps a random code that tells the server one
-        device from another, and a few counts, like how many picks you&apos;ve asked for this visit,
-        which end when you close the tab. Plinth sets no cookies.
+        browser, and nowhere else unless you sign in. Your browser also keeps a random code that
+        tells the server one device from another, and a few counts, like how many picks you&apos;ve
+        asked for this visit, which end when you close the tab. Plinth sets no cookies.
       </p>
 
       <h2>On the server</h2>
@@ -48,15 +48,24 @@ export function PrivacyPage(): React.ReactElement {
 
       <h2>If you sign in</h2>
       <p>
-        Signing in is optional. Plinth then keeps your email address and which devices are signed
-        in. The sign-in link you&apos;re sent is kept in a scrambled form, works once, and is
-        removed soon after it expires. Emails are sent through Resend, which delivers them for
-        Plinth and is used for nothing else.
+        Signing in is optional. Plinth then keeps your email address, which devices are signed in,
+        and a copy of your crate, so it&apos;s there on every device you sign in on. That is the
+        albums you&apos;ve been given, your answers to them and when, and each cover&apos;s address.
+        The copy follows your crate: an album you remove is removed from it, though the fact that
+        you removed it is remembered for 60 days (by artist and title only) so your other devices
+        drop it too. Picks you haven&apos;t answered are dropped from your account after 90 days,
+        and only the newest 50 are kept, as in your browser. The sign-in link you&apos;re sent is
+        kept in a scrambled form, works once, and is removed soon after it expires. Emails are sent
+        through Resend, which delivers them for Plinth and is used for nothing else.
       </p>
       <p>
         <strong>You can delete your account</strong> from the Sign in menu once you&apos;re signed
-        in. That removes your email address, signs every device out, and removes any sign-in links
-        that were sent. The crate on your device stays.
+        in. That removes your email address, the copy of your crate, and any sign-in links that were
+        sent, and signs every device out. The crate on your device stays.
+      </p>
+      <p>
+        <strong>Signing out</strong> takes your crate off that device, as it&apos;s kept in your
+        account. Sign in again to bring it back.
       </p>
 
       <h2>When you ask for a pick</h2>
