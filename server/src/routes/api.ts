@@ -7,7 +7,7 @@ import { createExampleAlbumHandler } from '../controllers/exampleAlbumController
 import { handleArtwork } from '../controllers/artworkController';
 import { handleArtistRelations } from '../controllers/artistRelationsController';
 import { handleImage } from '../controllers/imageController';
-import { handleArtistEssentials } from '../controllers/artistEssentialsController';
+import { createArtistEssentialsHandler } from '../controllers/artistEssentialsController';
 import { createRegisterDeviceHandler } from '../controllers/deviceController';
 import {
   createAccountHandler,
@@ -176,7 +176,11 @@ export function createApiRouter({
   router.get('/albums/:slug', albumLimiter, createAlbumHandler(albums));
   router.get('/albums/:slug/details', albumDetailsLimiter, createAlbumDetailsHandler(albums));
   router.get('/example-album', albumLimiter, createExampleAlbumHandler(albums));
-  router.post('/artist-essentials', artistEssentialsLimiter, handleArtistEssentials);
+  router.post(
+    '/artist-essentials',
+    artistEssentialsLimiter,
+    createArtistEssentialsHandler(dailyLimit),
+  );
   router.get('/artwork', artworkLimiter, handleArtwork);
   router.get('/artist-rels', artistRelsLimiter, handleArtistRelations);
   router.get('/image', imageLimiter, handleImage);

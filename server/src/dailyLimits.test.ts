@@ -12,18 +12,25 @@ vi.mock('./services/recommendationService', async (importOriginal) => ({
   getRecommendation: vi.fn(),
 }));
 
+vi.mock('./services/artistEssentialsService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./services/artistEssentialsService')>()),
+  getArtistEssentials: vi.fn(),
+}));
+
 import { createApp } from './app';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
 import { inMemoryAuth } from './testing/inMemoryAuth';
 import { createInMemoryUsageRepository } from './repositories/inMemoryUsageRepository';
 import { getRecommendation } from './services/recommendationService';
+import { getArtistEssentials } from './services/artistEssentialsService';
 import { createDailyPickLimiter, DailyLimits } from './services/dailyLimitService';
 
 // The real routes and middleware, with only the Claude call replaced. The recommend route lets
 // ten requests a minute through per address, and that limit is shared by every test in this
 // file, so the tests below send fewer than that between them.
 const mockGetRecommendation = vi.mocked(getRecommendation);
+const mockGetArtistEssentials = vi.mocked(getArtistEssentials);
 
 const PICK = { artist: 'Can', album: 'Tago Mago', year: '1971', reason: 'A great fit.' };
 const BODY = {
@@ -59,6 +66,8 @@ async function start(limits: DailyLimits): Promise<void> {
 beforeEach(() => {
   mockGetRecommendation.mockReset();
   mockGetRecommendation.mockResolvedValue(PICK);
+  mockGetArtistEssentials.mockReset();
+  mockGetArtistEssentials.mockResolvedValue({ artist: 'Can', albums: [] });
 });
 
 afterEach(async () => {
@@ -73,6 +82,14 @@ function recommend(token?: string): Promise<Response> {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(BODY),
+  });
+}
+
+function essentials(token: string): Promise<Response> {
+  return fetch(`${baseUrl}/api/v1/artist-essentials`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ artist: 'Can' }),
   });
 }
 
@@ -93,7 +110,7 @@ describe('daily limits through the real API', () => {
     const other = await recommend(tokenB);
 
     expect(limited.status).toBe(429);
-    expect(((await limited.json()) as { error: string }).error).toContain("all 2 of today's picks");
+    expect(((await limited.json()) as { error: string }).error).toContain('all 2 picks for today');
     expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0);
     expect(other.status).toBe(200);
     expect(mockGetRecommendation).toHaveBeenCalledTimes(3);
@@ -115,5 +132,20 @@ describe('daily limits through the real API', () => {
 
     expect((await recommend()).status).toBe(200);
     expect((await recommend()).status).toBe(429);
+  });
+
+  it("counts an artist's essentials as a pick, so they can't be used to get round the limit", async () => {
+    await start({ perVisitor: 2, perAccount: 100, global: 100 });
+    const token = await newDeviceToken();
+
+    expect((await recommend(token)).status).toBe(200);
+    expect((await essentials(token)).status).toBe(200);
+    const picked = await recommend(token);
+    const essentialsLimited = await essentials(token);
+
+    expect(picked.status).toBe(429);
+    expect(essentialsLimited.status).toBe(429);
+    expect(((await essentialsLimited.json()) as { code: string }).code).toBe('daily-limit');
+    expect(mockGetArtistEssentials).toHaveBeenCalledTimes(1);
   });
 });

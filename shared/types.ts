@@ -188,6 +188,9 @@ export interface LibrarySyncResponse {
   readonly cursor: string;
 }
 
+/** Sent with a 429 when a daily limit is used up, so it can be told from a request that came too fast. */
+export const DAILY_LIMIT_CODE = 'daily-limit';
+
 /** Sent with a pick so the server can tell a retry from a new request. */
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
 
