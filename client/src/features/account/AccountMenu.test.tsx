@@ -196,6 +196,15 @@ describe('AccountMenu signed in', () => {
     expect(screen.getByRole('status')).toHaveClass('account-error');
   });
 
+  it('says the crate is too big, and what to do, when the account is full', async () => {
+    renderMenu({ account, status: 'full', hasUnsynced: true });
+
+    await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(/too big to save any more/);
+    expect(screen.getByRole('status')).toHaveClass('account-error');
+  });
+
   describe('signing out with changes that have not reached the account', () => {
     async function trySigningOut(): Promise<void> {
       onSignOut.mockRejectedValueOnce(new UnsyncedCrateError());

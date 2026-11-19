@@ -6,7 +6,8 @@ import { syncCrate } from '../../services/crateSync';
 import { hasUnsyncedChanges } from '../../services/librarySync';
 import { clearSyncState, loadSyncState } from '../../services/librarySyncState';
 
-export type SyncStatus = 'idle' | 'syncing' | 'failed';
+/** `full` is failed for a reason retrying won't change: the account can't hold any more. */
+export type SyncStatus = 'idle' | 'syncing' | 'failed' | 'full';
 
 /** Thrown to stop signing out while the account is still missing changes from this device. */
 export class UnsyncedCrateError extends Error {
@@ -15,6 +16,9 @@ export class UnsyncedCrateError extends Error {
     this.name = 'UnsyncedCrateError';
   }
 }
+
+// What the server answers when the account can't hold any more albums.
+const CRATE_FULL_STATUS = 413;
 
 // After the crate changes, a short wait so a run of changes (rating several albums) is one save.
 const SAVE_DELAY_MS = 1_500;
@@ -97,7 +101,8 @@ export function useLibrarySync(options: UseLibrarySyncOptions): UseLibrarySyncRe
         setStatus('idle');
         return true;
       } catch (error) {
-        setStatus('failed');
+        const isFull = error instanceof ApiError && error.status === CRATE_FULL_STATUS;
+        setStatus(isFull ? 'full' : 'failed');
         if (error instanceof ApiError && error.status === 403) latest.current.onNotSignedIn();
         return false;
       } finally {

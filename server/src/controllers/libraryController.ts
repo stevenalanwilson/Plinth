@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { deviceOf } from '../middleware/deviceAuth';
-import { LibraryRepository } from '../repositories/libraryRepository';
+import { LibraryFullError, LibraryRepository } from '../repositories/libraryRepository';
 import { syncLibrary } from '../services/libraryService';
 import { parseLibrarySyncRequest } from '../utils/libraryRequest';
 import { logger } from '../logger';
@@ -39,6 +39,14 @@ export function createLibrarySyncHandler(library: LibraryRepository): Handler {
       );
       res.json(response);
     } catch (error) {
+      if (error instanceof LibraryFullError) {
+        logger.info('library full');
+        res.status(413).json({
+          error:
+            'Your crate is too big to save any more to your account. Remove some albums, then try again.',
+        });
+        return;
+      }
       logger.error(
         { error: error instanceof Error ? error.message : String(error) },
         'library sync failed',

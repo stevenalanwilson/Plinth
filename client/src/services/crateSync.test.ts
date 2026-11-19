@@ -162,6 +162,27 @@ describe('syncCrate', () => {
     expect(loadSyncState()?.cursor).toBe('c3');
   });
 
+  it('asks again from where the account stopped while it has more to tell, applying each part', async () => {
+    const { ports, requests, applied } = setup(
+      [],
+      [
+        { items: [item('A')], deletions: [], cursor: 'c1', more: true },
+        { items: [item('B')], deletions: [], cursor: 'c2', more: true },
+        { items: [item('C')], deletions: [], cursor: 'c3' },
+      ],
+    );
+
+    await syncCrate(EMAIL, ports);
+
+    expect(requests.map((request) => request.since)).toEqual([null, 'c1', 'c2']);
+    expect(applied.map((part) => part.items.map((i) => i.recommendation.album))).toEqual([
+      ['A'],
+      ['B'],
+      ['C'],
+    ]);
+    expect(loadSyncState()?.cursor).toBe('c3');
+  });
+
   it('keeps what it got through when a later round fails, and carries on from there', async () => {
     const history = Array.from({ length: LIBRARY_SYNC_MAX_ITEMS + 5 }, (_, index) =>
       entry(`Album ${index}`),

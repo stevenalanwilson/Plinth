@@ -134,3 +134,8 @@ export function expiredKeys(records: readonly LibraryRecord[], now: Date): strin
   }
   return expired;
 }
+
+/** True when a sync makes the crate bigger and leaves it over the limit. */
+export function overfills(before: number, after: number, maxRecords: number): boolean {
+  return after > maxRecords && after > before;
+}

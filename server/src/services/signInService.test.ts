@@ -370,12 +370,19 @@ describe('deleteAccount', () => {
       deletions: [],
       since: null,
       now: NOW,
+      maxRecords: 1_000,
     });
 
     await deleteAccount(env, accountId);
 
     expect(
-      await env.library.sync(accountId, { items: [], deletions: [], since: null, now: NOW }),
+      await env.library.sync(accountId, {
+        items: [],
+        deletions: [],
+        since: null,
+        now: NOW,
+        maxRecords: 1_000,
+      }),
     ).toEqual([]);
   });
 

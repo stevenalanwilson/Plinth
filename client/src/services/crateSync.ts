@@ -26,7 +26,8 @@ export interface CratePorts {
   ) => Promise<LibrarySyncResponse>;
 }
 
-// A safety stop, not a limit anyone should reach: 100 albums a round makes this 5,000 albums.
+// A safety stop, not a limit anyone should reach: 100 albums sent a round makes this 5,000 albums,
+// the most an account holds.
 const MAX_ROUNDS = 50;
 
 /**
@@ -79,7 +80,9 @@ export async function syncCrate(
     };
     saveSyncState(state);
 
+    // The account may have more to tell than one answer carries, which it says by the cursor
+    // it gave: ask again from there.
     const moreToSend = unsynced.length > sending.length || state.removals.length > 0;
-    if (!moreToSend) return;
+    if (!moreToSend && response.more !== true) return;
   }
 }

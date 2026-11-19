@@ -133,6 +133,15 @@ describe('useLibrarySync', () => {
     expect(hook.result.current.hasUnsynced).toBe(true);
   });
 
+  it('says so when the account is full, which is not the same as failing to connect', async () => {
+    mockSync.mockRejectedValue(new ApiError('Your crate is too big.', 413));
+
+    const { hook } = setup([entry('A')]);
+
+    await waitFor(() => expect(hook.result.current.status).toBe('full'));
+    expect(hook.result.current.hasUnsynced).toBe(true);
+  });
+
   it('tells whoever shows who is signed in when the server says it is nobody', async () => {
     mockSync.mockRejectedValue(new ApiError("You're not signed in.", 403));
 

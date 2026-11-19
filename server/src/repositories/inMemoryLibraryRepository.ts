@@ -1,5 +1,10 @@
-import { LibraryChanges, LibraryRecord, LibraryRepository } from './libraryRepository';
-import { expiredKeys, planWrites } from '../services/libraryMerge';
+import {
+  LibraryChanges,
+  LibraryFullError,
+  LibraryRecord,
+  LibraryRepository,
+} from './libraryRepository';
+import { expiredKeys, overfills, planWrites } from '../services/libraryMerge';
 
 /** For tests and for local development without a database; everything is lost on restart. */
 export function createInMemoryLibraryRepository(): LibraryRepository {
@@ -8,11 +13,16 @@ export function createInMemoryLibraryRepository(): LibraryRepository {
   return {
     // Nothing here waits, so one call finishes before the next starts.
     async sync(accountId: string, changes: LibraryChanges): Promise<readonly LibraryRecord[]> {
-      const records = byAccount.get(accountId) ?? new Map<string, LibraryRecord>();
-      byAccount.set(accountId, records);
+      const held = byAccount.get(accountId) ?? new Map<string, LibraryRecord>();
+      // Worked out on a copy, so a request that is refused leaves the crate as it was.
+      const records = new Map(held);
 
       for (const record of planWrites(records, changes)) records.set(record.key, record);
       for (const key of expiredKeys([...records.values()], changes.now)) records.delete(key);
+      if (overfills(held.size, records.size, changes.maxRecords)) {
+        throw new LibraryFullError(changes.maxRecords);
+      }
+      byAccount.set(accountId, records);
 
       const { since } = changes;
       return [...records.values()].filter(
