@@ -1,6 +1,7 @@
 import {
   AccountResponse,
   AccountStatusResponse,
+  ArtistSuggestionsResponse,
   DeviceRegistrationResponse,
   IDEMPOTENCY_KEY_HEADER,
   LibrarySyncRequest,
@@ -278,13 +279,33 @@ export function fetchArtistRelations(artist: string): Promise<ArtistRelationsRes
 // to well over the usual wait. The server keeps what it works out, so this is only the first time.
 const ESSENTIALS_TIMEOUT_MS = 60_000;
 
+/** An artist picked from the suggestions, which says which of several with the name is meant. */
+export interface ArtistChoice {
+  readonly id: string;
+  readonly detail: string;
+}
+
 export function fetchArtistEssentials(
   artist: string,
   signal?: AbortSignal,
+  choice?: ArtistChoice,
 ): Promise<ArtistEssentialsResponse> {
-  return post<ArtistEssentialsResponse>(`${API_V1}/artist-essentials`, { artist }, signal, {
+  const body = {
+    artist,
+    ...(choice ? { artistId: choice.id } : {}),
+    ...(choice?.detail ? { detail: choice.detail } : {}),
+  };
+  return post<ArtistEssentialsResponse>(`${API_V1}/artist-essentials`, body, signal, {
     timeoutMs: ESSENTIALS_TIMEOUT_MS,
   });
+}
+
+/** Artists whose names start with what has been typed. */
+export function fetchArtistSuggestions(
+  query: string,
+  signal?: AbortSignal,
+): Promise<ArtistSuggestionsResponse> {
+  return get<ArtistSuggestionsResponse>(`${API_V1}/artist-suggestions`, { q: query }, signal);
 }
 
 /** Emails a one-use sign-in link to the address. */

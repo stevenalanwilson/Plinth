@@ -10,17 +10,26 @@ const MIN_REQUEST_INTERVAL_MS = 1000;
  * wait for its slot. Shared across all callers, so concurrent lookups queue instead of
  * bursting, and an idle client pays no delay at all.
  */
+export interface RequestSpacer {
+  (): number;
+  /** How long a request made now would wait, without taking a slot. */
+  peek(): number;
+}
+
 export function createRequestSpacer(
   intervalMs: number,
   now: () => number = () => Date.now(),
-): () => number {
+): RequestSpacer {
   let nextSlotAt = 0;
-  return () => {
+  const reserve = (): number => {
     const current = now();
     const slot = Math.max(current, nextSlotAt);
     nextSlotAt = slot + intervalMs;
     return slot - current;
   };
+  return Object.assign(reserve, {
+    peek: (): number => Math.max(0, nextSlotAt - now()),
+  });
 }
 
 const reserveSlot = createRequestSpacer(MIN_REQUEST_INTERVAL_MS);
@@ -87,8 +96,31 @@ export function musicBrainzTtlSeconds(path: string, body: unknown): number {
   return isEmptyResult(body) ? DAY_SECONDS : 7 * DAY_SECONDS;
 }
 
-async function fetchFromMusicBrainz(path: string, budgetSignal: AbortSignal): Promise<Response> {
+/** The line to MusicBrainz is too long for a request that can't afford to wait in it. */
+export class MusicBrainzBusyError extends Error {
+  constructor() {
+    super('MusicBrainz requests are queued for too long to add another');
+    this.name = 'MusicBrainzBusyError';
+  }
+}
+
+export interface MusicBrainzFetchOptions {
+  /**
+   * Gives up with a MusicBrainzBusyError, taking no place in the line, if the request would wait
+   * longer than this. For requests that are only worth making straight away.
+   */
+  readonly maxQueueMs?: number;
+}
+
+async function fetchFromMusicBrainz(
+  path: string,
+  budgetSignal: AbortSignal,
+  { maxQueueMs }: MusicBrainzFetchOptions,
+): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
+    if (maxQueueMs !== undefined && reserveSlot.peek() > maxQueueMs) {
+      throw new MusicBrainzBusyError();
+    }
     const delayMs = reserveSlot();
     if (delayMs > 0) await sleep(delayMs, budgetSignal);
 
@@ -106,11 +138,15 @@ async function fetchFromMusicBrainz(path: string, budgetSignal: AbortSignal): Pr
  * GET a MusicBrainz web-service path (e.g. `artist?query=...`). A cached response skips the
  * request and the rate limit; otherwise the request waits for its slot and retries when busy.
  */
-export function musicBrainzFetch(path: string, budgetSignal: AbortSignal): Promise<Response> {
+export function musicBrainzFetch(
+  path: string,
+  budgetSignal: AbortSignal,
+  options: MusicBrainzFetchOptions = {},
+): Promise<Response> {
   return cachedResponse({
     namespace: 'musicbrainz',
     key: path,
     ttlSeconds: (body) => musicBrainzTtlSeconds(path, body),
-    fetch: () => fetchFromMusicBrainz(path, budgetSignal),
+    fetch: () => fetchFromMusicBrainz(path, budgetSignal, options),
   });
 }

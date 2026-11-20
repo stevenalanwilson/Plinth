@@ -312,6 +312,26 @@ export interface DeviceRegistrationResponse {
 
 export interface ArtistEssentialsRequest {
   readonly artist: string;
+  /**
+   * MusicBrainz ID of the artist, when they were chosen from the suggestions. It says which of
+   * several artists with the same name is meant.
+   */
+  readonly artistId?: string;
+  /** What set the chosen artist apart in the suggestions, such as "60s band from the UK". */
+  readonly detail?: string;
+}
+
+/** An artist to offer while someone types a name. */
+export interface ArtistSuggestion {
+  /** MusicBrainz ID. */
+  readonly id: string;
+  readonly name: string;
+  /** What tells artists with the same name apart, such as "1980s–1990s US grunge band". */
+  readonly detail: string;
+}
+
+export interface ArtistSuggestionsResponse {
+  readonly suggestions: readonly ArtistSuggestion[];
 }
 
 export interface ArtistEssentialsResponse {

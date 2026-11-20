@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   createRequestSpacer,
   escapeLucene,
+  MusicBrainzBusyError,
   musicBrainzFetch,
   musicBrainzTtlSeconds,
 } from './musicBrainzClient';
@@ -33,6 +34,20 @@ describe('createRequestSpacer', () => {
     now += 400;
 
     expect(reserve()).toBe(600);
+  });
+
+  it('says how long a request would wait without taking a place in the line', () => {
+    let now = 10_000;
+    const reserve = createRequestSpacer(1000, () => now);
+
+    expect(reserve.peek()).toBe(0);
+    reserve();
+    reserve();
+    now += 300;
+
+    expect(reserve.peek()).toBe(1700);
+    expect(reserve.peek()).toBe(1700);
+    expect(reserve()).toBe(1700);
   });
 });
 
@@ -123,6 +138,34 @@ describe('musicBrainzFetch', () => {
     expect(sentAt).toHaveLength(3);
     expect(sentAt[1] - sentAt[0]).toBeGreaterThanOrEqual(1000);
     expect(sentAt[2] - sentAt[1]).toBeGreaterThanOrEqual(1000);
+  });
+
+  it('gives up at once, taking no place in the line, when the wait would be too long', async () => {
+    const budget = new AbortController().signal;
+    const queued = [
+      musicBrainzFetch('artist?query=busy-1', budget),
+      musicBrainzFetch('artist?query=busy-2', budget),
+      musicBrainzFetch('artist?query=busy-3', budget),
+    ];
+
+    await expect(
+      musicBrainzFetch('artist?query=impatient', budget, { maxQueueMs: 500 }),
+    ).rejects.toBeInstanceOf(MusicBrainzBusyError);
+
+    await vi.runAllTimersAsync();
+    await Promise.all(queued);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('goes ahead when the line is short enough', async () => {
+    const budget = new AbortController().signal;
+    // The line is shared with earlier tests, so let their places pass first.
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    const request = musicBrainzFetch('artist?query=quiet', budget, { maxQueueMs: 500 });
+    await vi.runAllTimersAsync();
+
+    await expect(request).resolves.toBeDefined();
   });
 
   it('gives up waiting for a slot when the budget is spent', async () => {

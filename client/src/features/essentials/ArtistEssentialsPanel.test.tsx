@@ -5,6 +5,7 @@ import { ArtistEssentialsPanel } from './ArtistEssentialsPanel';
 
 vi.mock('../../services/apiClient', () => ({
   fetchArtistEssentials: vi.fn(),
+  fetchArtistSuggestions: vi.fn(),
   buildAppleMusicSearchUrl: vi.fn(
     (artist: string, album: string) => `https://music.apple.com/search?term=${artist}+${album}`,
   ),
@@ -17,9 +18,10 @@ vi.mock('../../services/apiClient', () => ({
   getProxiedArtworkUrl: vi.fn((url: string) => `/api/v1/image?url=${encodeURIComponent(url)}`),
 }));
 
-import { fetchArtistEssentials } from '../../services/apiClient';
+import { fetchArtistEssentials, fetchArtistSuggestions } from '../../services/apiClient';
 
 const mockFetchEssentials = vi.mocked(fetchArtistEssentials);
+const mockFetchSuggestions = vi.mocked(fetchArtistSuggestions);
 
 const mockResult = {
   artist: 'Talk Talk',
@@ -40,12 +42,13 @@ const mockResult = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockFetchSuggestions.mockResolvedValue({ suggestions: [] });
 });
 
 describe('ArtistEssentialsPanel', () => {
   it('renders the input and submit button', () => {
     render(<ArtistEssentialsPanel />);
-    expect(screen.getByRole('textbox', { name: /artist name/i })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /artist name/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /get essentials/i })).toBeInTheDocument();
   });
 
@@ -54,7 +57,7 @@ describe('ArtistEssentialsPanel', () => {
     render(<ArtistEssentialsPanel />);
     const user = userEvent.setup();
 
-    await user.type(screen.getByRole('textbox'), 'Talk Talk');
+    await user.type(screen.getByRole('combobox'), 'Talk Talk');
     await user.click(screen.getByRole('button', { name: /get essentials/i }));
 
     expect(screen.getByRole('button', { name: /finding essentials/i })).toBeDisabled();
@@ -65,7 +68,7 @@ describe('ArtistEssentialsPanel', () => {
     render(<ArtistEssentialsPanel />);
     const user = userEvent.setup();
 
-    await user.type(screen.getByRole('textbox'), 'Talk Talk');
+    await user.type(screen.getByRole('combobox'), 'Talk Talk');
     await user.click(screen.getByRole('button', { name: /get essentials/i }));
 
     await waitFor(() => {
@@ -91,7 +94,7 @@ describe('ArtistEssentialsPanel', () => {
     render(<ArtistEssentialsPanel />);
     const user = userEvent.setup();
 
-    await user.type(screen.getByRole('textbox'), 'Talk Talk');
+    await user.type(screen.getByRole('combobox'), 'Talk Talk');
     await user.click(screen.getByRole('button', { name: /get essentials/i }));
 
     await waitFor(() => {
@@ -106,10 +109,11 @@ describe('ArtistEssentialsPanel', () => {
     render(<ArtistEssentialsPanel />);
     const user = userEvent.setup();
 
-    await user.type(screen.getByRole('textbox'), 'Talk Talk');
+    await user.type(screen.getByRole('combobox'), 'Talk Talk');
     await user.click(screen.getByRole('button', { name: /get essentials/i }));
 
-    expect(await screen.findByRole('status')).toHaveTextContent("That's all 25 picks for today.");
+    const note = await screen.findByText("That's all 25 picks for today.");
+    expect(note).toHaveAttribute('role', 'status');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
@@ -129,7 +133,7 @@ describe('ArtistEssentialsPanel', () => {
     render(<ArtistEssentialsPanel onSeedArtist={onSeedArtist} />);
     const user = userEvent.setup();
 
-    await user.type(screen.getByRole('textbox'), 'Talk Talk');
+    await user.type(screen.getByRole('combobox'), 'Talk Talk');
     await user.click(screen.getByRole('button', { name: /get essentials/i }));
 
     await waitFor(() => {
@@ -138,5 +142,84 @@ describe('ArtistEssentialsPanel', () => {
 
     await user.click(screen.getByRole('button', { name: /recommend from this artist/i }));
     expect(onSeedArtist).toHaveBeenCalledWith('Talk Talk');
+  });
+
+  describe('suggesting artists as someone types', () => {
+    const NIRVANAS = [
+      { id: 'a1', name: 'Nirvana', detail: 'US grunge band' },
+      { id: 'a2', name: 'Nirvana', detail: '60s band from the UK' },
+    ];
+
+    it('offers the artists found, and looks up the one that is picked by its ID', async () => {
+      mockFetchSuggestions.mockResolvedValue({ suggestions: NIRVANAS });
+      mockFetchEssentials.mockResolvedValue({ ...mockResult, artist: 'Nirvana' });
+      render(<ArtistEssentialsPanel />);
+      const user = userEvent.setup();
+
+      await user.type(screen.getByRole('combobox'), 'nirv');
+      await user.click(await screen.findByRole('option', { name: /60s band from the UK/ }));
+
+      expect(screen.getByRole('combobox')).toHaveValue('Nirvana');
+      await waitFor(() => {
+        expect(mockFetchEssentials).toHaveBeenCalledWith('Nirvana', expect.any(AbortSignal), {
+          id: 'a2',
+          detail: '60s band from the UK',
+        });
+      });
+    });
+
+    it('offers artists from the crate straight away, and looks them up by name', async () => {
+      mockFetchEssentials.mockResolvedValue(mockResult);
+      render(<ArtistEssentialsPanel crateArtists={['Talk Talk', 'Can']} />);
+      const user = userEvent.setup();
+
+      await user.type(screen.getByRole('combobox'), 'tal');
+      await user.click(screen.getByRole('option', { name: /Talk Talk/ }));
+
+      await waitFor(() => {
+        expect(mockFetchEssentials).toHaveBeenCalledWith(
+          'Talk Talk',
+          expect.any(AbortSignal),
+          undefined,
+        );
+      });
+    });
+
+    it('looks up what was typed, by name, when no suggestion is picked', async () => {
+      mockFetchEssentials.mockResolvedValue(mockResult);
+      render(<ArtistEssentialsPanel />);
+      const user = userEvent.setup();
+
+      await user.type(screen.getByRole('combobox'), 'Talk Talk');
+      await user.click(screen.getByRole('button', { name: /get essentials/i }));
+
+      await waitFor(() => {
+        expect(mockFetchEssentials).toHaveBeenCalledWith(
+          'Talk Talk',
+          expect.any(AbortSignal),
+          undefined,
+        );
+      });
+    });
+
+    it('forgets the artist that was picked once the name is changed', async () => {
+      mockFetchSuggestions.mockResolvedValue({ suggestions: NIRVANAS });
+      mockFetchEssentials.mockResolvedValue({ ...mockResult, artist: 'Nirvana' });
+      render(<ArtistEssentialsPanel />);
+      const user = userEvent.setup();
+      await user.type(screen.getByRole('combobox'), 'nirv');
+      await user.click(await screen.findByRole('option', { name: /60s band from the UK/ }));
+      await waitFor(() => expect(mockFetchEssentials).toHaveBeenCalledTimes(1));
+
+      await user.type(screen.getByRole('combobox'), ' Tribute');
+      await user.click(screen.getByRole('button', { name: /get essentials/i }));
+
+      await waitFor(() => expect(mockFetchEssentials).toHaveBeenCalledTimes(2));
+      expect(mockFetchEssentials).toHaveBeenLastCalledWith(
+        'Nirvana Tribute',
+        expect.any(AbortSignal),
+        undefined,
+      );
+    });
   });
 });

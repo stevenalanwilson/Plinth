@@ -8,6 +8,7 @@ import { handleArtwork } from '../controllers/artworkController';
 import { handleArtistRelations } from '../controllers/artistRelationsController';
 import { handleImage } from '../controllers/imageController';
 import { createArtistEssentialsHandler } from '../controllers/artistEssentialsController';
+import { handleArtistSuggestions } from '../controllers/artistSuggestionsController';
 import { createRegisterDeviceHandler } from '../controllers/deviceController';
 import {
   createAccountHandler,
@@ -117,6 +118,16 @@ const artistRelsLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
+// Asked as someone types, a few times a second at most, and answered from the cache or a quick
+// lookup.
+const artistSuggestionsLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 90,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' },
+});
+
 const artistEssentialsLimiter = rateLimit({
   windowMs: 60_000,
   max: 5,
@@ -183,6 +194,7 @@ export function createApiRouter({
   );
   router.get('/artwork', artworkLimiter, handleArtwork);
   router.get('/artist-rels', artistRelsLimiter, handleArtistRelations);
+  router.get('/artist-suggestions', artistSuggestionsLimiter, handleArtistSuggestions);
   router.get('/image', imageLimiter, handleImage);
   return router;
 }

@@ -9,6 +9,7 @@ import {
   fetchArtwork,
   fetchArtistRelations,
   fetchArtistEssentials,
+  fetchArtistSuggestions,
   fetchAccount,
   deleteAccount,
   getProxiedArtworkUrl,
@@ -25,6 +26,10 @@ const fetchMock = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>();
 function requestedUrl(call = 0): string {
   const url = new URL(String(fetchMock.mock.calls[call][0]), 'http://base.invalid');
   return `${url.pathname}${url.search}`;
+}
+
+function sentBody(call = 0): unknown {
+  return JSON.parse(String(fetchMock.mock.calls[call][1]?.body));
 }
 
 function pathAndQuery(url: string): string {
@@ -70,6 +75,37 @@ describe('apiClient paths', () => {
     await fetchArtistEssentials('Can');
 
     expect(requestedUrl()).toBe('/api/v1/artist-essentials');
+  });
+
+  it('sends the artist as typed when none was chosen from the suggestions', async () => {
+    await fetchArtistEssentials('Can');
+
+    expect(sentBody()).toEqual({ artist: 'Can' });
+  });
+
+  it('sends the chosen artist’s ID and what tells them apart', async () => {
+    await fetchArtistEssentials('Nirvana', undefined, {
+      id: 'mb-1',
+      detail: '60s band from the UK',
+    });
+
+    expect(sentBody()).toEqual({
+      artist: 'Nirvana',
+      artistId: 'mb-1',
+      detail: '60s band from the UK',
+    });
+  });
+
+  it('leaves out the description of a chosen artist who has none', async () => {
+    await fetchArtistEssentials('Nirvana', undefined, { id: 'mb-1', detail: '' });
+
+    expect(sentBody()).toEqual({ artist: 'Nirvana', artistId: 'mb-1' });
+  });
+
+  it('asks the v1 API for artist suggestions, with what was typed in the query', async () => {
+    await fetchArtistSuggestions('talk ta');
+
+    expect(requestedUrl()).toBe('/api/v1/artist-suggestions?q=talk+ta');
   });
 
   it('proxies artwork through the v1 image endpoint', () => {
@@ -638,7 +674,7 @@ describe('apiClient accounts', () => {
 
     expect(requestedUrl()).toBe('/api/v1/auth/sign-in');
     expect(init().method).toBe('POST');
-    expect(JSON.parse(init().body as string)).toEqual({ email: 'person@example.com' });
+    expect(sentBody()).toEqual({ email: 'person@example.com' });
   });
 
   it('shows the server’s reason when a link can’t be sent', async () => {
@@ -657,7 +693,7 @@ describe('apiClient accounts', () => {
 
     expect(result).toEqual({ account: { email: 'person@example.com' } });
     expect(requestedUrl()).toBe('/api/v1/auth/verify');
-    expect(JSON.parse(init().body as string)).toEqual({ token: 'pls_token' });
+    expect(sentBody()).toEqual({ token: 'pls_token' });
     expect(headers().Authorization).toBe('Bearer pld_existing');
   });
 
@@ -759,7 +795,7 @@ describe('apiClient accounts', () => {
       expect(requestedUrl()).toBe('/api/v1/library/sync');
       expect(init().method).toBe('POST');
       expect(headers().Authorization).toBe('Bearer pld_existing');
-      expect(JSON.parse(init().body as string)).toEqual(request);
+      expect(sentBody()).toEqual(request);
     });
 
     it('sends no idempotency key, since asking again is how it is retried', async () => {

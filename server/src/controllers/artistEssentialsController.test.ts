@@ -110,6 +110,40 @@ describe('handleArtistEssentials', () => {
     });
   });
 
+  describe('an artist chosen from the suggestions', () => {
+    const artistId = '9a58fda3-f4ed-4080-a3a5-f457aac9fcdd';
+
+    it('passes the ID and what tells the artist apart to the service', async () => {
+      mockGetArtistEssentials.mockResolvedValue(mockResult);
+      const { res } = makeRes();
+
+      await handleArtistEssentials(
+        makeReq({ artist: 'Nirvana', artistId, detail: '  60s band\n from the UK ' }),
+        res,
+      );
+
+      expect(mockGetArtistEssentials).toHaveBeenCalledWith({
+        artist: 'Nirvana',
+        artistId,
+        detail: '60s band from the UK',
+      });
+    });
+
+    it.each([
+      ['an ID that is not a MusicBrainz ID', { artistId: 'not-an-id' }],
+      ['an ID that is not text', { artistId: 123 }],
+      ['a detail that is not text', { detail: 42 }],
+      ['a detail that is too long', { detail: 'x'.repeat(151) }],
+    ])('returns 400 for %s', async (_name, extra) => {
+      const { res, status } = makeRes();
+
+      await handleArtistEssentials(makeReq({ artist: 'Nirvana', ...extra }), res);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(mockGetArtistEssentials).not.toHaveBeenCalled();
+    });
+  });
+
   describe('service errors', () => {
     it('returns 502 when getArtistEssentials throws', async () => {
       mockGetArtistEssentials.mockRejectedValue(new Error('Claude API failed'));
