@@ -1585,3 +1585,38 @@ body::before {
   color: var(--muted);
 }
 .crate-nudge-actions { display: flex; gap: 8px; }
+
+/* An example reads as one: a badge up top and a dashed outline, so it isn't taken for a pick. */
+.example-album { border-style: dashed; }
+.example-album-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--accent);
+}
+.example-album-badge {
+  padding: 3px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #0e0e0f;
+}
+/* The record itself is dimmed so it isn't taken for a pick; it comes back up when pointed at. */
+.example-album-body,
+.example-album-hook {
+  opacity: 0.1;
+  transition: opacity 0.2s ease;
+}
+.example-album-cover img { filter: grayscale(0.8); }
+.example-album:hover .example-album-body,
+.example-album:hover .example-album-hook,
+.example-album:focus-within .example-album-body,
+.example-album:focus-within .example-album-hook { opacity: 0.7; }

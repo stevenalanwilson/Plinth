@@ -14,7 +14,10 @@ export function ExampleAlbum({ album }: ExampleAlbumProps): React.ReactElement {
 
   return (
     <article className="example-album" aria-labelledby="example-album-title">
-      <p className="example-album-label">An example pick</p>
+      <p className="example-album-label">
+        <span className="example-album-badge">Example</span>
+        <span>Not picked for you. This is the kind of record Plinth finds.</span>
+      </p>
       <div className="example-album-body">
         <div className="example-album-cover">
           {album.artworkUrl && !coverFailed ? (
@@ -39,9 +42,7 @@ export function ExampleAlbum({ album }: ExampleAlbumProps): React.ReactElement {
         </div>
       </div>
       {album.hook && <p className="example-album-hook">{album.hook}</p>}
-      <p className="example-album-prompt">
-        Someone else’s pick. Set your vibe and Plinth will find one for you.
-      </p>
+      <p className="example-album-prompt">Set your vibe and Plinth will find one for you.</p>
     </article>
   );
 }
