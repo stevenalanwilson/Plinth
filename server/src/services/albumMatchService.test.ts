@@ -14,6 +14,7 @@ import { logger } from '../logger';
 import {
   findAlbum,
   findArtistAlbums,
+  findArtistAlbumsById,
   ReleaseGroupCandidate,
   selectAlbumMatch,
 } from './albumMatchService';
@@ -261,5 +262,49 @@ describe('findArtistAlbums', () => {
     mockMusicBrainzFetch.mockResolvedValueOnce({ ok: false, status: 503 } as Response);
 
     await expect(findArtistAlbums('The Sound')).resolves.toEqual({ status: 'lookup_failed' });
+  });
+});
+
+describe('findArtistAlbumsById', () => {
+  function jsonResponse(body: unknown): Response {
+    return { ok: true, json: async (): Promise<unknown> => body } as Response;
+  }
+
+  it('fetches the albums of the chosen artist without searching for their name first', async () => {
+    mockMusicBrainzFetch
+      .mockResolvedValueOnce(
+        jsonResponse({ 'release-group-count': 1, 'release-groups': [jeopardy] }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ 'release-group-count': 1, 'release-groups': [jeopardy] }),
+      );
+
+    const lookup = await findArtistAlbumsById('artist-uk', 'Nirvana');
+
+    expect(lookup).toEqual({
+      status: 'found',
+      artist: 'Nirvana',
+      albums: [jeopardy],
+      listedIds: new Set(['jeopardy-1980']),
+    });
+    const paths = mockMusicBrainzFetch.mock.calls.map(([path]) => path);
+    expect(paths).toHaveLength(2);
+    expect(paths.every((path) => path.startsWith('release-group?artist=artist-uk'))).toBe(true);
+  });
+
+  it('reports lookup_failed when MusicBrainz errors', async () => {
+    mockMusicBrainzFetch.mockResolvedValueOnce({ ok: false, status: 503 } as Response);
+
+    await expect(findArtistAlbumsById('artist-uk', 'Nirvana')).resolves.toEqual({
+      status: 'lookup_failed',
+    });
+  });
+
+  it('reports lookup_failed when the request throws', async () => {
+    mockMusicBrainzFetch.mockRejectedValueOnce(new Error('timed out'));
+
+    await expect(findArtistAlbumsById('artist-uk', 'Nirvana')).resolves.toEqual({
+      status: 'lookup_failed',
+    });
   });
 });

@@ -1,16 +1,38 @@
 import React from 'react';
 import { useArtistEssentials } from './useArtistEssentials';
+import { ArtistSearchBox } from './ArtistSearchBox';
+import { useArtistSuggestions } from './useArtistSuggestions';
 import { EssentialsResult } from './EssentialsResult';
 
 interface ArtistEssentialsPanelProps {
   onSeedArtist?: (artist: string) => void;
+  /** Artists in the person's crate, offered first as they type. */
+  crateArtists?: readonly string[];
 }
+
+const NO_ARTISTS: readonly string[] = [];
 
 export function ArtistEssentialsPanel({
   onSeedArtist,
+  crateArtists = NO_ARTISTS,
 }: ArtistEssentialsPanelProps): React.ReactElement {
-  const { artist, setArtist, result, isLoading, error, isLimitReached, fetchEssentials } =
-    useArtistEssentials();
+  const {
+    artist,
+    setArtist,
+    chosen,
+    chooseArtist,
+    result,
+    isLoading,
+    error,
+    isLimitReached,
+    fetchEssentials,
+  } = useArtistEssentials();
+  // Not while looking someone up, or once they are chosen: the name is filled in and settled.
+  const { options, isSearching } = useArtistSuggestions({
+    query: artist,
+    crateArtists,
+    isEnabled: !isLoading && chosen === null,
+  });
 
   function handleSubmit(e: React.FormEvent): void {
     e.preventDefault();
@@ -28,15 +50,15 @@ export function ArtistEssentialsPanel({
         collaborators and producers.
       </p>
       <form onSubmit={handleSubmit} className="essentials-input-row">
-        <input
-          type="text"
+        <ArtistSearchBox
           value={artist}
-          onChange={(e) => setArtist(e.target.value)}
-          placeholder="Artist or band…"
-          maxLength={100}
-          className="essentials-input"
+          onChange={setArtist}
+          options={options}
+          isSearching={isSearching}
+          onChoose={(option) =>
+            void chooseArtist({ name: option.name, id: option.artistId, detail: option.detail })
+          }
           disabled={isLoading}
-          aria-label="Artist name"
         />
         <button type="submit" className="app-cta-button essentials-submit" disabled={isLoading}>
           {isLoading ? 'Finding essentials…' : 'Get essentials'}

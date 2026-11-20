@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { PivotHint } from '@shared/types';
 import { useRecommendation } from './hooks/useRecommendation';
 import { PreferencesPanel, sectionLabelStyle } from './features/preferences/PreferencesPanel';
@@ -56,6 +56,11 @@ export default function App(): React.ReactElement {
   // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives, and
   // the presets stay to hand for trying another.
   const [isFirstVisit] = useState(recommendation === null);
+  // Offered first when searching Artist Essentials, from the crate as it is now.
+  const crateArtists = useMemo(
+    () => history.map((entry) => entry.recommendation.artist),
+    [history],
+  );
 
   return (
     <div className="app-layout" data-first-visit={isFirstVisit} data-page={page}>
@@ -165,6 +170,7 @@ export default function App(): React.ReactElement {
       ) : page === 'essentials' ? (
         <div className="app-full">
           <ArtistEssentialsPanel
+            crateArtists={crateArtists}
             onSeedArtist={(artist) => {
               setPage('home');
               void fetchRecommendation(undefined, artist);

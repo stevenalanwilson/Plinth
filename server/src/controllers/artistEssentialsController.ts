@@ -9,6 +9,9 @@ import { respondLimitReached, visitorOf } from './dailyLimitHandling';
 
 type Handler = (req: Request, res: Response) => Promise<void>;
 
+const MUSICBRAINZ_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+const MAX_DETAIL_LENGTH = 150;
+
 /**
  * An artist's essentials cost a Claude call as a pick does, so they are counted against the same
  * daily allowance. Otherwise this is a way round the limit.
@@ -22,7 +25,7 @@ async function handleArtistEssentials(
   res: Response,
   dailyLimit: DailyPickLimiter,
 ): Promise<void> {
-  const { artist } = req.body as Record<string, unknown>;
+  const { artist, artistId, detail } = req.body as Record<string, unknown>;
 
   if (typeof artist !== 'string' || artist.trim() === '') {
     res.status(400).json({ error: 'artist must be a non-empty string' });
@@ -34,10 +37,26 @@ async function handleArtistEssentials(
     return;
   }
 
+  if (artistId !== undefined && (typeof artistId !== 'string' || !MUSICBRAINZ_ID.test(artistId))) {
+    res.status(400).json({ error: 'artistId must be a MusicBrainz ID' });
+    return;
+  }
+
+  if (detail !== undefined && (typeof detail !== 'string' || detail.length > MAX_DETAIL_LENGTH)) {
+    res.status(400).json({ error: `detail must be ${MAX_DETAIL_LENGTH} characters or fewer` });
+    return;
+  }
+  // It goes into a prompt, so it is kept to one line of plain words.
+  const cleanDetail = typeof detail === 'string' ? detail.replace(/\s+/g, ' ').trim() : '';
+
   try {
     // After the request is known to be valid, so a mistake in it doesn't use up a pick.
     await dailyLimit.consume(visitorOf(req, res));
-    const result = await getArtistEssentials({ artist: artist.trim() });
+    const result = await getArtistEssentials({
+      artist: artist.trim(),
+      ...(artistId ? { artistId } : {}),
+      ...(cleanDetail ? { detail: cleanDetail } : {}),
+    });
     res.json(result);
   } catch (error) {
     if (error instanceof DailyLimitError) {

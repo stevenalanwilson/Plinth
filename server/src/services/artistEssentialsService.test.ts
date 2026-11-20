@@ -13,6 +13,7 @@ vi.mock('@anthropic-ai/sdk', () => {
 vi.mock('./albumMatchService', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./albumMatchService')>()),
   findArtistAlbums: vi.fn(),
+  findArtistAlbumsById: vi.fn(),
   findAlbum: vi.fn(),
 }));
 vi.mock('../logger', () => ({
@@ -34,6 +35,7 @@ import {
   AlbumQuery,
   findAlbum,
   findArtistAlbums,
+  findArtistAlbumsById,
   ReleaseGroupCandidate,
 } from './albumMatchService';
 import { CacheStore } from '../repositories/cacheStore';
@@ -42,6 +44,7 @@ import { configureLookupCache } from '../repositories/lookupCache';
 
 const mockCreate = vi.fn();
 const mockFindArtistAlbums = vi.mocked(findArtistAlbums);
+const mockFindArtistAlbumsById = vi.mocked(findArtistAlbumsById);
 const mockFindAlbum = vi.mocked(findAlbum);
 
 function catalogueAlbum(
@@ -92,6 +95,12 @@ beforeEach(() => {
   }));
   process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
   mockFindArtistAlbums.mockResolvedValue({
+    status: 'found',
+    artist: 'Talk Talk',
+    albums: talkTalkCatalogue,
+    listedIds: null,
+  });
+  mockFindArtistAlbumsById.mockResolvedValue({
     status: 'found',
     artist: 'Talk Talk',
     albums: talkTalkCatalogue,
@@ -166,6 +175,17 @@ describe('buildPrompt', () => {
 
     expect(prompt).toContain('direct connection to Talk Talk');
     expect(prompt).toMatch(/Do not include labelmates, contemporaries/);
+  });
+
+  it('says which artist is meant when several share the name', () => {
+    const prompt = buildPrompt('Nirvana', undefined, '60s band from the UK');
+
+    expect(prompt).toContain('Someone loves Nirvana (60s band from the UK)');
+    expect(prompt).toContain('by Nirvana (60s band from the UK) a newcomer');
+  });
+
+  it('names the artist plainly when there is nothing to tell them apart from', () => {
+    expect(buildPrompt('Talk Talk')).toContain('Someone loves Talk Talk and');
   });
 
   it('lists what MusicBrainz could not find, and what it does have, on a retry', () => {
@@ -479,6 +499,79 @@ describe('getArtistEssentials', () => {
 
     expect(result.albums).toHaveLength(3);
     expect(result.related).toEqual([]);
+  });
+});
+
+describe('getArtistEssentials for an artist chosen from the suggestions', () => {
+  const chosen = {
+    artist: 'Talk Talk',
+    artistId: '11111111-1111-4111-8111-111111111111',
+    detail: 'English synth-pop and post-rock band',
+  };
+
+  beforeEach(() => {
+    mockCreate.mockResolvedValue(claudeAnswer(startHere));
+  });
+
+  it('looks the artist up by their ID, not by searching for the name', async () => {
+    const result = await getArtistEssentials(chosen);
+
+    expect(mockFindArtistAlbumsById).toHaveBeenCalledWith(chosen.artistId, 'Talk Talk');
+    expect(mockFindArtistAlbums).not.toHaveBeenCalled();
+    expect(result.albums).toHaveLength(3);
+  });
+
+  it('tells Claude which artist is meant', async () => {
+    await getArtistEssentials(chosen);
+
+    const prompt = mockCreate.mock.calls[0][0].messages[0].content as string;
+    expect(prompt).toContain('Talk Talk (English synth-pop and post-rock band)');
+  });
+
+  it('does not search again under Claude’s spelling when the artist was not found', async () => {
+    mockFindArtistAlbumsById.mockResolvedValue({ status: 'not_found' });
+
+    await expect(getArtistEssentials(chosen)).rejects.toBeInstanceOf(UnverifiedEssentialsError);
+
+    expect(mockFindArtistAlbums).not.toHaveBeenCalled();
+  });
+
+  describe('with the cache', () => {
+    let store: CacheStore;
+
+    beforeEach(() => {
+      store = createInMemoryCacheStore();
+      configureLookupCache(store);
+    });
+
+    afterEach(() => {
+      configureLookupCache(null);
+    });
+
+    it('keeps the list under the artist’s ID, apart from one searched for by name', async () => {
+      const set = vi.spyOn(store, 'set');
+
+      await getArtistEssentials(chosen);
+
+      expect(set).toHaveBeenCalledWith(
+        `essentials:v4:id:${chosen.artistId}`,
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('does not give one artist the list of another with the same name', async () => {
+      await getArtistEssentials({ artist: 'Nirvana' });
+      mockCreate.mockClear();
+
+      await getArtistEssentials({ ...chosen, artist: 'Nirvana', detail: '60s band from the UK' });
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+      mockCreate.mockClear();
+
+      await getArtistEssentials({ artist: 'Nirvana' });
+      await getArtistEssentials({ ...chosen, artist: 'Nirvana', detail: '60s band from the UK' });
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
   });
 });
 

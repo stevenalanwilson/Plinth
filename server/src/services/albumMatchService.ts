@@ -244,6 +244,39 @@ async function listedAlbumIds(
 }
 
 /**
+ * Fetches a known artist's albums, and which of them their page lists, as the lookup result.
+ * `artist` is what the lookup was asked for, for the log.
+ */
+async function lookUpAlbumsOf(
+  found: { readonly id: string; readonly name: string },
+  artist: string,
+  budgetSignal: AbortSignal,
+): Promise<ArtistAlbumsLookup> {
+  const albums = await browseArtistAlbums(found.id, budgetSignal);
+  if (!albums) {
+    logger.warn({ artist, outcome: 'lookup_failed' }, 'artist albums');
+    return { status: 'lookup_failed' };
+  }
+
+  // Albums are verified against the whole catalogue, so a pick that exists only as a bootleg
+  // still counts; the listed IDs keep such albums out of what is shown as the discography.
+  const listedIds = await listedAlbumIds(found.id, budgetSignal);
+  if (!listedIds) logger.warn({ artist, artistId: found.id }, 'listed albums unavailable');
+
+  logger.info(
+    {
+      artist,
+      outcome: 'found',
+      artistId: found.id,
+      albumCount: albums.length,
+      listedCount: listedIds?.size ?? null,
+    },
+    'artist albums',
+  );
+  return { status: 'found', artist: found.name, albums, listedIds };
+}
+
+/**
  * Finds the artist in MusicBrainz and fetches their albums, so a whole list of picks can be
  * checked with a few requests instead of one search per album.
  */
@@ -271,31 +304,28 @@ export async function findArtistAlbums(
       return { status: 'not_found' };
     }
 
-    const albums = await browseArtistAlbums(found.id, budgetSignal);
-    if (!albums) {
-      logger.warn({ artist, outcome: 'lookup_failed' }, 'artist albums');
-      return { status: 'lookup_failed' };
-    }
-
-    // Albums are verified against the whole catalogue, so a pick that exists only as a bootleg
-    // still counts; the listed IDs keep such albums out of what is shown as the discography.
-    const listedIds = await listedAlbumIds(found.id, budgetSignal);
-    if (!listedIds) logger.warn({ artist, artistId: found.id }, 'listed albums unavailable');
-
-    logger.info(
-      {
-        artist,
-        outcome: 'found',
-        artistId: found.id,
-        albumCount: albums.length,
-        listedCount: listedIds?.size ?? null,
-      },
-      'artist albums',
-    );
-    return { status: 'found', artist: found.name, albums, listedIds };
+    return await lookUpAlbumsOf(found, artist, budgetSignal);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.warn({ artist, outcome: 'lookup_failed', error: message }, 'artist albums');
+    return { status: 'lookup_failed' };
+  }
+}
+
+/**
+ * Fetches the albums of an artist already chosen by their MusicBrainz ID, where a name could
+ * mean any of several artists. No search is needed, so it is quicker than findArtistAlbums.
+ */
+export async function findArtistAlbumsById(
+  artistId: string,
+  name: string,
+  budgetSignal: AbortSignal = AbortSignal.timeout(ARTIST_LOOKUP_BUDGET_MS),
+): Promise<ArtistAlbumsLookup> {
+  try {
+    return await lookUpAlbumsOf({ id: artistId, name }, name, budgetSignal);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn({ artist: name, outcome: 'lookup_failed', error: message }, 'artist albums');
     return { status: 'lookup_failed' };
   }
 }

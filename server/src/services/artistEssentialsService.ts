@@ -13,6 +13,7 @@ import {
   ArtistAlbumsLookup,
   findAlbum,
   findArtistAlbums,
+  findArtistAlbumsById,
   ReleaseGroupCandidate,
   selectAlbumMatch,
 } from './albumMatchService';
@@ -45,10 +46,19 @@ function correctionText(artist: string, correction: EssentialsCorrection | undef
   return `${notFound}${known}`;
 }
 
-export function buildPrompt(artist: string, correction?: EssentialsCorrection): string {
-  return `Someone loves ${artist} and wants to know what to listen to next. Give them two lists.
+/**
+ * `detail` says which artist is meant when several share the name, such as "60s band from the
+ * UK", and is given wherever the prompt first names them.
+ */
+export function buildPrompt(
+  artist: string,
+  correction?: EssentialsCorrection,
+  detail?: string,
+): string {
+  const who = detail ? `${artist} (${detail})` : artist;
+  return `Someone loves ${who} and wants to know what to listen to next. Give them two lists.
 
-1. "albums": the two or three albums by ${artist} a newcomer should start with, in the order to listen to them. Each must be a real, verifiably released studio or live album by ${artist}.
+1. "albums": the two or three albums by ${who} a newcomer should start with, in the order to listen to them. Each must be a real, verifiably released studio or live album by ${artist}.
 
 2. "related": five to seven essential albums by OTHER artists who are closely connected to ${artist}. Only include people with a direct connection to ${artist}: members, past or present, and their solo albums and other bands; side projects; frequent collaborators and guest musicians; and the producers and engineers who made ${artist}'s records, where that person made records of their own. Do not include labelmates, contemporaries, touring partners or artists who merely sound similar. Never include an album by ${artist}. Take no more than two albums from any one of them. For each, say who made it, and in "connection" say in a few words how they are connected to ${artist} (for example "Guitarist's solo debut" or "Produced by Steve Albini").
 
@@ -184,12 +194,13 @@ const ESSENTIALS_SCHEMA = {
 async function requestEssentials(
   artist: string,
   correction?: EssentialsCorrection,
+  detail?: string,
 ): Promise<ArtistEssentialsResponse> {
   const parsed = await completeJson({
     label: 'artist-essentials',
     schema: ESSENTIALS_SCHEMA,
     system: SYSTEM_PROMPT,
-    prompt: buildPrompt(artist, correction),
+    prompt: buildPrompt(artist, correction, detail),
     maxTokens: 3000,
     timeoutMs: 25_000,
   });
@@ -335,10 +346,13 @@ async function lookUpCatalogue(
   requestedArtist: string,
   claudeArtist: string,
   pending: Promise<ArtistAlbumsLookup>,
+  isChosenById: boolean,
 ): Promise<ArtistAlbumsLookup> {
   const lookup = await pending;
-  // Claude corrects typos in the typed name, so its spelling is worth a second try.
+  // Claude corrects typos in the typed name, so its spelling is worth a second try. Not for an
+  // artist chosen from the suggestions, whose name was never typed.
   if (
+    !isChosenById &&
     lookup.status === 'not_found' &&
     normaliseName(claudeArtist) !== normaliseName(requestedArtist)
   ) {
@@ -409,7 +423,11 @@ function isVerifiedEssentials(value: unknown): value is ArtistEssentialsResponse
 export async function getArtistEssentials(
   request: ArtistEssentialsRequest,
 ): Promise<ArtistEssentialsResponse> {
-  const key = `${ESSENTIALS_CACHE_VERSION}:${normaliseName(request.artist)}`;
+  // An artist chosen by ID is kept apart from one searched for by name: two artists can share
+  // a name, and the name alone would give one of them the other's list.
+  const key = request.artistId
+    ? `${ESSENTIALS_CACHE_VERSION}:id:${request.artistId.toLowerCase()}`
+    : `${ESSENTIALS_CACHE_VERSION}:${normaliseName(request.artist)}`;
 
   const cached = await readCache('essentials', key);
   if (isVerifiedEssentials(cached)) return cached;
@@ -426,9 +444,17 @@ async function buildEssentials(
   request: ArtistEssentialsRequest,
 ): Promise<ArtistEssentialsResponse> {
   // The MusicBrainz lookup only needs the typed name, so it runs while Claude answers.
-  const pendingCatalogue = findArtistAlbums(request.artist);
-  const first = await requestEssentials(request.artist);
-  const lookup = await lookUpCatalogue(request.artist, first.artist, pendingCatalogue);
+  const { artistId, detail } = request;
+  const pendingCatalogue = artistId
+    ? findArtistAlbumsById(artistId, request.artist)
+    : findArtistAlbums(request.artist);
+  const first = await requestEssentials(request.artist, undefined, detail);
+  const lookup = await lookUpCatalogue(
+    request.artist,
+    first.artist,
+    pendingCatalogue,
+    artistId !== undefined,
+  );
 
   // Better an unchecked list than none at all while MusicBrainz is down.
   if (lookup.status === 'lookup_failed') return first;
@@ -439,10 +465,14 @@ async function buildEssentials(
 
   if (result.essentials.albums.length < MIN_VERIFIED_ALBUMS) {
     const retry = verifyEssentials(
-      await requestEssentials(lookup.artist, {
-        notFound: result.notFound,
-        knownAlbums: studioAlbumTitles(lookup.albums, lookup.listedIds),
-      }),
+      await requestEssentials(
+        lookup.artist,
+        {
+          notFound: result.notFound,
+          knownAlbums: studioAlbumTitles(lookup.albums, lookup.listedIds),
+        },
+        detail,
+      ),
       lookup.artist,
       lookup.albums,
     );
