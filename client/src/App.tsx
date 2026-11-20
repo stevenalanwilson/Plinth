@@ -58,7 +58,7 @@ export default function App(): React.ReactElement {
   const [isFirstVisit] = useState(recommendation === null);
 
   return (
-    <div className="app-layout" data-first-visit={isFirstVisit}>
+    <div className="app-layout" data-first-visit={isFirstVisit} data-page={page}>
       <header className="app-header">
         <h1
           style={{

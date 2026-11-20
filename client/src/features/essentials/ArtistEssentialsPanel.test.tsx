@@ -66,6 +66,15 @@ describe('ArtistEssentialsPanel', () => {
     expect(screen.getByText('A transformative work.')).toBeInTheDocument();
   });
 
+  it('says what Artist Essentials is for', () => {
+    render(<ArtistEssentialsPanel />);
+
+    expect(screen.getByRole('heading', { name: 'Artist Essentials' })).toBeInTheDocument();
+    expect(screen.getByText(/Love a particular artist or band/)).toHaveTextContent(
+      /considered essential listening/,
+    );
+  });
+
   it('shows error message on API failure', async () => {
     mockFetchEssentials.mockRejectedValue(new Error('Service unavailable'));
     render(<ArtistEssentialsPanel />);

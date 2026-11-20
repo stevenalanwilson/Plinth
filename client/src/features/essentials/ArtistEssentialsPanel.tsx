@@ -18,13 +18,20 @@ export function ArtistEssentialsPanel({
   }
 
   return (
-    <div className="essentials-panel">
+    <section className="essentials-panel" aria-labelledby="essentials-title">
+      <h2 id="essentials-title" className="essentials-title">
+        Artist Essentials
+      </h2>
+      <p className="essentials-intro">
+        Love a particular artist or band? Enter their name and Plinth lists the albums that are
+        considered essential listening, so you know where to start, or what you may have missed.
+      </p>
       <form onSubmit={handleSubmit} className="essentials-input-row">
         <input
           type="text"
           value={artist}
           onChange={(e) => setArtist(e.target.value)}
-          placeholder="Enter an artist name…"
+          placeholder="Artist or band…"
           maxLength={100}
           className="essentials-input"
           disabled={isLoading}
@@ -51,6 +58,6 @@ export function ArtistEssentialsPanel({
       )}
 
       {result !== null && <EssentialsResult result={result} onSeedArtist={onSeedArtist} />}
-    </div>
+    </section>
   );
 }
