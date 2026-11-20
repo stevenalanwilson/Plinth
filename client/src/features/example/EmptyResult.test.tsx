@@ -42,7 +42,7 @@ describe('EmptyResult', () => {
     renderEmptyResult();
 
     expect(screen.getByText(/next favourite album is waiting/)).toBeInTheDocument();
-    expect(screen.queryByText('An example pick')).not.toBeInTheDocument();
+    expect(screen.queryByText('Example')).not.toBeInTheDocument();
   });
 
   it('shows the example in place of the waiting message once there is one', () => {
@@ -50,7 +50,7 @@ describe('EmptyResult', () => {
 
     renderEmptyResult();
 
-    expect(screen.getByText('An example pick')).toBeInTheDocument();
+    expect(screen.getByText('Example')).toBeInTheDocument();
     expect(screen.queryByText(/next favourite album is waiting/)).not.toBeInTheDocument();
   });
 });

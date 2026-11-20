@@ -33,7 +33,8 @@ describe('ExampleAlbum', () => {
     renderExample();
 
     expect(screen.getByRole('article', { name: 'Jeopardy' })).toBeInTheDocument();
-    expect(screen.getByText('An example pick')).toBeInTheDocument();
+    expect(screen.getByText('Example')).toBeInTheDocument();
+    expect(screen.getByText(/Not picked for you/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Jeopardy' })).toBeInTheDocument();
     expect(screen.getByText('The Sound')).toBeInTheDocument();
     expect(screen.getByText('1980')).toBeInTheDocument();
