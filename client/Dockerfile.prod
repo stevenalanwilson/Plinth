@@ -11,6 +11,14 @@ COPY shared/ /shared/
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
+# The footer's Support and Get in touch links are baked in the same way, and each shows only when
+# its variable is set. Set both as variables on the client service. Left unset, the links are
+# left out.
+ARG VITE_MONZO_URL
+ENV VITE_MONZO_URL=$VITE_MONZO_URL
+ARG VITE_FEEDBACK_EMAIL
+ENV VITE_FEEDBACK_EMAIL=$VITE_FEEDBACK_EMAIL
+
 # Vite resolves @shared at build time via vite.config.ts alias
 RUN npm run build
 
