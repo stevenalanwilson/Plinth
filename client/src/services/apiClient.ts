@@ -60,12 +60,13 @@ async function fetchWithTimeout(
   input: string,
   init?: RequestInit,
   externalSignal?: AbortSignal,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   // Combined by hand: AbortSignal.any needs Safari 17.4 and AbortSignal.timeout Safari 16.4,
   // and a shared album link may well be opened on an older iPhone.
   const controller = new AbortController();
   const cancel = (): void => controller.abort();
-  const timeoutId = setTimeout(cancel, REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(cancel, timeoutMs);
   if (externalSignal?.aborted) cancel();
   else externalSignal?.addEventListener('abort', cancel, { once: true });
 
@@ -113,6 +114,8 @@ async function registerDevice(): Promise<string> {
 interface PostOptions {
   /** Marks the request as safe to repeat: it is retried once if the connection fails. */
   readonly idempotencyKey?: string;
+  /** How long to wait for the answer, where the usual wait is too short for this request. */
+  readonly timeoutMs?: number;
 }
 
 /**
@@ -125,7 +128,7 @@ async function sendAsDevice<T>(
   path: string,
   body: unknown,
   signal?: AbortSignal,
-  { idempotencyKey }: PostOptions = {},
+  { idempotencyKey, timeoutMs }: PostOptions = {},
 ): Promise<T> {
   const sendOnce = (token: string | null): Promise<Response> =>
     fetchWithTimeout(
@@ -140,6 +143,7 @@ async function sendAsDevice<T>(
         body: body === undefined ? undefined : JSON.stringify(body),
       },
       signal,
+      timeoutMs,
     );
 
   // With a key, the server answers a repeat from the first result, so trying again after the
@@ -270,11 +274,17 @@ export function fetchArtistRelations(artist: string): Promise<ArtistRelationsRes
   return get<ArtistRelationsResponse>(`${API_V1}/artist-rels`, { artist });
 }
 
+// An artist's essentials take a Claude answer and a lookup of each related album, which can come
+// to well over the usual wait. The server keeps what it works out, so this is only the first time.
+const ESSENTIALS_TIMEOUT_MS = 60_000;
+
 export function fetchArtistEssentials(
   artist: string,
   signal?: AbortSignal,
 ): Promise<ArtistEssentialsResponse> {
-  return post<ArtistEssentialsResponse>(`${API_V1}/artist-essentials`, { artist }, signal);
+  return post<ArtistEssentialsResponse>(`${API_V1}/artist-essentials`, { artist }, signal, {
+    timeoutMs: ESSENTIALS_TIMEOUT_MS,
+  });
 }
 
 /** Emails a one-use sign-in link to the address. */

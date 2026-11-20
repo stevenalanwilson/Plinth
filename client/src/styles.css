@@ -1659,3 +1659,15 @@ body::before {
     padding-right: 0;
   }
 }
+
+/* Related essentials say who made the album and how they are connected to the artist. */
+.essentials-album-byline {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--accent);
+}
+.essentials-empty {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}

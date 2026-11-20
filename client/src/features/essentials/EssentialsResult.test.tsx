@@ -1,25 +1,29 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { ArtistEssentialsResponse, EssentialAlbum } from '@shared/types';
+import { ArtistEssentialsResponse, ConnectedAlbum, EssentialAlbum } from '@shared/types';
 import { EssentialsResult } from './EssentialsResult';
 
-function essential(album: string, year: string, startHere: boolean): EssentialAlbum {
-  return { album, year, reason: `Why ${album}.`, releaseGroupId: `rg-${album}`, startHere };
+function essential(album: string, year: string): EssentialAlbum {
+  return { album, year, reason: `Why ${album}.`, releaseGroupId: `rg-${album}` };
+}
+
+function connected(artist: string, album: string, connection: string): ConnectedAlbum {
+  return {
+    artist,
+    album,
+    year: '1998',
+    connection,
+    reason: `Why ${album}.`,
+    releaseGroupId: `rg-${album}`,
+  };
 }
 
 const CHECKED: ArtistEssentialsResponse = {
   artist: 'Talk Talk',
-  albums: [
-    essential('Spirit of Eden', '1988', true),
-    essential('The Colour of Spring', '1986', true),
-    essential('Laughing Stock', '1991', false),
-  ],
-  discography: [
-    { title: 'The Party’s Over', year: '1982', releaseGroupId: 'rg-The Party’s Over' },
-    { title: 'The Colour of Spring', year: '1986', releaseGroupId: 'rg-The Colour of Spring' },
-    { title: 'Spirit of Eden', year: '1988', releaseGroupId: 'rg-Spirit of Eden' },
-    { title: 'Laughing Stock', year: '1991', releaseGroupId: 'rg-Laughing Stock' },
-    { title: 'Undated', year: null, releaseGroupId: 'rg-Undated' },
+  albums: [essential('Spirit of Eden', '1988'), essential('The Colour of Spring', '1986')],
+  related: [
+    connected('Mark Hollis', 'Mark Hollis', 'Singer’s solo album'),
+    connected('O.Rang', 'Herd of Instinct', 'Side project of two members'),
   ],
 };
 
@@ -51,21 +55,49 @@ describe('EssentialsResult', () => {
     );
   });
 
-  it('follows with the rest of the discography in order, essentials with their reasons', () => {
+  it('says "three" when there are three albums to start with', () => {
+    render(
+      <EssentialsResult
+        result={{ ...CHECKED, albums: [...CHECKED.albums, essential('Laughing Stock', '1991')] }}
+      />,
+    );
+
+    expect(screen.getByText('The three albums to begin with, and why.')).toBeInTheDocument();
+  });
+
+  it('follows with albums by the people around the artist, saying who and how they are connected', () => {
     render(<EssentialsResult result={CHECKED} />);
 
-    const rest = section('Then the rest');
-    const items = within(rest).getAllByRole('listitem');
-    expect(items.map((item) => item.textContent)).toEqual([
-      expect.stringContaining('The Party’s Over'),
-      expect.stringContaining('Laughing Stock'),
-      expect.stringContaining('Undated'),
-    ]);
-    expect(within(items[0]).getByText('1982')).toBeInTheDocument();
-    expect(within(items[0]).queryByRole('img')).not.toBeInTheDocument();
-    expect(within(items[1]).getByText('Why Laughing Stock.')).toBeInTheDocument();
-    expect(within(items[1]).getByAltText('Laughing Stock album artwork')).toBeInTheDocument();
-    expect(within(items[2]).getByText('—')).toBeInTheDocument();
+    const related = section('Then the people around them');
+    expect(
+      within(related)
+        .getAllByRole('heading', { level: 4 })
+        .map((heading) => heading.textContent),
+    ).toEqual(['Mark Hollis', 'Herd of Instinct']);
+    expect(within(related).getByText('Mark Hollis · Singer’s solo album')).toBeInTheDocument();
+    expect(within(related).getByText('O.Rang · Side project of two members')).toBeInTheDocument();
+    expect(within(related).getByText('Why Herd of Instinct.')).toBeInTheDocument();
+  });
+
+  it('finds a related album by the name of whoever made it, not the artist searched for', () => {
+    render(<EssentialsResult result={CHECKED} />);
+
+    const link = within(section('Then the people around them')).getAllByRole('link', {
+      name: /spotify/i,
+    })[1];
+
+    expect(link.getAttribute('href')).toContain(encodeURIComponent('O.Rang Herd of Instinct'));
+  });
+
+  it('says so, rather than showing an empty list, when no related albums could be confirmed', () => {
+    render(<EssentialsResult result={{ ...CHECKED, related: [] }} />);
+
+    const related = section('Then the people around them');
+    expect(
+      within(related).getByText(/couldn.t confirm any albums connected to Talk Talk/),
+    ).toBeInTheDocument();
+    expect(within(related).queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
+    expect(within(section('Start here')).getAllByRole('heading', { level: 4 })).toHaveLength(2);
   });
 
   it('shows the placeholder sleeve when a cover fails to load', () => {
@@ -79,39 +111,17 @@ describe('EssentialsResult', () => {
     ).toBeInTheDocument();
   });
 
-  it('lists the other essentials on their own when there is no discography', () => {
-    render(<EssentialsResult result={{ artist: 'Talk Talk', albums: CHECKED.albums }} />);
-
-    expect(screen.queryByRole('region', { name: 'Then the rest' })).not.toBeInTheDocument();
-    expect(
-      within(section('Then these')).getByRole('heading', { name: 'Laughing Stock' }),
-    ).toBeInTheDocument();
-  });
-
   it('uses placeholder sleeves for a list that could not be checked', () => {
-    const unchecked = CHECKED.albums.map((album) => ({ ...album, releaseGroupId: undefined }));
+    const unchecked: ArtistEssentialsResponse = {
+      artist: 'Talk Talk',
+      albums: CHECKED.albums.map((album) => ({ ...album, releaseGroupId: undefined })),
+      related: CHECKED.related.map((album) => ({ ...album, releaseGroupId: undefined })),
+    };
 
-    render(<EssentialsResult result={{ artist: 'Talk Talk', albums: unchecked }} />);
+    render(<EssentialsResult result={unchecked} />);
 
     expect(screen.queryByAltText(/album artwork/)).not.toBeInTheDocument();
-    expect(screen.getAllByRole('img')).toHaveLength(3);
-  });
-
-  it('shows one plain list when nothing is marked to start with', () => {
-    const unmarked = CHECKED.albums.map((album) => ({ ...album, startHere: undefined }));
-
-    render(<EssentialsResult result={{ ...CHECKED, albums: unmarked }} />);
-
-    expect(screen.queryByRole('region', { name: 'Start here' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 4 })).toHaveLength(3);
-  });
-
-  it('says "three" when there are three albums to start with', () => {
-    const three = CHECKED.albums.map((album) => ({ ...album, startHere: true }));
-
-    render(<EssentialsResult result={{ ...CHECKED, albums: three }} />);
-
-    expect(screen.getByText('The three albums to begin with, and why.')).toBeInTheDocument();
+    expect(screen.getAllByRole('img')).toHaveLength(4);
   });
 
   it('offers recommendations from the artist', () => {

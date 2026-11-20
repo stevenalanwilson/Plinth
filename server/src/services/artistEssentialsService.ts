@@ -1,16 +1,17 @@
 import {
   ArtistEssentialsRequest,
   ArtistEssentialsResponse,
-  DiscographyAlbum,
   EssentialAlbum,
+  ConnectedAlbum,
 } from '@shared/types';
 import { completeJson } from '../repositories/claudeClient';
 import { logger } from '../logger';
-import { normaliseName } from '../utils/musicNames';
+import { artistsMatch, normaliseName } from '../utils/musicNames';
 import { readCache, writeCache } from '../repositories/lookupCache';
-import { sortableDate } from '../utils/releaseDates';
 import {
+  AlbumLookup,
   ArtistAlbumsLookup,
+  findAlbum,
   findArtistAlbums,
   ReleaseGroupCandidate,
   selectAlbumMatch,
@@ -21,6 +22,9 @@ const SYSTEM_PROMPT =
   'Only list albums you have complete certainty exist as real, released recordings. ' +
   'Never invent or fabricate an artist or album title — if you are not certain an album exists, choose a different one you are sure about. ' +
   'Respond only with valid JSON — no markdown, no prose, nothing else.';
+
+const MAX_OWN_ALBUMS = 3;
+const MAX_RELATED_ALBUMS = 8;
 
 /** Albums from an earlier answer that MusicBrainz didn't have, plus the titles it does have. */
 export interface EssentialsCorrection {
@@ -36,25 +40,75 @@ function correctionText(artist: string, correction: EssentialsCorrection | undef
       : '';
   const known =
     correction.knownAlbums.length > 0
-      ? `\n\nMusicBrainz lists these albums by ${artist}; choose from them: ${correction.knownAlbums.join(', ')}`
+      ? `\n\nMusicBrainz lists these albums by ${artist}; choose the albums to start with from them: ${correction.knownAlbums.join(', ')}`
       : '';
   return `${notFound}${known}`;
 }
 
 export function buildPrompt(artist: string, correction?: EssentialsCorrection): string {
-  return `List 5 to 8 essential albums by ${artist} that a new listener should explore. Order them in the way you'd recommend a newcomer to listen through the catalogue — whether that means chronologically, by accessibility, or by importance.
+  return `Someone loves ${artist} and wants to know what to listen to next. Give them two lists.
 
-Mark the two or three albums a newcomer should start with as "startHere": true, and the rest false.
+1. "albums": the two or three albums by ${artist} a newcomer should start with, in the order to listen to them. Each must be a real, verifiably released studio or live album by ${artist}.
 
-Each album must be a real, verifiably released studio or live album by ${artist}. Do not invent titles.${correctionText(artist, correction)}
+2. "related": five to seven essential albums by OTHER artists who are closely connected to ${artist}. Only include people with a direct connection to ${artist}: members, past or present, and their solo albums and other bands; side projects; frequent collaborators and guest musicians; and the producers and engineers who made ${artist}'s records, where that person made records of their own. Do not include labelmates, contemporaries, touring partners or artists who merely sound similar. Never include an album by ${artist}. Take no more than two albums from any one of them. For each, say who made it, and in "connection" say in a few words how they are connected to ${artist} (for example "Guitarist's solo debut" or "Produced by Steve Albini").
+
+Keep every reason to one short sentence. Do not invent titles.${correctionText(artist, correction)}
 
 Respond with ONLY this JSON:
 {
   "artist": "Canonical Artist Name",
   "albums": [
-    { "album": "Album Title", "year": "YYYY", "reason": "One or two sentences on why this album is essential.", "startHere": true }
+    { "album": "Album Title", "year": "YYYY", "reason": "One short sentence on why to start here." }
+  ],
+  "related": [
+    { "artist": "Connected Artist", "album": "Album Title", "year": "YYYY", "connection": "How they are connected to ${artist}", "reason": "One short sentence on why this album is essential." }
   ]
 }`;
+}
+
+function coerceYear(entry: Record<string, unknown>): void {
+  // LLMs occasionally omit the quotes around a year value.
+  if (typeof entry.year === 'number') entry.year = String(entry.year);
+}
+
+function toOwnAlbum(item: unknown, index: number): EssentialAlbum {
+  if (typeof item !== 'object' || item === null) {
+    throw new Error(`Album at index ${index} is not an object`);
+  }
+  const entry = item as Record<string, unknown>;
+  coerceYear(entry);
+  if (
+    typeof entry.album !== 'string' ||
+    typeof entry.year !== 'string' ||
+    typeof entry.reason !== 'string'
+  ) {
+    throw new Error(`Album at index ${index} has invalid field types`);
+  }
+  return { album: entry.album, year: entry.year, reason: entry.reason };
+}
+
+/** A related album that isn't well formed is left out, not a reason to lose the whole answer. */
+function toConnectedAlbum(item: unknown): ConnectedAlbum | null {
+  if (typeof item !== 'object' || item === null) return null;
+  const entry = item as Record<string, unknown>;
+  coerceYear(entry);
+  if (
+    typeof entry.artist !== 'string' ||
+    entry.artist.trim() === '' ||
+    typeof entry.album !== 'string' ||
+    typeof entry.year !== 'string' ||
+    typeof entry.reason !== 'string' ||
+    typeof entry.connection !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    artist: entry.artist,
+    album: entry.album,
+    year: entry.year,
+    connection: entry.connection,
+    reason: entry.reason,
+  };
 }
 
 export function toArtistEssentials(parsed: unknown): ArtistEssentialsResponse {
@@ -77,42 +131,19 @@ export function toArtistEssentials(parsed: unknown): ArtistEssentialsResponse {
     throw new Error('albums must be a non-empty array');
   }
 
-  const albums: EssentialAlbum[] = (data.albums as unknown[])
-    .slice(0, 8)
-    .map((item: unknown, index: number) => {
-      if (typeof item !== 'object' || item === null) {
-        throw new Error(`Album at index ${index} is not an object`);
-      }
-      const entry = item as Record<string, unknown>;
+  const albums = (data.albums as unknown[]).slice(0, MAX_OWN_ALBUMS).map(toOwnAlbum);
+  const related = Array.isArray(data.related)
+    ? (data.related as unknown[])
+        .map(toConnectedAlbum)
+        .filter((album): album is ConnectedAlbum => album !== null)
+        .slice(0, MAX_RELATED_ALBUMS)
+    : [];
 
-      // Coerce numeric year to string — LLMs occasionally omit the quotes around a year value.
-      if (typeof entry.year === 'number') {
-        entry.year = String(entry.year);
-      }
-
-      if (
-        typeof entry.album !== 'string' ||
-        typeof entry.year !== 'string' ||
-        typeof entry.reason !== 'string'
-      ) {
-        throw new Error(`Album at index ${index} has invalid field types`);
-      }
-
-      // An answer without the mark (from an older prompt, say) still parses; markStartHere
-      // fills the gap.
-      return {
-        album: entry.album,
-        year: entry.year,
-        reason: entry.reason,
-        startHere: entry.startHere === true,
-      };
-    });
-
-  return { artist: data.artist, albums };
+  return { artist: data.artist, albums, related };
 }
 
-// Structured outputs support only a subset of JSON Schema, so the 5-8 album bound stays
-// out of the schema: the prompt asks for it and toArtistEssentials enforces it.
+// Structured outputs support only a subset of JSON Schema, so the counts stay out of the schema:
+// the prompt asks for them and toArtistEssentials enforces them.
 const ESSENTIALS_SCHEMA = {
   type: 'object',
   properties: {
@@ -125,14 +156,28 @@ const ESSENTIALS_SCHEMA = {
           album: { type: 'string' },
           year: { type: 'string' },
           reason: { type: 'string' },
-          startHere: { type: 'boolean' },
         },
-        required: ['album', 'year', 'reason', 'startHere'],
+        required: ['album', 'year', 'reason'],
+        additionalProperties: false,
+      },
+    },
+    related: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          artist: { type: 'string' },
+          album: { type: 'string' },
+          year: { type: 'string' },
+          connection: { type: 'string' },
+          reason: { type: 'string' },
+        },
+        required: ['artist', 'album', 'year', 'connection', 'reason'],
         additionalProperties: false,
       },
     },
   },
-  required: ['artist', 'albums'],
+  required: ['artist', 'albums', 'related'],
   additionalProperties: false,
 } as const;
 
@@ -145,14 +190,17 @@ async function requestEssentials(
     schema: ESSENTIALS_SCHEMA,
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(artist, correction),
-    maxTokens: 2000,
-    timeoutMs: 20_000,
+    maxTokens: 3000,
+    timeoutMs: 25_000,
   });
   return toArtistEssentials(parsed);
 }
 
-const MIN_VERIFIED_ALBUMS = 3;
+const MIN_VERIFIED_ALBUMS = 2;
 const MAX_KNOWN_ALBUMS = 60;
+// All the related albums are looked up together, one MusicBrainz request a second, so this is
+// time for about a dozen of them.
+const RELATED_LOOKUP_BUDGET_MS = 14_000;
 
 export class UnverifiedEssentialsError extends Error {
   constructor() {
@@ -166,7 +214,11 @@ interface VerifiedEssentials {
   readonly notFound: readonly string[];
 }
 
-/** Keeps only albums found in the artist's MusicBrainz catalogue, in Claude's order. */
+/**
+ * Keeps only the artist's own albums that are in their MusicBrainz catalogue, in Claude's order.
+ * The related albums are carried through as they are: they belong to other artists, so they are
+ * checked on their own by verifyRelated.
+ */
 export function verifyEssentials(
   essentials: ArtistEssentialsResponse,
   artist: string,
@@ -186,37 +238,72 @@ export function verifyEssentials(
       album: match.album,
       year: match.year ?? entry.year,
       reason: entry.reason,
-      startHere: entry.startHere,
       releaseGroupId: match.releaseGroupId,
     });
   }
 
-  return { essentials: { artist, albums }, notFound };
+  return { essentials: { artist, albums, related: essentials.related }, notFound };
 }
 
-const MIN_START_HERE = 2;
-const MAX_START_HERE = 3;
+interface VerifiedRelated {
+  readonly related: readonly ConnectedAlbum[];
+  /** True when some could not be looked up, so the list went out partly unchecked. */
+  readonly isUnchecked: boolean;
+}
+
+function toVerifiedRelated(
+  entry: ConnectedAlbum,
+  lookup: AlbumLookup,
+): { readonly album: ConnectedAlbum | null; readonly isUnchecked: boolean } {
+  if (lookup.status === 'not_found') return { album: null, isUnchecked: false };
+  // Better an album that couldn't be checked than none while MusicBrainz is struggling.
+  if (lookup.status === 'lookup_failed') return { album: entry, isUnchecked: true };
+  const { match } = lookup;
+  return {
+    album: {
+      artist: match.artist,
+      album: match.album,
+      year: match.year ?? entry.year,
+      connection: entry.connection,
+      reason: entry.reason,
+      releaseGroupId: match.releaseGroupId,
+    },
+    isUnchecked: false,
+  };
+}
 
 /**
- * Makes sure two or three albums are marked to start with, keeping Claude's choices where it
- * made them. Runs after verification, so an album dropped as unknown is replaced by the next
- * one in Claude's order rather than leaving a gap.
+ * Keeps the related albums MusicBrainz knows, with its spellings and years, in Claude's order.
+ * An album by the artist searched for is dropped, since this list is for what else to hear.
  */
-export function markStartHere(albums: readonly EssentialAlbum[]): EssentialAlbum[] {
-  const chosen = new Set(
-    albums
-      .map((album, index) => (album.startHere ? index : -1))
-      .filter((index) => index >= 0)
-      .slice(0, MAX_START_HERE),
+export async function verifyRelated(
+  related: readonly ConnectedAlbum[],
+  artist: string,
+): Promise<VerifiedRelated> {
+  const budget = AbortSignal.timeout(RELATED_LOOKUP_BUDGET_MS);
+  const lookups = await Promise.all(
+    related.map((entry) =>
+      findAlbum({ artist: entry.artist, album: entry.album, year: entry.year }, budget),
+    ),
   );
-  for (let index = 0; index < albums.length && chosen.size < MIN_START_HERE; index++) {
-    chosen.add(index);
-  }
-  return albums.map((album, index) => ({ ...album, startHere: chosen.has(index) }));
-}
 
-function withStartHere(essentials: ArtistEssentialsResponse): ArtistEssentialsResponse {
-  return { ...essentials, albums: markStartHere(essentials.albums) };
+  const kept: ConnectedAlbum[] = [];
+  let isUnchecked = false;
+  related.forEach((entry, index) => {
+    const result = toVerifiedRelated(entry, lookups[index]);
+    if (result.isUnchecked) isUnchecked = true;
+    const { album } = result;
+    if (!album || artistsMatch(artist, album.artist)) return;
+    const isRepeat = kept.some((other) =>
+      album.releaseGroupId !== undefined
+        ? other.releaseGroupId === album.releaseGroupId
+        : normaliseName(other.album) === normaliseName(album.album) &&
+          normaliseName(other.artist) === normaliseName(album.artist),
+    );
+    if (!isRepeat) kept.push(album);
+  });
+
+  return { related: kept, isUnchecked };
 }
 
 function isStudioAlbum(candidate: ReleaseGroupCandidate): boolean {
@@ -232,33 +319,6 @@ function isListed(
   listedIds: ReadonlySet<string> | null,
 ): boolean {
   return listedIds?.has(candidate.id) ?? true;
-}
-
-/**
- * The artist's studio albums, oldest first, so a newcomer can see where the essentials sit.
- * Albums MusicBrainz doesn't list (bootlegs) are left out. An essential is always kept, even a
- * live album or a bootleg, so every essential appears in it.
- */
-export function buildDiscography(
-  catalogue: readonly ReleaseGroupCandidate[],
-  essentials: readonly EssentialAlbum[],
-  listedIds: ReadonlySet<string> | null,
-): DiscographyAlbum[] {
-  const essentialIds = new Set(essentials.map((album) => album.releaseGroupId));
-  return catalogue
-    .filter(
-      (candidate) =>
-        (isStudioAlbum(candidate) && isListed(candidate, listedIds)) ||
-        essentialIds.has(candidate.id),
-    )
-    .sort((a, b) =>
-      sortableDate(a['first-release-date']).localeCompare(sortableDate(b['first-release-date'])),
-    )
-    .map((candidate) => ({
-      title: candidate.title,
-      year: candidate['first-release-date']?.substring(0, 4) || null,
-      releaseGroupId: candidate.id,
-    }));
 }
 
 function studioAlbumTitles(
@@ -299,12 +359,12 @@ function logVerification(artist: string, attempt: number, result: VerifiedEssent
   );
 }
 
-// A list takes a Claude call and several MusicBrainz lookups to make, and an artist's essential
+// A list takes Claude calls and a dozen MusicBrainz lookups to make, and an artist's essential
 // albums don't change, so a verified list keeps for a month.
 const ESSENTIALS_CACHE_SECONDS = 30 * 24 * 60 * 60;
 // Bump when ArtistEssentialsResponse changes shape or what goes into it, so entries from before
-// are left behind. v3: discographies kept before it may list bootleg-only albums.
-const ESSENTIALS_CACHE_VERSION = 'v3';
+// are left behind. v4: the rest of the artist's albums became related albums by other artists.
+const ESSENTIALS_CACHE_VERSION = 'v4';
 
 function isVerifiedAlbum(entry: unknown): boolean {
   if (typeof entry !== 'object' || entry === null) return false;
@@ -313,41 +373,38 @@ function isVerifiedAlbum(entry: unknown): boolean {
     typeof album.album === 'string' &&
     typeof album.year === 'string' &&
     typeof album.reason === 'string' &&
-    typeof album.releaseGroupId === 'string' &&
-    typeof album.startHere === 'boolean'
-  );
-}
-
-function isDiscographyAlbum(entry: unknown): boolean {
-  if (typeof entry !== 'object' || entry === null) return false;
-  const album = entry as DiscographyAlbum;
-  return (
-    typeof album.title === 'string' &&
-    (typeof album.year === 'string' || album.year === null) &&
     typeof album.releaseGroupId === 'string'
   );
 }
 
+function isVerifiedRelated(entry: unknown): boolean {
+  if (!isVerifiedAlbum(entry)) return false;
+  const album = entry as ConnectedAlbum;
+  return typeof album.artist === 'string' && typeof album.connection === 'string';
+}
+
 /**
- * True for a list where every album was matched in MusicBrainz, and so has a discography: the
- * only kind worth keeping.
+ * True for a list where every album was matched in MusicBrainz, and which has related albums:
+ * the only kind worth keeping. A list with none may only mean the lookups missed.
  */
 function isVerifiedEssentials(value: unknown): value is ArtistEssentialsResponse {
   if (typeof value !== 'object' || value === null) return false;
-  const { artist, albums, discography } = value as Partial<ArtistEssentialsResponse>;
+  const { artist, albums, related } = value as Partial<ArtistEssentialsResponse>;
   return (
     typeof artist === 'string' &&
     Array.isArray(albums) &&
     albums.length > 0 &&
     albums.every(isVerifiedAlbum) &&
-    Array.isArray(discography) &&
-    discography.every(isDiscographyAlbum)
+    Array.isArray(related) &&
+    related.length > 0 &&
+    related.every(isVerifiedRelated)
   );
 }
 
 /**
- * Returns an artist's essential albums, from the cache when a verified list is kept. A list that
- * went out unchecked (MusicBrainz was down) is never kept, so it can't outlive the outage.
+ * Returns where to start with an artist and essential albums by people connected to them, from
+ * the cache when a verified list is kept. A list that went out unchecked (MusicBrainz was down)
+ * is never kept, so it can't outlive the outage.
  */
 export async function getArtistEssentials(
   request: ArtistEssentialsRequest,
@@ -374,7 +431,7 @@ async function buildEssentials(
   const lookup = await lookUpCatalogue(request.artist, first.artist, pendingCatalogue);
 
   // Better an unchecked list than none at all while MusicBrainz is down.
-  if (lookup.status === 'lookup_failed') return withStartHere(first);
+  if (lookup.status === 'lookup_failed') return first;
   if (lookup.status === 'not_found') throw new UnverifiedEssentialsError();
 
   let result = verifyEssentials(first, lookup.artist, lookup.albums);
@@ -394,10 +451,20 @@ async function buildEssentials(
   }
 
   if (result.essentials.albums.length === 0) throw new UnverifiedEssentialsError();
-  const albums = markStartHere(result.essentials.albums);
+
+  const verifiedRelated = await verifyRelated(result.essentials.related, lookup.artist);
+  logger.info(
+    {
+      artist: lookup.artist,
+      asked: result.essentials.related.length,
+      kept: verifiedRelated.related.length,
+      unchecked: verifiedRelated.isUnchecked,
+    },
+    'related albums verified',
+  );
   return {
     artist: result.essentials.artist,
-    albums,
-    discography: buildDiscography(lookup.albums, albums, lookup.listedIds),
+    albums: result.essentials.albums,
+    related: verifiedRelated.related,
   };
 }

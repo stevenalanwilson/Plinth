@@ -222,6 +222,21 @@ describe('request timeout and cancellation', () => {
     expect(await result).toMatchObject({ message: 'Request timed out. Please try again.' });
   });
 
+  it('waits longer for Artist Essentials, which take a Claude answer and many lookups', async () => {
+    vi.useFakeTimers();
+    hangUntilAborted();
+
+    let outcome: unknown = 'waiting';
+    void fetchArtistEssentials('Can').catch((error: unknown) => {
+      outcome = error;
+    });
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(outcome).toBe('waiting');
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(outcome).toMatchObject({ message: 'Request timed out. Please try again.' });
+  });
+
   it('passes the caller cancelling through untouched', async () => {
     hangUntilAborted();
     const controller = new AbortController();

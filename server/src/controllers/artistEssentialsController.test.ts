@@ -37,6 +37,7 @@ function makeReq(body: unknown, ip: string | undefined = '203.0.113.7'): Request
 const mockResult = {
   artist: 'Talk Talk',
   albums: [{ album: 'Spirit of Eden', year: '1988', reason: 'A transformative work.' }],
+  related: [],
 };
 
 beforeEach(() => {

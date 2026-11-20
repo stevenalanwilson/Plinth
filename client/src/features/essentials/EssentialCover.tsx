@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { getProxiedArtworkUrl } from '../../services/apiClient';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
-import { coverArtUrl } from './essentialsLayout';
+
+/** The album's front cover from the Cover Art Archive, which may not have one. */
+export function coverArtUrl(releaseGroupId: string): string {
+  return `https://coverartarchive.org/release-group/${encodeURIComponent(releaseGroupId)}/front-250`;
+}
 
 interface EssentialCoverProps {
   readonly artist: string;

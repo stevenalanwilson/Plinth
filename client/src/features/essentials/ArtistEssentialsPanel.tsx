@@ -23,8 +23,9 @@ export function ArtistEssentialsPanel({
         Artist Essentials
       </h2>
       <p className="essentials-intro">
-        Love a particular artist or band? Enter their name and Plinth lists the albums that are
-        considered essential listening, so you know where to start, or what you may have missed.
+        Love a particular artist or band? Enter their name and Plinth shows where to start with
+        them, then essential albums by the people around them: band members, side projects,
+        collaborators and producers.
       </p>
       <form onSubmit={handleSubmit} className="essentials-input-row">
         <input

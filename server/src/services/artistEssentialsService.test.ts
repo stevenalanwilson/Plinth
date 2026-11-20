@@ -13,6 +13,7 @@ vi.mock('@anthropic-ai/sdk', () => {
 vi.mock('./albumMatchService', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./albumMatchService')>()),
   findArtistAlbums: vi.fn(),
+  findAlbum: vi.fn(),
 }));
 vi.mock('../logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -21,21 +22,27 @@ vi.mock('../logger', () => ({
 import Anthropic from '@anthropic-ai/sdk';
 import {
   getArtistEssentials,
-  buildDiscography,
   buildPrompt,
-  markStartHere,
   toArtistEssentials,
   UnverifiedEssentialsError,
   verifyEssentials,
+  verifyRelated,
 } from './artistEssentialsService';
-import { EssentialAlbum } from '@shared/types';
-import { findArtistAlbums, ReleaseGroupCandidate } from './albumMatchService';
+import { ConnectedAlbum } from '@shared/types';
+import {
+  AlbumLookup,
+  AlbumQuery,
+  findAlbum,
+  findArtistAlbums,
+  ReleaseGroupCandidate,
+} from './albumMatchService';
 import { CacheStore } from '../repositories/cacheStore';
 import { createInMemoryCacheStore } from '../repositories/inMemoryCacheStore';
 import { configureLookupCache } from '../repositories/lookupCache';
 
 const mockCreate = vi.fn();
 const mockFindArtistAlbums = vi.mocked(findArtistAlbums);
+const mockFindAlbum = vi.mocked(findAlbum);
 
 function catalogueAlbum(
   title: string,
@@ -61,6 +68,23 @@ const talkTalkCatalogue = [
   catalogueAlbum('Natural History', '1990', ['Compilation']),
 ];
 
+// What MusicBrainz knows of the related albums: anything else is not found.
+const knownRelated: Record<string, { artist: string; album: string; year: string }> = {
+  'mark hollis|mark hollis': { artist: 'Mark Hollis', album: 'Mark Hollis', year: '1998' },
+  'o.rang|herd of instinct': { artist: 'O.Rang', album: 'Herd of Instinct', year: '1994' },
+  'beth gibbons & rustin man|out of season': {
+    artist: 'Beth Gibbons & Rustin’ Man',
+    album: 'Out of Season',
+    year: '2002',
+  },
+};
+
+function lookUpRelated(query: AlbumQuery): AlbumLookup {
+  const known = knownRelated[`${query.artist.toLowerCase()}|${query.album.toLowerCase()}`];
+  if (!known) return { status: 'not_found' };
+  return { status: 'matched', match: { ...known, releaseGroupId: `rg-${known.album}` } };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   (Anthropic as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
@@ -73,152 +97,36 @@ beforeEach(() => {
     albums: talkTalkCatalogue,
     listedIds: null,
   });
+  mockFindAlbum.mockImplementation(async (query) => lookUpRelated(query));
 });
 
-const validAlbums = [
-  { album: 'Spirit of Eden', year: '1988', reason: 'A transformative work.' },
-  { album: 'Laughing Stock', year: '1991', reason: 'The culmination of their art.' },
-  { album: "It's My Life", year: '1984', reason: 'Accessible early new wave.' },
-  { album: "It's My Life 2", year: '1985', reason: 'Follow-up.' },
-  { album: 'The Colour of Spring', year: '1986', reason: 'Key transitional album.' },
+type RelatedEntry = readonly [artist: string, album: string];
+
+const defaultRelated: RelatedEntry[] = [
+  ['Mark Hollis', 'Mark Hollis'],
+  ['O.Rang', 'Herd of Instinct'],
+  ['Beth Gibbons & Rustin Man', 'Out of Season'],
+  ['Made Up Band', 'Fake Album'],
 ];
 
-const validJsonResponse = JSON.stringify({
-  artist: 'Talk Talk',
-  albums: validAlbums,
-});
-
-describe('buildPrompt', () => {
-  it('includes the artist name in the output', () => {
-    const prompt = buildPrompt('Talk Talk');
-    expect(prompt).toContain('Talk Talk');
-  });
-
-  it('mentions essential', () => {
-    const prompt = buildPrompt('Talk Talk');
-    expect(prompt.toLowerCase()).toContain('essential');
-  });
-
-  it('asks for the two or three albums to start with', () => {
-    const prompt = buildPrompt('Talk Talk');
-    expect(prompt).toContain('two or three albums a newcomer should start with');
-    expect(prompt).toContain('"startHere": true');
-  });
-});
-
-describe('toArtistEssentials', () => {
-  it('maps a valid response', () => {
-    const result = toArtistEssentials(JSON.parse(validJsonResponse));
-    expect(result.artist).toBe('Talk Talk');
-    expect(result.albums).toHaveLength(5);
-    expect(result.albums[0].album).toBe('Spirit of Eden');
-  });
-
-  it('keeps the start-here mark', () => {
-    const result = toArtistEssentials({
-      artist: 'Talk Talk',
-      albums: [
-        { album: 'Spirit of Eden', year: '1988', reason: 'A.', startHere: true },
-        { album: 'Laughing Stock', year: '1991', reason: 'B.', startHere: false },
-      ],
-    });
-    expect(result.albums.map((album) => album.startHere)).toEqual([true, false]);
-  });
-
-  it('treats a missing or non-boolean mark as not marked', () => {
-    const result = toArtistEssentials({
-      artist: 'Talk Talk',
-      albums: [
-        { album: 'Spirit of Eden', year: '1988', reason: 'A.' },
-        { album: 'Laughing Stock', year: '1991', reason: 'B.', startHere: 'yes' },
-      ],
-    });
-    expect(result.albums.map((album) => album.startHere)).toEqual([false, false]);
-  });
-
-  it('coerces numeric year to string', () => {
-    const json = JSON.stringify({
-      artist: 'Talk Talk',
-      albums: [{ album: 'Spirit of Eden', year: 1988, reason: 'Great.' }],
-    });
-    const result = toArtistEssentials(JSON.parse(json));
-    expect(result.albums[0].year).toBe('1988');
-  });
-
-  it('slices albums to a maximum of 8', () => {
-    const manyAlbums = Array.from({ length: 12 }, (_, i) => ({
-      album: `Album ${i}`,
-      year: '2000',
-      reason: 'Reason.',
-    }));
-    const json = JSON.stringify({ artist: 'Artist', albums: manyAlbums });
-    const result = toArtistEssentials(JSON.parse(json));
-    expect(result.albums).toHaveLength(8);
-  });
-
-  it('throws when artist field is missing', () => {
-    const json = JSON.stringify({ albums: validAlbums });
-    expect(() => toArtistEssentials(JSON.parse(json))).toThrow();
-  });
-
-  it('throws when albums field is missing', () => {
-    const json = JSON.stringify({ artist: 'Talk Talk' });
-    expect(() => toArtistEssentials(JSON.parse(json))).toThrow();
-  });
-
-  it('throws when albums is an empty array', () => {
-    const json = JSON.stringify({ artist: 'Talk Talk', albums: [] });
-    expect(() => toArtistEssentials(JSON.parse(json))).toThrow();
-  });
-
-  it('throws when an album entry is missing required fields', () => {
-    const json = JSON.stringify({
-      artist: 'Talk Talk',
-      albums: [{ album: 'Spirit of Eden' }],
-    });
-    expect(() => toArtistEssentials(JSON.parse(json))).toThrow();
-  });
-});
-
-describe('getArtistEssentials', () => {
-  it('returns a parsed response on success', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{ type: 'text', text: validJsonResponse }],
-    });
-
-    const result = await getArtistEssentials({ artist: 'Talk Talk' });
-
-    expect(result.artist).toBe('Talk Talk');
-    expect(result.albums.length).toBeGreaterThan(0);
-  });
-
-  it('throws when there is no text content in the API response', async () => {
-    mockCreate.mockResolvedValue({ content: [] });
-
-    await expect(getArtistEssentials({ artist: 'Talk Talk' })).rejects.toThrow();
-  });
-
-  it('throws when the API call fails', async () => {
-    mockCreate.mockRejectedValue(new Error('Network error'));
-
-    await expect(getArtistEssentials({ artist: 'Talk Talk' })).rejects.toThrow('Network error');
-  });
-});
-
-function essentialsWithMarks(
-  albums: readonly (readonly [string, boolean])[],
+function claudeAnswer(
+  albums: readonly string[],
+  related: readonly RelatedEntry[] = defaultRelated,
+  artist = 'Talk Talk',
 ): Record<string, unknown> {
   return {
     content: [
       {
         type: 'text',
         text: JSON.stringify({
-          artist: 'Talk Talk',
-          albums: albums.map(([album, startHere]) => ({
+          artist,
+          albums: albums.map((album) => ({ album, year: '1988', reason: 'Start here.' })),
+          related: related.map(([relatedArtist, album]) => ({
+            artist: relatedArtist,
             album,
-            year: '1988',
+            year: '1998',
+            connection: 'Former member',
             reason: 'Essential.',
-            startHere,
           })),
         }),
       },
@@ -226,227 +134,307 @@ function essentialsWithMarks(
   };
 }
 
-function claudeEssentials(artist: string, albums: readonly string[]): Record<string, unknown> {
-  return {
-    content: [
+const startHere = ['Spirit of Eden', 'Laughing Stock', 'The Colour of Spring'];
+
+describe('buildPrompt', () => {
+  it('includes the artist name', () => {
+    expect(buildPrompt('Talk Talk')).toContain('Talk Talk');
+  });
+
+  it('asks for the two or three albums to start with', () => {
+    const prompt = buildPrompt('Talk Talk');
+
+    expect(prompt).toMatch(/two or three albums by Talk Talk/i);
+    expect(prompt).toMatch(/newcomer should start with/i);
+  });
+
+  it('asks for essential albums by band members, producers and collaborators', () => {
+    const prompt = buildPrompt('Talk Talk');
+
+    expect(prompt).toMatch(/members, past or present/i);
+    expect(prompt).toMatch(/producers/i);
+    expect(prompt).toMatch(/collaborators/i);
+    expect(prompt).toContain('connection');
+  });
+
+  it('says not to include the artist’s own albums among the related ones', () => {
+    expect(buildPrompt('Talk Talk')).toContain('Never include an album by Talk Talk');
+  });
+
+  it('keeps the related albums to people directly connected, not labelmates or similar bands', () => {
+    const prompt = buildPrompt('Talk Talk');
+
+    expect(prompt).toContain('direct connection to Talk Talk');
+    expect(prompt).toMatch(/Do not include labelmates, contemporaries/);
+  });
+
+  it('lists what MusicBrainz could not find, and what it does have, on a retry', () => {
+    const prompt = buildPrompt('Talk Talk', {
+      notFound: ['Made Up One'],
+      knownAlbums: ['Spirit of Eden'],
+    });
+
+    expect(prompt).toContain('do NOT list them: Made Up One');
+    expect(prompt).toContain('choose the albums to start with from them: Spirit of Eden');
+  });
+});
+
+describe('toArtistEssentials', () => {
+  const valid = {
+    artist: 'Talk Talk',
+    albums: [{ album: 'Spirit of Eden', year: '1988', reason: 'A transformative work.' }],
+    related: [
       {
-        type: 'text',
-        text: JSON.stringify({
-          artist,
-          albums: albums.map((album) => ({ album, year: '1988', reason: 'Essential.' })),
-        }),
+        artist: 'Mark Hollis',
+        album: 'Mark Hollis',
+        year: '1998',
+        connection: 'Singer’s solo album',
+        reason: 'Quiet and spare.',
       },
     ],
   };
-}
+
+  it('maps a valid response', () => {
+    expect(toArtistEssentials(valid)).toEqual(valid);
+  });
+
+  it('coerces a numeric year to a string, for both lists', () => {
+    const result = toArtistEssentials({
+      ...valid,
+      albums: [{ ...valid.albums[0], year: 1988 }],
+      related: [{ ...valid.related[0], year: 1998 }],
+    });
+
+    expect(result.albums[0].year).toBe('1988');
+    expect(result.related[0].year).toBe('1998');
+  });
+
+  it('keeps at most three albums to start with and eight related', () => {
+    const result = toArtistEssentials({
+      ...valid,
+      albums: Array.from({ length: 6 }, (_, i) => ({ ...valid.albums[0], album: `A${i}` })),
+      related: Array.from({ length: 12 }, (_, i) => ({ ...valid.related[0], album: `R${i}` })),
+    });
+
+    expect(result.albums).toHaveLength(3);
+    expect(result.related).toHaveLength(8);
+  });
+
+  it('treats a missing related list as none', () => {
+    expect(toArtistEssentials({ artist: 'Talk Talk', albums: valid.albums }).related).toEqual([]);
+  });
+
+  it('leaves out a related album that is not well formed, without losing the rest', () => {
+    const result = toArtistEssentials({
+      ...valid,
+      related: [
+        { album: 'No artist', year: '1998', connection: 'x', reason: 'y' },
+        ...valid.related,
+      ],
+    });
+
+    expect(result.related).toEqual(valid.related);
+  });
+
+  it('throws when the artist is missing', () => {
+    expect(() => toArtistEssentials({ albums: valid.albums })).toThrow();
+  });
+
+  it('throws when there are no albums to start with', () => {
+    expect(() => toArtistEssentials({ ...valid, albums: [] })).toThrow();
+    expect(() => toArtistEssentials({ artist: 'Talk Talk' })).toThrow();
+  });
+
+  it('throws when an album to start with is missing fields', () => {
+    expect(() => toArtistEssentials({ ...valid, albums: [{ album: 'Only a title' }] })).toThrow();
+  });
+});
 
 describe('verifyEssentials', () => {
   it('keeps catalogue albums in order with MusicBrainz spellings and years', () => {
     const result = verifyEssentials(
-      toArtistEssentials(JSON.parse(validJsonResponse)),
+      {
+        artist: 'talk talk',
+        albums: [
+          { album: "It's My Life", year: '1985', reason: 'Accessible.' },
+          { album: 'Made Up', year: '1990', reason: 'Not real.' },
+        ],
+        related: [],
+      },
       'Talk Talk',
       talkTalkCatalogue,
     );
 
-    expect(result.essentials.albums.map((album) => album.album)).toEqual([
-      'Spirit of Eden',
-      'Laughing Stock',
-      'It’s My Life',
-      'The Colour of Spring',
+    expect(result.essentials.albums).toEqual([
+      {
+        album: 'It’s My Life',
+        year: '1984',
+        reason: 'Accessible.',
+        releaseGroupId: 'rg-It’s My Life',
+      },
     ]);
-    expect(result.essentials.albums[2]).toMatchObject({
-      year: '1984',
-      releaseGroupId: 'rg-It’s My Life',
-    });
-    expect(result.notFound).toEqual(["It's My Life 2"]);
+    expect(result.notFound).toEqual(['Made Up']);
   });
 
   it('drops a second entry for the same album', () => {
     const result = verifyEssentials(
-      { artist: 'Talk Talk', albums: [validAlbums[0], { ...validAlbums[0], year: '1989' }] },
+      {
+        artist: 'Talk Talk',
+        albums: [
+          { album: 'Spirit of Eden', year: '1988', reason: 'One.' },
+          { album: 'spirit of eden', year: '1988', reason: 'Two.' },
+        ],
+        related: [],
+      },
       'Talk Talk',
       talkTalkCatalogue,
     );
 
     expect(result.essentials.albums).toHaveLength(1);
   });
-});
 
-function essential(album: string, startHere: boolean): EssentialAlbum {
-  return { album, year: '1988', reason: 'Essential.', startHere };
-}
-
-function startHereTitles(albums: readonly EssentialAlbum[]): string[] {
-  return albums.filter((album) => album.startHere).map((album) => album.album);
-}
-
-describe('markStartHere', () => {
-  it('keeps two or three albums Claude marked', () => {
-    const albums = [essential('A', false), essential('B', true), essential('C', true)];
-
-    expect(startHereTitles(markStartHere(albums))).toEqual(['B', 'C']);
-  });
-
-  it('keeps only the first three when more are marked', () => {
-    const albums = ['A', 'B', 'C', 'D', 'E'].map((title) => essential(title, true));
-
-    expect(startHereTitles(markStartHere(albums))).toEqual(['A', 'B', 'C']);
-  });
-
-  it('marks the first two when none are marked', () => {
-    const albums = ['A', 'B', 'C', 'D'].map((title) => essential(title, false));
-
-    expect(startHereTitles(markStartHere(albums))).toEqual(['A', 'B']);
-  });
-
-  it('adds the first unmarked album when only one is marked', () => {
-    const albums = [essential('A', false), essential('B', false), essential('C', true)];
-
-    expect(startHereTitles(markStartHere(albums))).toEqual(['A', 'C']);
-  });
-
-  it('marks the only album of a one-album list', () => {
-    expect(startHereTitles(markStartHere([essential('A', false)]))).toEqual(['A']);
-  });
-
-  it('keeps the albums in Claude’s order', () => {
-    const albums = [essential('A', false), essential('B', true), essential('C', true)];
-
-    expect(markStartHere(albums).map((album) => album.album)).toEqual(['A', 'B', 'C']);
-  });
-});
-
-describe('buildDiscography', () => {
-  it('lists studio albums oldest first, with MusicBrainz titles and years', () => {
-    const shuffled = [talkTalkCatalogue[4], talkTalkCatalogue[0], talkTalkCatalogue[3]];
-
-    expect(buildDiscography(shuffled, [], null)).toEqual([
-      { title: 'The Party’s Over', year: '1982', releaseGroupId: 'rg-The Party’s Over' },
-      { title: 'Spirit of Eden', year: '1988', releaseGroupId: 'rg-Spirit of Eden' },
-      { title: 'Laughing Stock', year: '1991', releaseGroupId: 'rg-Laughing Stock' },
-    ]);
-  });
-
-  it('leaves out compilations and live albums', () => {
-    const titles = buildDiscography(talkTalkCatalogue, [], null).map((album) => album.title);
-
-    expect(titles).not.toContain('Natural History');
-    expect(titles).toHaveLength(5);
-  });
-
-  it('keeps an essential album that isn’t a studio album', () => {
-    const live = catalogueAlbum('London 1986', '1999', ['Live']);
-    const essentials = [{ ...essential('London 1986', true), releaseGroupId: live.id }];
-
-    const titles = buildDiscography([...talkTalkCatalogue, live], essentials, null).map(
-      (album) => album.title,
-    );
-
-    expect(titles).toContain('London 1986');
-    expect(titles).not.toContain('Natural History');
-  });
-
-  it('leaves out albums MusicBrainz doesn’t list on the artist’s page, such as bootlegs', () => {
-    const bootleg = catalogueAlbum('Live in Montreux', '2008');
-    const listedIds = new Set(talkTalkCatalogue.map((album) => album.id));
-
-    const titles = buildDiscography([...talkTalkCatalogue, bootleg], [], listedIds).map(
-      (album) => album.title,
-    );
-
-    expect(titles).not.toContain('Live in Montreux');
-    expect(titles).toHaveLength(5);
-  });
-
-  it('keeps an essential album that MusicBrainz doesn’t list', () => {
-    const bootleg = catalogueAlbum('Live in Montreux', '2008');
-    const essentials = [{ ...essential('Live in Montreux', true), releaseGroupId: bootleg.id }];
-    const listedIds = new Set(talkTalkCatalogue.map((album) => album.id));
-
-    const titles = buildDiscography([...talkTalkCatalogue, bootleg], essentials, listedIds).map(
-      (album) => album.title,
-    );
-
-    expect(titles).toContain('Live in Montreux');
-  });
-
-  it('puts a year alone after a fuller date in the same year, and undated albums last', () => {
-    const catalogue = [
-      catalogueAlbum('Undated', ''),
-      catalogueAlbum('Sometime 1986', '1986'),
-      catalogueAlbum('March 1986', '1986-03-01'),
+  it('passes the related albums through untouched, as they are checked separately', () => {
+    const related: ConnectedAlbum[] = [
+      {
+        artist: 'Mark Hollis',
+        album: 'Mark Hollis',
+        year: '1998',
+        connection: 'Singer',
+        reason: 'r',
+      },
     ];
 
-    expect(buildDiscography(catalogue, [], null)).toEqual([
-      { title: 'March 1986', year: '1986', releaseGroupId: 'rg-March 1986' },
-      { title: 'Sometime 1986', year: '1986', releaseGroupId: 'rg-Sometime 1986' },
-      { title: 'Undated', year: null, releaseGroupId: 'rg-Undated' },
-    ]);
+    const result = verifyEssentials(
+      {
+        artist: 'Talk Talk',
+        albums: [{ album: 'Spirit of Eden', year: '1988', reason: 'One.' }],
+        related,
+      },
+      'Talk Talk',
+      talkTalkCatalogue,
+    );
+
+    expect(result.essentials.related).toEqual(related);
   });
 });
 
-describe('getArtistEssentials album check', () => {
-  it('returns only albums found in MusicBrainz', async () => {
-    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: validJsonResponse }] });
+describe('verifyRelated', () => {
+  function related(artist: string, album: string): ConnectedAlbum {
+    return { artist, album, year: '1998', connection: 'Former member', reason: 'Essential.' };
+  }
+
+  it('keeps the albums MusicBrainz knows, with its spelling and year, in order', async () => {
+    const result = await verifyRelated(
+      [
+        related('O.Rang', 'Herd of Instinct'),
+        related('beth gibbons & rustin man', 'out of season'),
+      ],
+      'Talk Talk',
+    );
+
+    expect(
+      result.related.map((album) => `${album.artist} – ${album.album} (${album.year})`),
+    ).toEqual([
+      'O.Rang – Herd of Instinct (1994)',
+      'Beth Gibbons & Rustin’ Man – Out of Season (2002)',
+    ]);
+    expect(result.related[0].releaseGroupId).toBe('rg-Herd of Instinct');
+    expect(result.related[0].connection).toBe('Former member');
+    expect(result.isUnchecked).toBe(false);
+  });
+
+  it('drops an album MusicBrainz does not know', async () => {
+    const result = await verifyRelated(
+      [related('Made Up Band', 'Fake Album'), related('Mark Hollis', 'Mark Hollis')],
+      'Talk Talk',
+    );
+
+    expect(result.related.map((album) => album.album)).toEqual(['Mark Hollis']);
+  });
+
+  it('drops an album by the artist searched for, since this list is for what else to hear', async () => {
+    mockFindAlbum.mockResolvedValueOnce({
+      status: 'matched',
+      match: {
+        releaseGroupId: 'rg-own',
+        artist: 'Talk Talk',
+        album: 'Spirit of Eden',
+        year: '1988',
+      },
+    });
+
+    const result = await verifyRelated([related('Talk Talk', 'Spirit of Eden')], 'Talk Talk');
+
+    expect(result.related).toEqual([]);
+  });
+
+  it('drops a repeat of the same album', async () => {
+    const result = await verifyRelated(
+      [related('Mark Hollis', 'Mark Hollis'), related('Mark Hollis', 'mark hollis')],
+      'Talk Talk',
+    );
+
+    expect(result.related).toHaveLength(1);
+  });
+
+  it('keeps an album it could not look up, unchecked, and says so', async () => {
+    mockFindAlbum.mockResolvedValueOnce({ status: 'lookup_failed' });
+
+    const result = await verifyRelated([related('Mark Hollis', 'Mark Hollis')], 'Talk Talk');
+
+    expect(result.related).toHaveLength(1);
+    expect(result.related[0].releaseGroupId).toBeUndefined();
+    expect(result.isUnchecked).toBe(true);
+  });
+});
+
+describe('getArtistEssentials', () => {
+  it('returns where to start and the related albums that check out', async () => {
+    mockCreate.mockResolvedValue(claudeAnswer(startHere));
 
     const result = await getArtistEssentials({ artist: 'talk talk' });
 
     expect(result.artist).toBe('Talk Talk');
-    expect(result.albums.map((album) => album.album)).not.toContain("It's My Life 2");
+    expect(result.albums.map((album) => album.album)).toEqual([
+      'Spirit of Eden',
+      'Laughing Stock',
+      'The Colour of Spring',
+    ]);
+    expect(result.related.map((album) => album.album)).toEqual([
+      'Mark Hollis',
+      'Herd of Instinct',
+      'Out of Season',
+    ]);
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
-  it('asks again with the real catalogue when fewer than three albums check out', async () => {
+  it('asks again with the real catalogue when fewer than two start-here albums check out', async () => {
     mockCreate
-      .mockResolvedValueOnce(
-        claudeEssentials('Talk Talk', ['Spirit of Eden', 'Made Up One', 'Made Up Two']),
-      )
-      .mockResolvedValueOnce(
-        claudeEssentials('Talk Talk', ['Spirit of Eden', 'Laughing Stock', 'The Colour of Spring']),
-      );
+      .mockResolvedValueOnce(claudeAnswer(['Spirit of Eden', 'Made Up One', 'Made Up Two']))
+      .mockResolvedValueOnce(claudeAnswer(['Spirit of Eden', 'Laughing Stock']));
 
     const result = await getArtistEssentials({ artist: 'Talk Talk' });
 
-    expect(result.albums).toHaveLength(3);
+    expect(result.albums).toHaveLength(2);
     const retryPrompt = mockCreate.mock.calls[1][0].messages[0].content as string;
     expect(retryPrompt).toContain('Made Up One, Made Up Two');
     expect(retryPrompt).toContain('Laughing Stock');
     expect(retryPrompt).not.toContain('Natural History');
   });
 
-  it('still verifies an album MusicBrainz doesn’t list, but doesn’t suggest one', async () => {
-    const bootleg = catalogueAlbum('Live in Montreux', '2008');
-    mockFindArtistAlbums.mockResolvedValue({
-      status: 'found',
-      artist: 'Talk Talk',
-      albums: [...talkTalkCatalogue, bootleg],
-      listedIds: new Set(talkTalkCatalogue.map((album) => album.id)),
-    });
-    mockCreate
-      .mockResolvedValueOnce(claudeEssentials('Talk Talk', ['Live in Montreux', 'Made Up One']))
-      .mockResolvedValueOnce(claudeEssentials('Talk Talk', ['Live in Montreux']));
-
-    const result = await getArtistEssentials({ artist: 'Talk Talk' });
-
-    expect(result.albums.map((album) => album.album)).toEqual(['Live in Montreux']);
-    expect(result.discography?.map((album) => album.title)).toContain('Live in Montreux');
-    const retryPrompt = mockCreate.mock.calls[1][0].messages[0].content as string;
-    expect(retryPrompt).toContain('Laughing Stock');
-    expect(retryPrompt.split('choose from them:')[1]).not.toContain('Live in Montreux');
-  });
-
   it('keeps the first answer if the retry checks out worse', async () => {
     mockCreate
-      .mockResolvedValueOnce(claudeEssentials('Talk Talk', ['Spirit of Eden', 'Laughing Stock']))
-      .mockResolvedValueOnce(claudeEssentials('Talk Talk', ['Made Up One']));
+      .mockResolvedValueOnce(claudeAnswer(['Spirit of Eden', 'Made Up One']))
+      .mockResolvedValueOnce(claudeAnswer(['Made Up Two']));
 
     const result = await getArtistEssentials({ artist: 'Talk Talk' });
 
-    expect(result.albums.map((album) => album.album)).toEqual(['Spirit of Eden', 'Laughing Stock']);
+    expect(result.albums.map((album) => album.album)).toEqual(['Spirit of Eden']);
+    expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
-  it('fails when no album can be verified', async () => {
-    mockCreate.mockResolvedValue(claudeEssentials('Talk Talk', ['Made Up One']));
+  it('fails when none of the albums to start with can be verified', async () => {
+    mockCreate.mockResolvedValue(claudeAnswer(['Made Up One']));
 
     await expect(getArtistEssentials({ artist: 'Talk Talk' })).rejects.toBeInstanceOf(
       UnverifiedEssentialsError,
@@ -454,7 +442,7 @@ describe('getArtistEssentials album check', () => {
   });
 
   it('fails when the artist is not in MusicBrainz', async () => {
-    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: validJsonResponse }] });
+    mockCreate.mockResolvedValue(claudeAnswer(startHere));
     mockFindArtistAlbums.mockResolvedValue({ status: 'not_found' });
 
     await expect(getArtistEssentials({ artist: 'Talk Talk' })).rejects.toBeInstanceOf(
@@ -463,7 +451,7 @@ describe('getArtistEssentials album check', () => {
   });
 
   it('retries the lookup with Claude’s spelling of a mistyped artist', async () => {
-    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: validJsonResponse }] });
+    mockCreate.mockResolvedValue(claudeAnswer(startHere));
     mockFindArtistAlbums.mockResolvedValueOnce({ status: 'not_found' });
 
     const result = await getArtistEssentials({ artist: 'Tlak Talk' });
@@ -472,52 +460,25 @@ describe('getArtistEssentials album check', () => {
     expect(result.albums.length).toBeGreaterThan(0);
   });
 
-  it('returns the list unchecked when MusicBrainz is unavailable', async () => {
-    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: validJsonResponse }] });
+  it('returns the lists unchecked, looking nothing else up, when MusicBrainz is unavailable', async () => {
+    mockCreate.mockResolvedValue(claudeAnswer(startHere));
     mockFindArtistAlbums.mockResolvedValue({ status: 'lookup_failed' });
 
     const result = await getArtistEssentials({ artist: 'Talk Talk' });
 
-    expect(result.albums).toHaveLength(5);
+    expect(result.albums).toHaveLength(3);
     expect(result.albums[0].releaseGroupId).toBeUndefined();
-    expect(result.discography).toBeUndefined();
-    expect(startHereTitles(result.albums)).toHaveLength(2);
+    expect(result.related).toHaveLength(4);
+    expect(mockFindAlbum).not.toHaveBeenCalled();
   });
 
-  it('includes the discography and the albums to start with', async () => {
-    mockCreate.mockResolvedValue(
-      essentialsWithMarks([
-        ['Spirit of Eden', true],
-        ['Laughing Stock', false],
-        ['The Colour of Spring', true],
-      ]),
-    );
+  it('still returns where to start when none of the related albums check out', async () => {
+    mockCreate.mockResolvedValue(claudeAnswer(startHere, [['Made Up Band', 'Fake Album']]));
 
     const result = await getArtistEssentials({ artist: 'Talk Talk' });
 
-    expect(startHereTitles(result.albums)).toEqual(['Spirit of Eden', 'The Colour of Spring']);
-    expect(result.discography?.map((album) => album.title)).toEqual([
-      'The Party’s Over',
-      'It’s My Life',
-      'The Colour of Spring',
-      'Spirit of Eden',
-      'Laughing Stock',
-    ]);
-  });
-
-  it('replaces a start-here album that MusicBrainz doesn’t have with the next one', async () => {
-    mockCreate.mockResolvedValue(
-      essentialsWithMarks([
-        ['Made Up One', true],
-        ['Spirit of Eden', true],
-        ['Laughing Stock', false],
-        ['The Colour of Spring', false],
-      ]),
-    );
-
-    const result = await getArtistEssentials({ artist: 'Talk Talk' });
-
-    expect(startHereTitles(result.albums)).toEqual(['Spirit of Eden', 'Laughing Stock']);
+    expect(result.albums).toHaveLength(3);
+    expect(result.related).toEqual([]);
   });
 });
 
@@ -528,7 +489,7 @@ describe('getArtistEssentials cache', () => {
   beforeEach(() => {
     store = createInMemoryCacheStore();
     configureLookupCache(store);
-    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: validJsonResponse }] });
+    mockCreate.mockResolvedValue(claudeAnswer(startHere));
   });
 
   afterEach(() => {
@@ -538,12 +499,14 @@ describe('getArtistEssentials cache', () => {
   it('answers a repeat request without calling Claude or MusicBrainz', async () => {
     const first = await getArtistEssentials({ artist: 'Talk Talk' });
     mockFindArtistAlbums.mockClear();
+    mockFindAlbum.mockClear();
 
     const second = await getArtistEssentials({ artist: 'Talk Talk' });
 
     expect(second).toEqual(first);
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(mockFindArtistAlbums).not.toHaveBeenCalled();
+    expect(mockFindAlbum).not.toHaveBeenCalled();
   });
 
   it.each(['talk talk', '  TALK TALK  ', 'Talk-Talk', 'The Talk Talk'])(
@@ -565,13 +528,13 @@ describe('getArtistEssentials cache', () => {
     expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps a verified list for 30 days', async () => {
+  it('keeps a verified list for 30 days, under the current version', async () => {
     const set = vi.spyOn(store, 'set');
 
     await getArtistEssentials({ artist: 'Talk Talk' });
 
     expect(set).toHaveBeenCalledWith(
-      expect.stringContaining('essentials:'),
+      'essentials:v4:talk talk',
       expect.anything(),
       THIRTY_DAYS_SECONDS,
     );
@@ -593,6 +556,25 @@ describe('getArtistEssentials cache', () => {
     expect(recovered.albums.every((album) => album.releaseGroupId !== undefined)).toBe(true);
   });
 
+  it('does not keep a list with a related album that could not be looked up', async () => {
+    mockFindAlbum.mockResolvedValue({ status: 'lookup_failed' });
+    await getArtistEssentials({ artist: 'Talk Talk' });
+
+    mockFindAlbum.mockImplementation(async (query) => lookUpRelated(query));
+    await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not keep a list with no related albums, which may only mean the lookups missed', async () => {
+    mockCreate.mockResolvedValue(claudeAnswer(startHere, [['Made Up Band', 'Fake Album']]));
+    await getArtistEssentials({ artist: 'Talk Talk' });
+
+    await getArtistEssentials({ artist: 'Talk Talk' });
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
   it('does not keep a failure', async () => {
     mockFindArtistAlbums.mockResolvedValue({ status: 'not_found' });
     await expect(getArtistEssentials({ artist: 'Talk Talk' })).rejects.toBeInstanceOf(
@@ -611,32 +593,23 @@ describe('getArtistEssentials cache', () => {
     });
   });
 
-  it('keeps lists under a new version, leaving ones with bootlegs in the discography behind', async () => {
-    const set = vi.spyOn(store, 'set');
-
-    await getArtistEssentials({ artist: 'Talk Talk' });
-
-    expect(set).toHaveBeenCalledWith(
-      'essentials:v3:talk talk',
-      expect.anything(),
-      expect.anything(),
-    );
-  });
-
-  it('ignores a cached list without a discography and asks again', async () => {
+  it('leaves behind a list kept in the old shape, with a discography and no related albums', async () => {
     const first = await getArtistEssentials({ artist: 'Talk Talk' });
-    await store.set('essentials:v3:talk talk', { artist: first.artist, albums: first.albums }, 60);
+    await store.set(
+      'essentials:v4:talk talk',
+      { artist: first.artist, albums: first.albums, discography: [] },
+      60,
+    );
 
     const result = await getArtistEssentials({ artist: 'Talk Talk' });
 
     expect(mockCreate).toHaveBeenCalledTimes(2);
-    expect(result.discography).toBeDefined();
+    expect(result.related.length).toBeGreaterThan(0);
   });
 
   it('ignores a cached entry that no longer has the right shape and asks again', async () => {
     await getArtistEssentials({ artist: 'Talk Talk' });
-    // Overwrite the stored list with something an older version might have written.
-    await store.set('essentials:v3:talk talk', { artist: 'Talk Talk', albums: 'nope' }, 60);
+    await store.set('essentials:v4:talk talk', { artist: 'Talk Talk', albums: 'nope' }, 60);
 
     const result = await getArtistEssentials({ artist: 'Talk Talk' });
 

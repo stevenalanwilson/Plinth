@@ -1,25 +1,24 @@
 import React from 'react';
-import { ArtistEssentialsResponse, EssentialAlbum } from '@shared/types';
+import { ArtistEssentialsResponse, ConnectedAlbum, EssentialAlbum } from '@shared/types';
 import { ListeningLinks } from '../../components/ListeningLinks';
 import { EssentialCover } from './EssentialCover';
-import { DiscographyRow, layOutEssentials } from './essentialsLayout';
 
 interface EssentialsResultProps {
   readonly result: ArtistEssentialsResponse;
   readonly onSeedArtist?: (artist: string) => void;
 }
 
-interface AlbumProps {
+interface AlbumCardProps {
   readonly entry: EssentialAlbum;
+  /** Who made the album: the cover, its placeholder and the listening links go by this name. */
   readonly artist: string;
+  readonly size: 'large' | 'small';
+  /** A line under the title, such as who the artist is to the one searched for. */
+  readonly byline?: string;
 }
 
 /** An essential album with its cover, reason and listening links. */
-function EssentialAlbumCard({
-  entry,
-  artist,
-  size,
-}: AlbumProps & { readonly size: 'large' | 'small' }): React.ReactElement {
+function EssentialAlbumCard({ entry, artist, size, byline }: AlbumCardProps): React.ReactElement {
   return (
     <article className="essentials-album-row" data-size={size}>
       <div className="essentials-album-cover">
@@ -30,32 +29,11 @@ function EssentialAlbumCard({
           <h4 className="essentials-album-title">{entry.album}</h4>
           <span className="essentials-album-meta">{entry.year}</span>
         </div>
+        {byline !== undefined && <p className="essentials-album-byline">{byline}</p>}
         <p className="essentials-album-reason">{entry.reason}</p>
         <ListeningLinks artist={artist} album={entry.album} />
       </div>
     </article>
-  );
-}
-
-function DiscographyItem({
-  row,
-  artist,
-}: {
-  readonly row: DiscographyRow;
-  readonly artist: string;
-}): React.ReactElement {
-  if (row.essential) {
-    return (
-      <li className="discography-item" data-essential="true">
-        <EssentialAlbumCard entry={row.essential} artist={artist} size="small" />
-      </li>
-    );
-  }
-  return (
-    <li className="discography-item">
-      <span className="discography-year">{row.year ?? '—'}</span>
-      <span className="discography-title">{row.title}</span>
-    </li>
   );
 }
 
@@ -81,27 +59,6 @@ function Section({
   );
 }
 
-function EssentialList({
-  albums,
-  artist,
-}: {
-  readonly albums: readonly EssentialAlbum[];
-  readonly artist: string;
-}): React.ReactElement {
-  return (
-    <div className="essentials-list">
-      {albums.map((entry) => (
-        <EssentialAlbumCard
-          key={entry.releaseGroupId ?? entry.album}
-          entry={entry}
-          artist={artist}
-          size="small"
-        />
-      ))}
-    </div>
-  );
-}
-
 const COUNT_WORDS = ['', 'one', 'two', 'three'];
 
 function startHereNote(count: number): string {
@@ -109,13 +66,19 @@ function startHereNote(count: number): string {
   return `The ${COUNT_WORDS[count] ?? count} albums to begin with, and why.`;
 }
 
-/** An artist's essentials: where to start, then the rest of their albums in order. */
+function connectedByline(album: ConnectedAlbum): string {
+  return `${album.artist} · ${album.connection}`;
+}
+
+/**
+ * Where to start with an artist, then essential albums by the people around them: the members,
+ * side projects, collaborators and producers.
+ */
 export function EssentialsResult({
   result,
   onSeedArtist,
 }: EssentialsResultProps): React.ReactElement {
-  const layout = layOutEssentials(result);
-  const { artist } = result;
+  const { artist, albums, related } = result;
 
   return (
     <div className="essentials-result">
@@ -128,52 +91,43 @@ export function EssentialsResult({
         )}
       </div>
 
-      {layout.kind === 'list' ? (
-        <EssentialList albums={layout.albums} artist={artist} />
-      ) : (
-        <>
-          <Section
-            id="essentials-start-here"
-            title="Start here"
-            note={startHereNote(layout.startHere.length)}
-          >
-            <div className="essentials-list">
-              {layout.startHere.map((entry) => (
-                <EssentialAlbumCard
-                  key={entry.releaseGroupId ?? entry.album}
-                  entry={entry}
-                  artist={artist}
-                  size="large"
-                />
-              ))}
-            </div>
-          </Section>
+      <Section id="essentials-start-here" title="Start here" note={startHereNote(albums.length)}>
+        <div className="essentials-list">
+          {albums.map((entry) => (
+            <EssentialAlbumCard
+              key={entry.releaseGroupId ?? entry.album}
+              entry={entry}
+              artist={artist}
+              size="large"
+            />
+          ))}
+        </div>
+      </Section>
 
-          {layout.kind === 'discography' && layout.rest.length > 0 && (
-            <Section
-              id="essentials-discography"
-              title="Then the rest"
-              note="Every other album, oldest first. The essentials say why they matter."
-            >
-              <ol className="discography">
-                {layout.rest.map((row) => (
-                  <DiscographyItem key={row.releaseGroupId} row={row} artist={artist} />
-                ))}
-              </ol>
-            </Section>
-          )}
-
-          {layout.kind === 'essentials' && layout.rest.length > 0 && (
-            <Section
-              id="essentials-more"
-              title="Then these"
-              note="The other essentials, in the order to listen to them."
-            >
-              <EssentialList albums={layout.rest} artist={artist} />
-            </Section>
-          )}
-        </>
-      )}
+      <Section
+        id="essentials-related"
+        title="Then the people around them"
+        note={`Essential albums by ${artist}'s members, side projects, collaborators and producers.`}
+      >
+        {related.length === 0 ? (
+          <p className="essentials-empty">
+            We couldn&apos;t confirm any albums connected to {artist} this time. Try again a little
+            later.
+          </p>
+        ) : (
+          <div className="essentials-list">
+            {related.map((entry) => (
+              <EssentialAlbumCard
+                key={entry.releaseGroupId ?? `${entry.artist}-${entry.album}`}
+                entry={entry}
+                artist={entry.artist}
+                size="small"
+                byline={connectedByline(entry)}
+              />
+            ))}
+          </div>
+        )}
+      </Section>
     </div>
   );
 }

@@ -67,7 +67,7 @@ beforeEach(() => {
   mockGetRecommendation.mockReset();
   mockGetRecommendation.mockResolvedValue(PICK);
   mockGetArtistEssentials.mockReset();
-  mockGetArtistEssentials.mockResolvedValue({ artist: 'Can', albums: [] });
+  mockGetArtistEssentials.mockResolvedValue({ artist: 'Can', albums: [], related: [] });
 });
 
 afterEach(async () => {
