@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { AccountResponse } from '@shared/types';
+import { AccountResponse, AccountStatusResponse } from '@shared/types';
 import { AccountRepository } from '../repositories/accountRepository';
 import { DeviceRepository } from '../repositories/deviceRepository';
 import { SignInLinkRepository } from '../repositories/signInLinkRepository';
@@ -109,13 +109,20 @@ export function createVerifySignInHandler(deps: {
   };
 }
 
-export function createAccountHandler(accounts: AccountRepository): Handler {
+export function createAccountHandler(
+  accounts: AccountRepository,
+  channel: SignInChannel | null,
+): Handler {
   return async (_req, res) => {
     noStore(res);
     const accountId = deviceOf(res)?.accountId;
     try {
       const account = accountId ? await accounts.findById(accountId) : null;
-      const body: AccountResponse = { account: account ? { email: account.email } : null };
+      const body: AccountStatusResponse = {
+        account: account ? { email: account.email } : null,
+        // So a page can leave out offers to sign in when that isn't possible.
+        signInAvailable: channel !== null,
+      };
       res.json(body);
     } catch (error) {
       logger.error({ error: describeError(error) }, 'account lookup failed');

@@ -242,6 +242,20 @@ describe('signing in through the real API', () => {
     expect(res.status).toBe(403);
   });
 
+  it('says whether signing in is available, so a page can leave out offers to do it', async () => {
+    await start();
+    const available = await newDeviceToken();
+    const withSignIn = await (await call('GET', '/auth/me', { token: available })).json();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+
+    await start({ sender: null });
+    const unavailable = await newDeviceToken();
+    const withoutSignIn = await (await call('GET', '/auth/me', { token: unavailable })).json();
+
+    expect(withSignIn).toMatchObject({ account: null, signInAvailable: true });
+    expect(withoutSignIn).toMatchObject({ account: null, signInAvailable: false });
+  });
+
   it('keeps what is private out of caches', async () => {
     await start();
     const token = await newDeviceToken();

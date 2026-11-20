@@ -669,6 +669,12 @@ describe('apiClient accounts', () => {
       expect(headers().Authorization).toBe('Bearer pld_existing');
     });
 
+    it('passes on whether signing in is switched on', async () => {
+      fetchMock.mockResolvedValueOnce(json({ account: null, signInAvailable: false }));
+
+      expect(await fetchAccount()).toEqual({ account: null, signInAvailable: false });
+    });
+
     it('does not ask, or get a token, for a browser that has none', async () => {
       localStorage.clear();
 

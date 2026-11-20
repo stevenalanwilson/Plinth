@@ -19,6 +19,8 @@ interface UseAccountSessionOptions {
 interface UseAccountSessionReturn {
   readonly account: Account | null;
   readonly isChecking: boolean;
+  /** False only when the server says signing in is switched off. */
+  readonly isSignInAvailable: boolean;
   readonly requestLink: (email: string) => Promise<void>;
   /**
    * Signs out, then takes the crate off this device, since it is kept in the account. If the
@@ -33,7 +35,8 @@ interface UseAccountSessionReturn {
 
 /** Who is signed in, and keeping their crate with them: in, out and away. */
 export function useAccountSession(options: UseAccountSessionOptions): UseAccountSessionReturn {
-  const { account, isChecking, requestLink, signOut, deleteAccount, refresh } = useAccount();
+  const { account, isChecking, isSignInAvailable, requestLink, signOut, deleteAccount, refresh } =
+    useAccount();
   const { status, hasUnsynced, syncNow } = useLibrarySync({
     email: account?.email ?? null,
     history: options.history,
@@ -65,6 +68,7 @@ export function useAccountSession(options: UseAccountSessionOptions): UseAccount
   return {
     account,
     isChecking,
+    isSignInAvailable,
     requestLink,
     signOut: signOutAndLeaveCrate,
     deleteAccount: deleteAccountAndForget,

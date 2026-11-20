@@ -15,6 +15,8 @@ interface UseAccountReturn {
   readonly account: Account | null;
   /** True until the first answer, so the menu doesn't offer to sign in someone who is. */
   readonly isChecking: boolean;
+  /** False only when the server says signing in is switched off. Not knowing counts as on. */
+  readonly isSignInAvailable: boolean;
   /** Emails a sign-in link. Rejects with a message fit to show. */
   readonly requestLink: (email: string) => Promise<void>;
   readonly signOut: () => Promise<void>;
@@ -27,12 +29,15 @@ interface UseAccountReturn {
 export function useAccount(): UseAccountReturn {
   const [account, setAccount] = useState<Account | null>(null);
   const [isChecking, setIsChecking] = useState(true);
+  const [isSignInAvailable, setIsSignInAvailable] = useState(true);
 
   useEffect(() => {
     const controller = new AbortController();
     fetchAccount(controller.signal)
       .then((result) => {
-        if (!controller.signal.aborted) setAccount(result.account);
+        if (controller.signal.aborted) return;
+        setAccount(result.account);
+        setIsSignInAvailable(result.signInAvailable !== false);
       })
       // Not knowing is the same as not being signed in: the page still works.
       .catch(() => undefined)
@@ -44,7 +49,9 @@ export function useAccount(): UseAccountReturn {
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
-      setAccount((await fetchAccount()).account);
+      const result = await fetchAccount();
+      setAccount(result.account);
+      setIsSignInAvailable(result.signInAvailable !== false);
     } catch {
       // Not knowing leaves things as they are.
     }
@@ -60,5 +67,13 @@ export function useAccount(): UseAccountReturn {
     setAccount(null);
   }, []);
 
-  return { account, isChecking, requestLink: requestSignInLink, signOut, refresh, deleteAccount };
+  return {
+    account,
+    isChecking,
+    isSignInAvailable,
+    requestLink: requestSignInLink,
+    signOut,
+    refresh,
+    deleteAccount,
+  };
 }

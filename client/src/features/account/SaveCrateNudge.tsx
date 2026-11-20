@@ -25,6 +25,8 @@ interface SaveCrateNudgeProps {
   readonly isSignedIn: boolean;
   /** True until it is known whether someone is signed in, so a signed-in person never sees this. */
   readonly isChecking: boolean;
+  /** False when signing in is switched off, when offering it would lead nowhere. */
+  readonly isSignInAvailable: boolean;
   /** Opens the way to signing in. */
   readonly onSignIn: () => void;
 }
@@ -38,11 +40,14 @@ export function SaveCrateNudge({
   history,
   isSignedIn,
   isChecking,
+  isSignInAvailable,
   onSignIn,
 }: SaveCrateNudgeProps): React.ReactElement | null {
   const [isDismissed, setIsDismissed] = useState(wasDismissed);
 
-  if (isChecking || isSignedIn || isDismissed || !history.some(isRated)) return null;
+  if (isChecking || isSignedIn || !isSignInAvailable || isDismissed || !history.some(isRated)) {
+    return null;
+  }
 
   return (
     <aside className="crate-nudge" role="note">
