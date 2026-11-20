@@ -1620,3 +1620,54 @@ body::before {
 .example-album:hover .example-album-hook,
 .example-album:focus-within .example-album-body,
 .example-album:focus-within .example-album-hook { opacity: 0.7; }
+
+/* Artist Essentials says what it is, and its button is the yellow of the other submit buttons. */
+.essentials-title {
+  margin-bottom: 10px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 26px;
+  letter-spacing: -0.2px;
+}
+.essentials-intro {
+  margin-bottom: 20px;
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.essentials-submit {
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #0e0e0f;
+  font-family: var(--mono);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.essentials-submit:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Artist Essentials has no sidebar, so its content and footer use the whole width, from the
+   same left edge as the header. */
+.essentials-panel { max-width: none; padding: 0; }
+@media (min-width: 769px) {
+  .app-layout[data-page='essentials'] .app-footer {
+    grid-column: 1 / -1;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* Related essentials say who made the album and how they are connected to the artist. */
+.essentials-album-byline {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--accent);
+}
+.essentials-empty {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}

@@ -27,6 +27,15 @@ const mockResult = {
     { album: 'Spirit of Eden', year: '1988', reason: 'A transformative work.' },
     { album: 'Laughing Stock', year: '1991', reason: 'The culmination of their art.' },
   ],
+  related: [
+    {
+      artist: 'Mark Hollis',
+      album: 'Mark Hollis',
+      year: '1998',
+      connection: 'Singer’s solo album',
+      reason: 'Quiet and spare.',
+    },
+  ],
 };
 
 beforeEach(() => {
@@ -64,6 +73,17 @@ describe('ArtistEssentialsPanel', () => {
     });
     expect(screen.getByRole('heading', { name: 'Laughing Stock' })).toBeInTheDocument();
     expect(screen.getByText('A transformative work.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Mark Hollis' })).toBeInTheDocument();
+    expect(screen.getByText(/Singer’s solo album/)).toBeInTheDocument();
+  });
+
+  it('says what Artist Essentials is for', () => {
+    render(<ArtistEssentialsPanel />);
+
+    expect(screen.getByRole('heading', { name: 'Artist Essentials' })).toBeInTheDocument();
+    expect(screen.getByText(/Love a particular artist or band/)).toHaveTextContent(
+      /band members, side projects, collaborators and producers/,
+    );
   });
 
   it('shows error message on API failure', async () => {

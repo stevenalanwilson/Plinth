@@ -295,15 +295,14 @@ export interface EssentialAlbum {
   readonly reason: string;
   /** MusicBrainz release group the album was matched to; absent if it couldn't be checked. */
   readonly releaseGroupId?: string;
-  /** One of the two or three albums a newcomer should start with. */
-  readonly startHere?: boolean;
 }
 
-/** An album in an artist's discography, from MusicBrainz. */
-export interface DiscographyAlbum {
-  readonly title: string;
-  readonly year: string | null;
-  readonly releaseGroupId: string;
+/** An essential album by someone connected to the artist searched for: a member, a producer. */
+export interface ConnectedAlbum extends EssentialAlbum {
+  /** Who made the album: not the artist searched for. */
+  readonly artist: string;
+  /** How they are connected to that artist, such as "Guitarist's solo debut". */
+  readonly connection: string;
 }
 
 /** From POST /api/v1/devices: the secret a browser or app sends from then on, shown only once. */
@@ -317,10 +316,8 @@ export interface ArtistEssentialsRequest {
 
 export interface ArtistEssentialsResponse {
   readonly artist: string;
+  /** Two or three of the artist's own albums to start with, in the order to listen. */
   readonly albums: readonly EssentialAlbum[];
-  /**
-   * The artist's studio albums, plus any essential album that isn't one (a live album, say),
-   * oldest first. Absent when the list couldn't be checked against MusicBrainz.
-   */
-  readonly discography?: readonly DiscographyAlbum[];
+  /** Essential albums by people connected to the artist, which may be none that could be checked. */
+  readonly related: readonly ConnectedAlbum[];
 }
