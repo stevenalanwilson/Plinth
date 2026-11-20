@@ -166,8 +166,8 @@ Then open [http://localhost:5173](http://localhost:5173).
 | `DATABASE_URL`        | In prod  | — (in memory)               | Postgres connection for stored albums; the server won't start without it in production     |
 | `MUSICBRAINZ_CONTACT` |          | —                           | Email or URL sent in the MusicBrainz User-Agent, as their etiquette asks                   |
 | `VITE_API_URL`        |          | `''` (same origin)          | Client → server base URL (local dev without Docker)                                        |
-| `VITE_MONZO_URL`      |          | —                           | Monzo.me payment link shown in the footer                                                  |
-| `VITE_FEEDBACK_EMAIL` |          | —                           | Email address for the feedback link in the footer                                          |
+| `VITE_MONZO_URL`      |          | —                           | Monzo.me link shown in the footer. In production, set it on the client service             |
+| `VITE_FEEDBACK_EMAIL` |          | —                           | Email for the footer's feedback link. In production, set it on the client service          |
 
 **Getting your Anthropic API key**
 
