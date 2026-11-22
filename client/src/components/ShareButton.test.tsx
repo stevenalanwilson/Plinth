@@ -43,7 +43,10 @@ describe('ShareButton', () => {
     });
 
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/album/the-sound-jeopardy`);
-    expect(screen.getByRole('button', { name: 'Link copied' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Link copied' })).toHaveAttribute(
+      'data-copied',
+      'true',
+    );
   });
 
   it('goes back to Share after a moment', async () => {
@@ -118,38 +121,11 @@ describe('ShareButton', () => {
     );
   });
 
-  describe('as an icon', () => {
-    function renderIcon(): void {
-      render(
-        <ShareButton
-          slug="the-sound-jeopardy"
-          album="Jeopardy"
-          artist="The Sound"
-          hook="A tightly coiled record."
-          iconOnly
-        />,
-      );
-    }
+  it('shows no text, but is named Share and has a tooltip', () => {
+    renderButton();
 
-    it('shows no text but is still named Share, with a tooltip', () => {
-      renderIcon();
-
-      const button = screen.getByRole('button', { name: 'Share' });
-      expect(button).toHaveTextContent('');
-      expect(button).toHaveAttribute('title', 'Share');
-    });
-
-    it('says the link was copied once it has been', async () => {
-      renderIcon();
-
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-      });
-
-      expect(screen.getByRole('button', { name: 'Link copied' })).toHaveAttribute(
-        'data-copied',
-        'true',
-      );
-    });
+    const button = screen.getByRole('button', { name: 'Share' });
+    expect(button).toHaveTextContent('');
+    expect(button).toHaveAttribute('title', 'Share');
   });
 });

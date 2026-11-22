@@ -4,28 +4,7 @@ interface IconProps {
   readonly size?: number;
 }
 
-export function AppleMusicOpenIcon({ size = 12 }: IconProps): React.ReactElement {
-  // External-link arrow — signals "opens directly"
-  return (
-    <svg
-      aria-hidden="true"
-      width={size}
-      height={size}
-      viewBox="0 0 12 12"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 2H2.5a.5.5 0 0 0-.5.5v7a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5V7" />
-      <path d="M7.5 2H10v2.5" />
-      <line x1="10" y1="2" x2="5.5" y2="6.5" />
-    </svg>
-  );
-}
-
-export function AppleMusicSearchIcon({ size = 12 }: IconProps): React.ReactElement {
+export function AppleMusicIcon({ size = 12 }: IconProps): React.ReactElement {
   // Single eighth-note — universally recognisable as music
   return (
     <svg aria-hidden="true" width={size} height={size} viewBox="0 0 12 12" fill="currentColor">

@@ -6,15 +6,13 @@ interface ShareButtonProps {
   readonly album: string;
   readonly artist: string;
   readonly hook: string | null;
-  /** Just the icon, named for screen readers and as a tooltip, for a row of icon buttons. */
-  readonly iconOnly?: boolean;
 }
 
-function ShareIcon({ size }: { readonly size: number }): React.ReactElement {
+function ShareIcon(): React.ReactElement {
   return (
     <svg
-      width={size}
-      height={size}
+      width={16}
+      height={16}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -30,14 +28,11 @@ function ShareIcon({ size }: { readonly size: number }): React.ReactElement {
   );
 }
 
-/** Shares the album's page: the phone's share sheet where there is one, otherwise a copied link. */
-export function ShareButton({
-  slug,
-  album,
-  artist,
-  hook,
-  iconOnly = false,
-}: ShareButtonProps): React.ReactElement {
+/**
+ * A square icon button that shares the album's page: the phone's share sheet where there is one,
+ * otherwise a copied link. Named for screen readers and as a tooltip, since it shows no text.
+ */
+export function ShareButton({ slug, album, artist, hook }: ShareButtonProps): React.ReactElement {
   const { status, share } = useShare();
   const title = `${album} by ${artist}`;
   const copied = status === 'copied';
@@ -46,10 +41,10 @@ export function ShareButton({
     <>
       <button
         type="button"
-        className={iconOnly ? 'icon-action' : 'share-button'}
+        className="icon-action"
         data-copied={copied}
-        aria-label={iconOnly ? (copied ? 'Link copied' : 'Share') : undefined}
-        title={iconOnly ? 'Share' : undefined}
+        aria-label={copied ? 'Link copied' : 'Share'}
+        title="Share"
         onClick={() =>
           void share({
             title,
@@ -58,8 +53,7 @@ export function ShareButton({
           })
         }
       >
-        <ShareIcon size={iconOnly ? 16 : 14} />
-        {!iconOnly && (copied ? 'Link copied' : 'Share')}
+        <ShareIcon />
       </button>
       <span role="status" className="visually-hidden">
         {copied ? 'Link copied' : ''}

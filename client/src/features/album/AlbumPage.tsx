@@ -1,15 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlbumResponse } from '@shared/types';
-import {
-  buildAppleMusicSearchUrl,
-  buildDiscogsSearchUrl,
-  buildSpotifySearchUrl,
-  getProxiedArtworkUrl,
-} from '../../services/apiClient';
+import { getProxiedArtworkUrl } from '../../services/apiClient';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
-import { ServiceLinks } from '../../components/ServiceLinks';
-import { ShareButton } from '../../components/ShareButton';
+import { ListenAndShare } from '../../components/ListenAndShare';
 import { AlbumDetails } from './AlbumDetails';
 import { useAlbum } from './useAlbum';
 import { moreLikeThisState } from '../recommendation/moreLikeThis';
@@ -91,20 +85,13 @@ function AlbumCard({ album }: { readonly album: AlbumResponse }): React.ReactEle
         {album.year && <div className="album-page-year">{album.year}</div>}
         {album.hook && <p className="album-page-hook">{album.hook}</p>}
         {details && <div className="album-page-details">{details}</div>}
-        <ServiceLinks
-          appleMusicDirectUrl={album.appleMusicUrl}
-          appleMusicSearchUrl={buildAppleMusicSearchUrl(album.artist, album.album)}
-          spotifyUrl={buildSpotifySearchUrl(album.artist, album.album)}
-          discogsUrl={buildDiscogsSearchUrl(album.artist, album.album)}
+        <ListenAndShare
+          artist={album.artist}
+          album={album.album}
+          appleMusicUrl={album.appleMusicUrl}
+          slug={album.slug}
+          hook={album.hook}
         />
-        <div className="album-page-share">
-          <ShareButton
-            slug={album.slug}
-            album={album.album}
-            artist={album.artist}
-            hook={album.hook}
-          />
-        </div>
       </div>
     </article>
   );

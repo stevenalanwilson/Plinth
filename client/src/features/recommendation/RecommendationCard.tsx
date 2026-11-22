@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { RecommendationResponse, ArtworkResponse, ArtistRelation } from '@shared/types';
 import { getProxiedArtworkUrl } from '../../services/apiClient';
-import { ServiceIconLinks } from '../../components/ServiceIconLinks';
+import { ListenAndShare } from '../../components/ListenAndShare';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
-import { ShareButton } from '../../components/ShareButton';
 import { FeedbackButtons } from '../feedback/FeedbackButtons';
 import { FeedbackStatus } from '../../types/feedback';
 
@@ -204,25 +203,13 @@ export function RecommendationCard({
       {/* One bar for everything to do with the pick: what you make of it, then where to find it. */}
       <div className="card-actions">
         <FeedbackButtons status={feedback} onChange={onFeedback} />
-        <div className="card-actions-listen" role="group" aria-label="Listen and share">
-          <ServiceIconLinks
-            artist={recommendation.artist}
-            album={recommendation.album}
-            appleMusicUrl={artworkResponse?.appleMusicUrl ?? null}
-          />
-          {recommendation.slug && (
-            <>
-              <span className="card-actions-divider" aria-hidden="true" />
-              <ShareButton
-                slug={recommendation.slug}
-                album={recommendation.album}
-                artist={recommendation.artist}
-                hook={recommendation.hook ?? null}
-                iconOnly
-              />
-            </>
-          )}
-        </div>
+        <ListenAndShare
+          artist={recommendation.artist}
+          album={recommendation.album}
+          appleMusicUrl={artworkResponse?.appleMusicUrl ?? null}
+          slug={recommendation.slug}
+          hook={recommendation.hook ?? null}
+        />
       </div>
       <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px' }}>
         <div
