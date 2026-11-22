@@ -1,6 +1,7 @@
 import React from 'react';
 import { RecommendationPreferences, Era, SLIDER_MIN, SLIDER_MAX, ERA_VALUES } from '@shared/types';
 import { GENRE_OPTIONS, MOOD_OPTIONS } from './preferenceOptions';
+import { pillStyle } from '../../components/pillStyle';
 
 // Derived from the interface so field names stay in sync automatically with any future renames.
 type SliderField = {
@@ -30,17 +31,6 @@ export const sectionLabelStyle: React.CSSProperties = {
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
   marginBottom: 6,
-};
-
-const pillBaseStyle: React.CSSProperties = {
-  display: 'inline-block',
-  padding: '6px 12px',
-  borderRadius: 20,
-  fontSize: 12,
-  fontFamily: 'var(--mono)',
-  cursor: 'pointer',
-  border: '1px solid var(--border)',
-  userSelect: 'none',
 };
 
 interface PreferencesPanelProps {
@@ -102,12 +92,7 @@ export function PreferencesPanel({
                 className="pill-button"
                 aria-pressed={isSelected}
                 aria-label={`${genre} genre`}
-                style={{
-                  ...pillBaseStyle,
-                  background: isSelected ? 'var(--accent)' : 'var(--surface2)',
-                  color: isSelected ? '#0e0e0f' : 'var(--text)',
-                  borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
-                }}
+                style={pillStyle(isSelected)}
               >
                 {genre}
               </button>
@@ -130,12 +115,7 @@ export function PreferencesPanel({
                 className="pill-button"
                 aria-pressed={isSelected}
                 aria-label={`${mood} mood`}
-                style={{
-                  ...pillBaseStyle,
-                  background: isSelected ? 'var(--accent)' : 'var(--surface2)',
-                  color: isSelected ? '#0e0e0f' : 'var(--text)',
-                  borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
-                }}
+                style={pillStyle(isSelected)}
               >
                 {mood}
               </button>

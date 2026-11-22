@@ -1723,3 +1723,7 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   .artist-search-spinner { animation: albumPulse 1.4s ease-in-out infinite; }
 }
+
+/* The vibe pills are drawn like the genre and mood pills (see pillStyle), so only the space
+   between them is set here. */
+.vibe-presets-list { gap: 6px; }
