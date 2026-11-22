@@ -50,13 +50,5 @@ export function createInMemoryAlbumRepository(): AlbumRepository {
       byReleaseGroupId.set(releaseGroupId, updated);
       return updated;
     },
-
-    async findRecentWithCoverAndHook(limit: number): Promise<StoredAlbum[]> {
-      // A Map keeps insertion order, which is the order albums were stored in.
-      return [...byReleaseGroupId.values()]
-        .filter((album) => album.artworkUrl && album.hook)
-        .reverse()
-        .slice(0, limit);
-    },
   };
 }

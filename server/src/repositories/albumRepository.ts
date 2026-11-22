@@ -35,6 +35,4 @@ export interface AlbumRepository {
   insert(album: NewAlbum): Promise<StoredAlbum>;
   /** Records an artwork lookup, including one that found nothing. Null if the album isn't stored. */
   updateArtwork(releaseGroupId: string, lookup: ArtworkLookup): Promise<StoredAlbum | null>;
-  /** The most recently stored albums that have both a cover and a hook, newest first. */
-  findRecentWithCoverAndHook(limit: number): Promise<StoredAlbum[]>;
 }

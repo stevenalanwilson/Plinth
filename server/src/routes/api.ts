@@ -3,7 +3,6 @@ import rateLimit from 'express-rate-limit';
 import { createRecommendHandler } from '../controllers/recommendController';
 import { createAlbumHandler } from '../controllers/albumController';
 import { createAlbumDetailsHandler } from '../controllers/albumDetailsController';
-import { createExampleAlbumHandler } from '../controllers/exampleAlbumController';
 import { handleArtwork } from '../controllers/artworkController';
 import { handleArtistRelations } from '../controllers/artistRelationsController';
 import { handleImage } from '../controllers/imageController';
@@ -186,7 +185,6 @@ export function createApiRouter({
   router.post('/recommend', recommendLimiter, createRecommendHandler(albums, dailyLimit));
   router.get('/albums/:slug', albumLimiter, createAlbumHandler(albums));
   router.get('/albums/:slug/details', albumDetailsLimiter, createAlbumDetailsHandler(albums));
-  router.get('/example-album', albumLimiter, createExampleAlbumHandler(albums));
   router.post(
     '/artist-essentials',
     artistEssentialsLimiter,

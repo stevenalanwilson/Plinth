@@ -116,65 +116,6 @@ export function describeAlbumRepository(
       ).toBeNull();
     });
 
-    describe('recent albums with a cover and a hook', () => {
-      const COVER = {
-        artworkUrl: 'https://coverartarchive.org/release/x/1-500.jpg',
-        appleMusicUrl: null,
-        checkedAt: new Date(),
-      };
-      const PORNOGRAPHY: NewAlbum = {
-        ...JEOPARDY,
-        releaseGroupId: '5d1c4e2a-8b3f-4a6c-9d7e-0f1a2b3c4d5e',
-        slug: 'the-cure-pornography',
-        artist: 'The Cure',
-        album: 'Pornography',
-        hook: 'The Cure at their most claustrophobic.',
-      };
-      const NO_COVER: NewAlbum = {
-        ...JEOPARDY,
-        releaseGroupId: '7e2d5f3b-9c4a-4b7d-8e6f-1a2b3c4d5e6f',
-        slug: 'wire-pink-flag',
-        artist: 'Wire',
-        album: 'Pink Flag',
-        hook: '21 songs in 35 minutes.',
-      };
-
-      it('returns only albums that have both, newest first', async () => {
-        await albums.insert(JEOPARDY);
-        await albums.updateArtwork(JEOPARDY.releaseGroupId, COVER);
-        await albums.insert(TAGO_MAGO);
-        await albums.updateArtwork(TAGO_MAGO.releaseGroupId, COVER);
-        await albums.insert(NO_COVER);
-        await albums.updateArtwork(NO_COVER.releaseGroupId, { ...COVER, artworkUrl: null });
-        await albums.insert(PORNOGRAPHY);
-        await albums.updateArtwork(PORNOGRAPHY.releaseGroupId, COVER);
-
-        const recent = await albums.findRecentWithCoverAndHook(10);
-
-        expect(recent.map((album) => album.slug)).toEqual([
-          'the-cure-pornography',
-          'the-sound-jeopardy',
-        ]);
-      });
-
-      it('returns no more than the limit', async () => {
-        await albums.insert(JEOPARDY);
-        await albums.updateArtwork(JEOPARDY.releaseGroupId, COVER);
-        await albums.insert(PORNOGRAPHY);
-        await albums.updateArtwork(PORNOGRAPHY.releaseGroupId, COVER);
-
-        const recent = await albums.findRecentWithCoverAndHook(1);
-
-        expect(recent.map((album) => album.slug)).toEqual(['the-cure-pornography']);
-      });
-
-      it('returns nothing when no album qualifies', async () => {
-        await albums.insert(TAGO_MAGO);
-
-        expect(await albums.findRecentWithCoverAndHook(10)).toEqual([]);
-      });
-    });
-
     it('rejects a slug that belongs to a different album', async () => {
       await albums.insert(JEOPARDY);
 

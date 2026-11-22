@@ -24,8 +24,3 @@ export function capHook(hook: string): string {
   const cut = lastSpace > 0 ? room.slice(0, lastSpace) : room.slice(0, -1);
   return `${cut.replace(TRAILING_PUNCTUATION, '')}${ELLIPSIS}`;
 }
-
-/** True for a hook that capHook had to cut short, which reads badly as a first impression. */
-export function isCutHook(hook: string): boolean {
-  return hook.endsWith(ELLIPSIS);
-}
