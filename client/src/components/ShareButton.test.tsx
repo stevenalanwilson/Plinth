@@ -117,4 +117,39 @@ describe('ShareButton', () => {
       expect.objectContaining({ text: 'Jeopardy by The Sound, a record picked on Plinth.' }),
     );
   });
+
+  describe('as an icon', () => {
+    function renderIcon(): void {
+      render(
+        <ShareButton
+          slug="the-sound-jeopardy"
+          album="Jeopardy"
+          artist="The Sound"
+          hook="A tightly coiled record."
+          iconOnly
+        />,
+      );
+    }
+
+    it('shows no text but is still named Share, with a tooltip', () => {
+      renderIcon();
+
+      const button = screen.getByRole('button', { name: 'Share' });
+      expect(button).toHaveTextContent('');
+      expect(button).toHaveAttribute('title', 'Share');
+    });
+
+    it('says the link was copied once it has been', async () => {
+      renderIcon();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+      });
+
+      expect(screen.getByRole('button', { name: 'Link copied' })).toHaveAttribute(
+        'data-copied',
+        'true',
+      );
+    });
+  });
 });

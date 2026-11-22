@@ -1,12 +1,7 @@
 import React, { useState } from 'react';
 import { RecommendationResponse, ArtworkResponse, ArtistRelation } from '@shared/types';
-import {
-  getProxiedArtworkUrl,
-  buildAppleMusicSearchUrl,
-  buildSpotifySearchUrl,
-  buildDiscogsSearchUrl,
-} from '../../services/apiClient';
-import { ServiceLinks } from '../../components/ServiceLinks';
+import { getProxiedArtworkUrl } from '../../services/apiClient';
+import { ServiceIconLinks } from '../../components/ServiceIconLinks';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
 import { ShareButton } from '../../components/ShareButton';
 import { FeedbackButtons } from '../feedback/FeedbackButtons';
@@ -128,6 +123,7 @@ export function RecommendationCard({
 
   return (
     <div
+      className="recommendation-card"
       style={{
         background: 'var(--surface)',
         border: '1px solid var(--border)',
@@ -189,35 +185,7 @@ export function RecommendationCard({
           >
             {recommendation.artist}
           </div>
-          <div
-            style={{
-              fontSize: 12,
-              color: 'var(--muted)',
-              marginBottom: 20,
-              letterSpacing: '0.06em',
-            }}
-          >
-            {year}
-          </div>
-          <ServiceLinks
-            appleMusicDirectUrl={artworkResponse?.appleMusicUrl ?? null}
-            appleMusicSearchUrl={buildAppleMusicSearchUrl(
-              recommendation.artist,
-              recommendation.album,
-            )}
-            spotifyUrl={buildSpotifySearchUrl(recommendation.artist, recommendation.album)}
-            discogsUrl={buildDiscogsSearchUrl(recommendation.artist, recommendation.album)}
-          />
-          {recommendation.slug && (
-            <div style={{ marginTop: 10 }}>
-              <ShareButton
-                slug={recommendation.slug}
-                album={recommendation.album}
-                artist={recommendation.artist}
-                hook={recommendation.hook ?? null}
-              />
-            </div>
-          )}
+          <div style={{ fontSize: 12, color: 'var(--muted)', letterSpacing: '0.06em' }}>{year}</div>
         </div>
       </div>
       <div
@@ -233,8 +201,28 @@ export function RecommendationCard({
       >
         {recommendation.reason}
       </div>
-      <div className="recommendation-card-feedback">
+      {/* One bar for everything to do with the pick: what you make of it, then where to find it. */}
+      <div className="card-actions">
         <FeedbackButtons status={feedback} onChange={onFeedback} />
+        <div className="card-actions-listen" role="group" aria-label="Listen and share">
+          <ServiceIconLinks
+            artist={recommendation.artist}
+            album={recommendation.album}
+            appleMusicUrl={artworkResponse?.appleMusicUrl ?? null}
+          />
+          {recommendation.slug && (
+            <>
+              <span className="card-actions-divider" aria-hidden="true" />
+              <ShareButton
+                slug={recommendation.slug}
+                album={recommendation.album}
+                artist={recommendation.artist}
+                hook={recommendation.hook ?? null}
+                iconOnly
+              />
+            </>
+          )}
+        </div>
       </div>
       <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px' }}>
         <div

@@ -166,7 +166,7 @@ describe('RecommendationCard', () => {
         onFeedback={vi.fn()}
       />,
     );
-    const link = screen.getByText('Search in Apple Music').closest('a');
+    const link = screen.getByRole('link', { name: 'Search in Apple Music' });
     expect(link).toHaveAttribute('href', expect.stringContaining('music.apple.com/gb/search'));
   });
 
@@ -184,7 +184,7 @@ describe('RecommendationCard', () => {
         onFeedback={vi.fn()}
       />,
     );
-    const link = screen.getByText('Open in Apple Music').closest('a');
+    const link = screen.getByRole('link', { name: 'Open in Apple Music' });
     expect(link).toHaveAttribute('href', 'https://music.apple.com/gb/album/mezzanine/123456');
   });
 
