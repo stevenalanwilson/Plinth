@@ -56,8 +56,7 @@ export default function App(): React.ReactElement {
   useMoreLikeThisFromNavigation(
     useCallback((pivot: PivotHint) => void fetchRecommendation(pivot), [fetchRecommendation]),
   );
-  // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives, and
-  // the presets stay to hand for trying another.
+  // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives.
   const [isFirstVisit] = useState(recommendation === null);
   // The how-it-works demo plays once per visit. While it does, the rest of the page is dimmed so
   // the demo stands out; when it ends, or the visitor starts using the site, everything returns.
@@ -208,16 +207,14 @@ export default function App(): React.ReactElement {
             <PageHeader title="Discover" />
           </div>
           <div className="app-sidebar">
-            {isFirstVisit && (
-              <VibePresets
-                preferences={preferences}
-                vibeQuery={vibeQuery}
-                onSelect={(preset) => {
-                  updatePreferences(preset.preferences);
-                  updateVibeQuery(preset.vibeQuery);
-                }}
-              />
-            )}
+            <VibePresets
+              preferences={preferences}
+              vibeQuery={vibeQuery}
+              onSelect={(preset) => {
+                updatePreferences(preset.preferences);
+                updateVibeQuery(preset.vibeQuery);
+              }}
+            />
             <div style={{ marginBottom: 20 }}>
               <label style={sectionLabelStyle}>Describe your vibe</label>
               <textarea
