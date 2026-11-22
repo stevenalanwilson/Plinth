@@ -14,7 +14,7 @@ export function FeedbackButtons({ status, onChange }: FeedbackButtonsProps): Rea
 
   return (
     <div className="feedback" role="group" aria-labelledby={headingId}>
-      <div id={headingId} className="feedback-heading">
+      <div id={headingId} className="visually-hidden">
         Your take
       </div>
       <div className="feedback-buttons">
