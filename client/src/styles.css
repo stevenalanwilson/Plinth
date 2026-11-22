@@ -278,7 +278,13 @@ body {
     max(env(safe-area-inset-left), 16px);
 }
 
-.app-header { margin-bottom: 32px; }
+/* Ruled off from the page with the same line as the footer. Every page's title row follows, 10px
+   below, so the title sits midway between this line and its own dotted one. */
+.app-header {
+  margin-bottom: 10px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
 
 @media (min-width: 431px) {
   .app-layout {
@@ -286,7 +292,6 @@ body {
     padding-left: max(env(safe-area-inset-left), 28px);
     padding-right: max(env(safe-area-inset-right), 28px);
   }
-  .app-header { margin-bottom: 44px; }
 }
 
 @media (min-width: 769px) {
@@ -301,9 +306,12 @@ body {
     padding-left: max(env(safe-area-inset-left), 40px);
     padding-right: max(env(safe-area-inset-right), 40px);
   }
-  .app-header { grid-column: 1 / -1; margin-bottom: 40px; }
-  .app-sidebar { grid-column: 1; grid-row: 2; position: sticky; top: 24px; }
-  .app-main { grid-column: 2; grid-row: 2; }
+  .app-header { grid-column: 1 / -1; }
+  /* Discover's title runs across both columns, above the sidebar and the pick. */
+  .app-layout[data-page='home'] { grid-template-rows: auto auto 1fr; }
+  .app-page-title { grid-column: 1 / -1; }
+  .app-sidebar { grid-column: 1; grid-row: 3; position: sticky; top: 24px; }
+  .app-main { grid-column: 2; grid-row: 3; }
   .app-full { grid-column: 1 / -1; }
   .stats-summary-grid { grid-template-columns: repeat(4, 1fr) !important; }
 }
@@ -924,7 +932,8 @@ body::before {
     display: flex;
     flex-direction: column;
   }
-  .app-layout[data-first-visit='true'] > .app-header { order: -2; }
+  .app-layout[data-first-visit='true'] > .app-header,
+  .app-layout[data-first-visit='true'] > .app-page-title { order: -2; }
   .app-layout[data-first-visit='true'] > .app-main { order: -1; }
 }
 
@@ -1298,16 +1307,20 @@ body::before {
 
 /* ─── Crate ───────────────────────────────────────────── */
 
-.crate-header {
+/* Every page's title row (PageHeader). Dotted underneath, and a shade stronger than the header's
+   solid line, since dots at that colour vanish. */
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px dotted var(--border2);
 }
 
-.crate-title {
+.page-title {
   font-family: var(--serif);
   font-style: italic;
   font-weight: 400;
@@ -1453,15 +1466,10 @@ body::before {
 
 /* ─── Account: sign in, sign out, privacy ─────────────── */
 
-.account-menu { position: relative; margin-left: auto; }
+/* Flex so the button sits on the same line as the menu items rather than on a text baseline. */
+.account-menu { position: relative; margin-left: auto; display: flex; }
 
-.account-toggle {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-transform: none;
-}
+.account-toggle { white-space: nowrap; }
 
 .account-panel {
   position: absolute;
@@ -1571,6 +1579,8 @@ body::before {
   align-items: center;
   justify-content: space-between;
   gap: 12px 20px;
+  /* With the header's 10px on the Crate page, 20px above the note, the same as below it. */
+  margin-top: 10px;
   margin-bottom: 20px;
   padding: 14px 16px;
   background: var(--surface);
@@ -1622,14 +1632,6 @@ body::before {
 .example-album:focus-within .example-album-hook { opacity: 0.7; }
 
 /* Artist Essentials says what it is, and its button is the yellow of the other submit buttons. */
-.essentials-title {
-  margin-bottom: 10px;
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 400;
-  font-size: 26px;
-  letter-spacing: -0.2px;
-}
 .essentials-intro {
   margin-bottom: 20px;
   max-width: 560px;
@@ -1649,11 +1651,13 @@ body::before {
 }
 .essentials-submit:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* Artist Essentials has no sidebar, so its content and footer use the whole width, from the
-   same left edge as the header. */
+/* Artist Essentials, Crate and Insights have no sidebar, so their footer uses the whole width,
+   from the same left edge as the header. */
 .essentials-panel { max-width: none; padding: 0; }
 @media (min-width: 769px) {
-  .app-layout[data-page='essentials'] .app-footer {
+  .app-layout[data-page='essentials'] .app-footer,
+  .app-layout[data-page='crate'] .app-footer,
+  .app-layout[data-page='insights'] .app-footer {
     grid-column: 1 / -1;
     padding-left: 0;
     padding-right: 0;
@@ -1727,3 +1731,40 @@ body::before {
 /* The vibe pills are drawn like the genre and mood pills (see pillStyle), so only the space
    between them is set here. */
 .vibe-presets-list { gap: 6px; }
+
+/* The crate's own actions are drawn like the main menu: plain upper-case text, lit on hover. */
+.crate-actions { gap: 16px; }
+.crate-actions .crate-action {
+  min-height: 0;
+  padding: 0 0 2px;
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  transition: color 0.15s ease;
+}
+.crate-actions .crate-action:hover:not(:disabled) { color: var(--text); }
+.crate-actions .crate-action-danger:hover:not(:disabled),
+.crate-actions .crate-action-danger[data-asking='true'] { color: var(--danger); }
+
+/* The two Crate pages on the left of the row, then what can be done to the crate, kept apart by
+   a thin rule. The page you are on is underlined in gold, as in the main menu. */
+.crate-views,
+.crate-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.crate-tools {
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+}
+.crate-actions .crate-action[aria-current='page'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+/* On a phone the actions wrap under the two pages, where a dividing rule would hang in space. */
+@media (max-width: 430px) {
+  .crate-tools { padding-left: 0; border-left: none; }
+}

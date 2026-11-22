@@ -3,6 +3,7 @@ import { useArtistEssentials } from './useArtistEssentials';
 import { ArtistSearchBox } from './ArtistSearchBox';
 import { useArtistSuggestions } from './useArtistSuggestions';
 import { EssentialsResult } from './EssentialsResult';
+import { PageHeader } from '../../components/PageHeader';
 
 interface ArtistEssentialsPanelProps {
   onSeedArtist?: (artist: string) => void;
@@ -41,9 +42,7 @@ export function ArtistEssentialsPanel({
 
   return (
     <section className="essentials-panel" aria-labelledby="essentials-title">
-      <h2 id="essentials-title" className="essentials-title">
-        Artist Essentials
-      </h2>
+      <PageHeader title="Artist Essentials" titleId="essentials-title" />
       <p className="essentials-intro">
         Love a particular artist or band? Enter their name and Plinth shows where to start with
         them, then essential albums by the people around them: band members, side projects,
