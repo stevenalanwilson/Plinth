@@ -56,6 +56,30 @@ describe('RecommendationCard', () => {
     expect(screen.getByText(/Finding your next favourite/)).toBeInTheDocument();
   });
 
+  it('does not reuse the loading spinner as the card when the result arrives', () => {
+    const props = {
+      artworkResponse: mockArtwork,
+      artistRelations: [],
+      isLoadingRelations: false,
+      error: null,
+      onSeedArtist: vi.fn(),
+      feedback: null,
+      onFeedback: vi.fn(),
+    };
+    const { container, rerender } = render(
+      <RecommendationCard {...props} recommendation={null} isLoading={true} />,
+    );
+    // The spinner is the first thing in the loading panel, and it spins.
+    const spinner = container.firstElementChild?.firstElementChild;
+
+    rerender(<RecommendationCard {...props} recommendation={mockRec} isLoading={false} />);
+
+    // If React kept that element as the card's content, the card would spin with it in browsers
+    // that don't stop the animation when its style is cleared.
+    expect(spinner?.isConnected).toBe(false);
+    expect(container.querySelector('.recommendation-card-content')).not.toBe(spinner);
+  });
+
   it('renders an error message', () => {
     render(
       <RecommendationCard
