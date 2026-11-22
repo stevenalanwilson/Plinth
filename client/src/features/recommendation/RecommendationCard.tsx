@@ -38,9 +38,12 @@ export function RecommendationCard({
 }: RecommendationCardProps): React.ReactElement {
   const [imgErrored, setImgErrored] = useState(false);
 
+  // Each state has its own key. They're all a div in the same place, so without one React would
+  // turn the loading panel's spinner into the card's artwork row, and in Safari it kept spinning.
   if (isLoading) {
     return (
       <div
+        key="loading"
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -80,6 +83,7 @@ export function RecommendationCard({
   if (error) {
     return (
       <div
+        key="error"
         style={{
           background: 'var(--surface)',
           border: '1px solid var(--border)',
@@ -122,6 +126,7 @@ export function RecommendationCard({
 
   return (
     <div
+      key="result"
       className="recommendation-card"
       style={{
         background: 'var(--surface)',
