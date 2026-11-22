@@ -1603,7 +1603,7 @@ body::before {
   border: 1px solid var(--accent);
   border-radius: 999px;
   background: var(--accent);
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
