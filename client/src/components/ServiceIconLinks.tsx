@@ -4,7 +4,7 @@ import {
   buildDiscogsSearchUrl,
   buildSpotifySearchUrl,
 } from '../services/apiClient';
-import { AppleMusicSearchIcon, DiscogsIcon, SpotifyIcon } from './serviceIcons';
+import { AppleMusicIcon, DiscogsIcon, SpotifyIcon } from './serviceIcons';
 
 interface ServiceIconLinksProps {
   readonly artist: string;
@@ -54,7 +54,7 @@ export function ServiceIconLinks({
         label={isDirect ? 'Open in Apple Music' : 'Search in Apple Music'}
         isDirect={isDirect}
       >
-        <AppleMusicSearchIcon size={16} />
+        <AppleMusicIcon size={16} />
       </IconLink>
       <IconLink href={buildSpotifySearchUrl(artist, album)} label="Search in Spotify">
         <SpotifyIcon size={16} />

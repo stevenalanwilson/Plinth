@@ -104,9 +104,9 @@ describe('HistoryGrid', () => {
 
   it('renders Apple Music, Spotify, and Discogs links in the overlay for every item', () => {
     render(<HistoryGrid history={entries} onRemove={vi.fn()} onSelect={vi.fn()} />);
-    expect(screen.getAllByText('Apple Music')).toHaveLength(entries.length);
-    expect(screen.getAllByText('Spotify')).toHaveLength(entries.length);
-    expect(screen.getAllByText('Discogs')).toHaveLength(entries.length);
+    expect(screen.getAllByRole('link', { name: /Apple Music/ })).toHaveLength(entries.length);
+    expect(screen.getAllByRole('link', { name: 'Search in Spotify' })).toHaveLength(entries.length);
+    expect(screen.getAllByRole('link', { name: 'Search in Discogs' })).toHaveLength(entries.length);
   });
 
   it('calls onRemove with the correct id when remove is clicked', async () => {
@@ -289,7 +289,7 @@ describe('HistoryGrid', () => {
       renderOne();
       fireEvent.click(toggle());
 
-      fireEvent.click(screen.getByRole('link', { name: 'Spotify' }));
+      fireEvent.click(screen.getByRole('link', { name: 'Search in Spotify' }));
 
       expect(overlayOf()).toHaveStyle({ opacity: '1' });
     });

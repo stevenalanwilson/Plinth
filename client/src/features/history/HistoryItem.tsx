@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
 import { HistoryEntry } from '../../types/history';
-import {
-  getProxiedArtworkUrl,
-  buildAppleMusicSearchUrl,
-  buildSpotifySearchUrl,
-  buildDiscogsSearchUrl,
-} from '../../services/apiClient';
+import { getProxiedArtworkUrl } from '../../services/apiClient';
 import { isRated } from '../../services/libraryRetention';
-import { ServiceLinks } from '../../components/ServiceLinks';
+import { ServiceIconLinks } from '../../components/ServiceIconLinks';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { FeedbackBadge } from '../feedback/FeedbackBadge';
@@ -94,22 +89,13 @@ export function HistoryItem({ entry, onRemove, onSelect }: HistoryItemProps): Re
             pointerEvents: isOverlayShown ? 'auto' : 'none',
           }}
         >
-          <ServiceLinks
-            appleMusicDirectUrl={entry.artworkResponse.appleMusicUrl}
-            appleMusicSearchUrl={buildAppleMusicSearchUrl(
-              entry.recommendation.artist,
-              entry.recommendation.album,
-            )}
-            spotifyUrl={buildSpotifySearchUrl(
-              entry.recommendation.artist,
-              entry.recommendation.album,
-            )}
-            discogsUrl={buildDiscogsSearchUrl(
-              entry.recommendation.artist,
-              entry.recommendation.album,
-            )}
-            compact
-          />
+          <div className="history-icons">
+            <ServiceIconLinks
+              artist={entry.recommendation.artist}
+              album={entry.recommendation.album}
+              appleMusicUrl={entry.artworkResponse.appleMusicUrl}
+            />
+          </div>
           {/* An album the listener rated is their crate, so removing one asks first. */}
           <ConfirmButton
             label="Remove"

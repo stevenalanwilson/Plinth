@@ -56,11 +56,9 @@ body {
   transition: opacity 0.2s;
 }
 
-.service-links-compact {
+.history-icons {
   display: flex;
-  flex-direction: column;
   gap: 6px;
-  width: 100%;
 }
 
 .history-remove {
@@ -123,9 +121,10 @@ body {
     background: rgba(14, 14, 15, 0.92);
   }
 
-  .history-overlay .service-links-compact { display: contents; }
+  .history-overlay .history-icons { display: contents; }
 
-  .history-overlay .service-link,
+  .history-overlay .icon-action { width: 100%; }
+
   .history-remove {
     min-height: 44px;
     box-sizing: border-box;
@@ -260,10 +259,6 @@ body {
 .era-button { transition: filter 0.15s ease; }
 .era-button:hover { filter: brightness(1.6); }
 
-.service-link { transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
-.service-link:hover { background-color: rgba(255, 255, 255, 0.05); }
-.service-link-primary:hover { background-color: rgba(200, 169, 110, 0.1); }
-
 /* ─── Responsive layout ──────────────────────────────── */
 
 .app-layout {
@@ -367,22 +362,6 @@ body {
 @media (min-width: 769px) {
   .recommendation-card-content { padding: 28px; }
   .recommendation-card-reason { padding: 20px 28px 24px; }
-}
-
-/* ─── Service links ───────────────────────────────────── */
-
-.service-links {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-@media (min-width: 769px) {
-  .service-links {
-    flex-direction: row;
-    width: auto;
-  }
 }
 
 /* ─── Album page (/album/:slug) ───────────────────────── */
@@ -594,28 +573,6 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .album-details-skeleton > div { animation: none; }
 }
-
-/* ─── Share button ───────────────────────────────────── */
-
-.share-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 13px 16px;
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--border2);
-  border-radius: 6px;
-  font-family: var(--mono);
-  font-size: 12px;
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-
-.share-button:hover { color: var(--text); }
-.share-button[data-copied="true"] { color: var(--accent); border-color: var(--accent); }
-
-.album-page-share { margin-top: 12px; }
 
 /* Read by screen readers, not shown. */
 .visually-hidden {
@@ -1261,13 +1218,13 @@ body::before {
   .card-actions { padding: 16px 28px 18px; }
 }
 
-.card-actions-listen {
+.icon-actions {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.card-actions-divider {
+.icon-actions-divider {
   width: 1px;
   height: 24px;
   margin: 0 2px;
