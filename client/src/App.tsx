@@ -12,6 +12,7 @@ import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPan
 import { VibePresets } from './features/presets/VibePresets';
 import { useMoreLikeThisFromNavigation } from './features/recommendation/useMoreLikeThisFromNavigation';
 import { AccountMenu } from './features/account/AccountMenu';
+import { VibeTutorial } from './features/tutorial/VibeTutorial';
 import { SaveCrateNudge } from './features/account/SaveCrateNudge';
 import { useAccountSession } from './features/account/useAccountSession';
 
@@ -58,6 +59,12 @@ export default function App(): React.ReactElement {
   // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives, and
   // the presets stay to hand for trying another.
   const [isFirstVisit] = useState(recommendation === null);
+  // The how-it-works demo plays once per visit. While it does, the rest of the page is dimmed so
+  // the demo stands out; when it ends, or the visitor starts using the site, everything returns.
+  const [isDemoOver, setIsDemoOver] = useState(false);
+  const endDemo = useCallback(() => setIsDemoOver(true), []);
+  const isDemoPlaying =
+    page === 'home' && recommendation === null && !isLoading && error === null && !isDemoOver;
   // Offered first when searching Artist Essentials, from the crate as it is now.
   const crateArtists = useMemo(
     () => history.map((entry) => entry.recommendation.artist),
@@ -65,7 +72,12 @@ export default function App(): React.ReactElement {
   );
 
   return (
-    <div className="app-layout" data-first-visit={isFirstVisit} data-page={page}>
+    <div
+      className="app-layout"
+      data-first-visit={isFirstVisit}
+      data-page={page}
+      data-demo-playing={isDemoPlaying}
+    >
       <header className="app-header">
         <h1
           style={{
@@ -245,6 +257,7 @@ export default function App(): React.ReactElement {
               onFeedback={(status) => {
                 if (currentEntry) setFeedback(currentEntry.id, status);
               }}
+              emptyState={<VibeTutorial isOver={isDemoOver} onEnd={endDemo} />}
             />
 
             {recommendation && !isLoading && (
