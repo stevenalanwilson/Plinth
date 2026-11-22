@@ -10,6 +10,7 @@ import { PageHeader } from './components/PageHeader';
 import { InsightsPage } from './features/stats/InsightsPage';
 import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPanel';
 import { VibePresets } from './features/presets/VibePresets';
+import { choosePresets, PRESETS_SHOWN, VIBE_PRESETS } from './features/presets/presets';
 import { useMoreLikeThisFromNavigation } from './features/recommendation/useMoreLikeThisFromNavigation';
 import { AccountMenu } from './features/account/AccountMenu';
 import { VibeTutorial } from './features/tutorial/VibeTutorial';
@@ -56,9 +57,11 @@ export default function App(): React.ReactElement {
   useMoreLikeThisFromNavigation(
     useCallback((pivot: PivotHint) => void fetchRecommendation(pivot), [fetchRecommendation]),
   );
-  // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives, and
-  // the presets stay to hand for trying another.
+  // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives.
   const [isFirstVisit] = useState(recommendation === null);
+  // A different handful of presets on each load, kept for the visit so they don't reshuffle
+  // when moving between pages.
+  const [shownPresets] = useState(() => choosePresets(VIBE_PRESETS, PRESETS_SHOWN));
   // The how-it-works demo plays once per visit. While it does, the rest of the page is dimmed so
   // the demo stands out; when it ends, or the visitor starts using the site, everything returns.
   const [isDemoOver, setIsDemoOver] = useState(false);
@@ -208,16 +211,15 @@ export default function App(): React.ReactElement {
             <PageHeader title="Discover" />
           </div>
           <div className="app-sidebar">
-            {isFirstVisit && (
-              <VibePresets
-                preferences={preferences}
-                vibeQuery={vibeQuery}
-                onSelect={(preset) => {
-                  updatePreferences(preset.preferences);
-                  updateVibeQuery(preset.vibeQuery);
-                }}
-              />
-            )}
+            <VibePresets
+              presets={shownPresets}
+              preferences={preferences}
+              vibeQuery={vibeQuery}
+              onSelect={(preset) => {
+                updatePreferences(preset.preferences);
+                updateVibeQuery(preset.vibeQuery);
+              }}
+            />
             <div style={{ marginBottom: 20 }}>
               <label style={sectionLabelStyle}>Describe your vibe</label>
               <textarea

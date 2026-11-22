@@ -1,9 +1,11 @@
 import React from 'react';
 import { RecommendationPreferences } from '@shared/types';
 import { pillStyle } from '../../components/pillStyle';
-import { isPresetApplied, VibePreset, VIBE_PRESETS } from './presets';
+import { isPresetApplied, VibePreset } from './presets';
 
 interface VibePresetsProps {
+  /** The presets to offer: a handful chosen by the page, so they stay put while it's open. */
+  readonly presets: readonly VibePreset[];
   readonly preferences: RecommendationPreferences;
   readonly vibeQuery: string;
   readonly onSelect: (preset: VibePreset) => void;
@@ -11,6 +13,7 @@ interface VibePresetsProps {
 
 /** One-tap starting points that fill in the vibe and the controls; the pick is still a tap away. */
 export function VibePresets({
+  presets,
   preferences,
   vibeQuery,
   onSelect,
@@ -21,7 +24,7 @@ export function VibePresets({
         Start from a vibe
       </h2>
       <div className="vibe-presets-list">
-        {VIBE_PRESETS.map((preset) => {
+        {presets.map((preset) => {
           const isApplied = isPresetApplied(preset, preferences, vibeQuery);
           return (
             <button
