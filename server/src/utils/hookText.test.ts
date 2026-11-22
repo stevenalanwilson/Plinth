@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { capHook, isCutHook, MAX_HOOK_LENGTH } from './hookText';
+import { capHook, MAX_HOOK_LENGTH } from './hookText';
 
 describe('capHook', () => {
   it('leaves a hook within the limit alone', () => {
@@ -63,12 +63,5 @@ describe('capHook', () => {
     ];
 
     samples.forEach((hook) => expect(capHook(hook).length).toBeLessThanOrEqual(MAX_HOOK_LENGTH));
-  });
-});
-
-describe('isCutHook', () => {
-  it('spots a hook that was cut short', () => {
-    expect(isCutHook(capHook('word '.repeat(60)))).toBe(true);
-    expect(isCutHook('A whole sentence.')).toBe(false);
   });
 });

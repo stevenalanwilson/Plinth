@@ -3,7 +3,6 @@ import { AlbumRepository, NewAlbum, StoredAlbum } from '../repositories/albumRep
 import { toSlug } from '../utils/musicNames';
 import { logger } from '../logger';
 import { fetchArtwork } from './artworkService';
-import { isCutHook } from '../utils/hookText';
 
 export type AlbumToSave = Omit<NewAlbum, 'slug'>;
 
@@ -94,31 +93,4 @@ export async function getAlbum(
 
   const album = needsArtworkLookup(stored, now) ? await withArtwork(albums, stored, now) : stored;
   return toAlbumResponse(album);
-}
-
-// Recent enough to rotate as new picks are made, big enough that two visits rarely match.
-const EXAMPLE_POOL_SIZE = 50;
-
-export type ChooseIndex = (count: number) => number;
-
-const randomIndex: ChooseIndex = (count) => Math.floor(Math.random() * count);
-
-/**
- * A real album to show first-time visitors, chosen from recent picks that have a cover and a
- * hook. Only the hook is shown, never the reason, because the hook doesn't depend on whoever
- * the album was picked for. Null until some album qualifies.
- */
-export async function getExampleAlbum(
-  albums: AlbumRepository,
-  chooseIndex: ChooseIndex = randomIndex,
-): Promise<AlbumResponse | null> {
-  const recent = await albums.findRecentWithCoverAndHook(EXAMPLE_POOL_SIZE);
-  // A hook cut short with an ellipsis is a poor first impression, so those are only shown when
-  // nothing else qualifies. Hooks are stored once and never rewritten, so older ones stay cut.
-  const whole = recent.filter((album) => album.hook && !isCutHook(album.hook));
-  const candidates = whole.length > 0 ? whole : recent;
-  if (candidates.length === 0) return null;
-
-  const index = Math.min(Math.max(chooseIndex(candidates.length), 0), candidates.length - 1);
-  return toAlbumResponse(candidates[index]);
 }
