@@ -1,5 +1,6 @@
 import React from 'react';
 import { RecommendationPreferences } from '@shared/types';
+import { pillStyle } from '../../components/pillStyle';
 import { isPresetApplied, VibePreset, VIBE_PRESETS } from './presets';
 
 interface VibePresetsProps {
@@ -20,17 +21,21 @@ export function VibePresets({
         Start from a vibe
       </h2>
       <div className="vibe-presets-list">
-        {VIBE_PRESETS.map((preset) => (
-          <button
-            key={preset.label}
-            type="button"
-            className="vibe-preset"
-            aria-pressed={isPresetApplied(preset, preferences, vibeQuery)}
-            onClick={() => onSelect(preset)}
-          >
-            {preset.label}
-          </button>
-        ))}
+        {VIBE_PRESETS.map((preset) => {
+          const isApplied = isPresetApplied(preset, preferences, vibeQuery);
+          return (
+            <button
+              key={preset.label}
+              type="button"
+              className="pill-button"
+              style={pillStyle(isApplied)}
+              aria-pressed={isApplied}
+              onClick={() => onSelect(preset)}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
       </div>
     </section>
   );
