@@ -222,7 +222,7 @@ export function AccountMenu({
         aria-expanded={isOpen}
         onClick={() => onOpenChange(!isOpen)}
       >
-        {account ? account.email : 'Sign in'}
+        {account ? 'Account' : 'Sign in'}
       </button>
       {isOpen && (
         <div className="account-panel">

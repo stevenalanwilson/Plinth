@@ -1,20 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HistoryEntry } from '../../types/history';
 import { FeedbackStatus } from '../../types/feedback';
-
-vi.mock('../../services/libraryExport', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../services/libraryExport')>()),
-  downloadLibrary: vi.fn(),
-  parseLibraryFile: vi.fn(),
-}));
-
-import { downloadLibrary, parseLibraryFile } from '../../services/libraryExport';
 import { CratePage } from './CratePage';
-
-const mockDownload = vi.mocked(downloadLibrary);
-const mockParse = vi.mocked(parseLibraryFile);
 
 function entry(album: string, status?: FeedbackStatus | null): HistoryEntry {
   return {
@@ -38,20 +27,14 @@ const LIBRARY = [
 interface Handlers {
   onSelect: ReturnType<typeof vi.fn>;
   onRemove: ReturnType<typeof vi.fn>;
-  onClear: ReturnType<typeof vi.fn>;
-  onImport: ReturnType<typeof vi.fn>;
   onFeedback: ReturnType<typeof vi.fn>;
-  onOpenInsights: ReturnType<typeof vi.fn>;
 }
 
 function renderCrate(history: readonly HistoryEntry[] = LIBRARY): Handlers {
   const handlers: Handlers = {
     onSelect: vi.fn(),
     onRemove: vi.fn(),
-    onClear: vi.fn(),
-    onImport: vi.fn(),
     onFeedback: vi.fn(),
-    onOpenInsights: vi.fn(),
   };
   render(<CratePage history={history} {...handlers} />);
   return handlers;
@@ -212,14 +195,6 @@ describe('CratePage', () => {
       expect(screen.getByText(/Your crate is empty/)).toBeInTheDocument();
       expect(screen.queryByRole('group', { name: 'Filter by answer' })).not.toBeInTheDocument();
     });
-
-    it('still lets a saved crate be imported, but not exported or cleared', () => {
-      renderCrate([]);
-
-      expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled();
-      expect(screen.getByRole('button', { name: 'Export' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Clear crate' })).toBeDisabled();
-    });
   });
 
   describe('opening an album', () => {
@@ -231,86 +206,6 @@ describe('CratePage', () => {
       );
 
       expect(onSelect).toHaveBeenCalledWith('Wanted');
-    });
-  });
-
-  describe('library actions', () => {
-    it('opens the insights', async () => {
-      const { onOpenInsights } = renderCrate();
-
-      await userEvent.click(screen.getByRole('button', { name: 'Insights' }));
-
-      expect(onOpenInsights).toHaveBeenCalled();
-    });
-
-    it('exports the whole library, including what is filtered out of view', async () => {
-      renderCrate();
-      await userEvent.click(screen.getByRole('button', { name: /^Own it/ }));
-
-      await userEvent.click(screen.getByRole('button', { name: 'Export' }));
-
-      expect(mockDownload).toHaveBeenCalledWith(LIBRARY);
-    });
-
-    it('asks before clearing, and clears on the second tap', async () => {
-      const { onClear } = renderCrate();
-
-      await userEvent.click(screen.getByRole('button', { name: 'Clear crate' }));
-      expect(onClear).not.toHaveBeenCalled();
-
-      await userEvent.click(screen.getByRole('button', { name: 'Tap again to clear it all' }));
-      expect(onClear).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('importing', () => {
-    function file(): File {
-      return new File(['{}'], 'plinth-library.json', { type: 'application/json' });
-    }
-
-    it('hands the albums in the file over to be merged', async () => {
-      const imported = [entry('Imported', 'own')];
-      mockParse.mockResolvedValue(imported);
-      const { onImport } = renderCrate();
-
-      await userEvent.upload(screen.getByLabelText('Import a crate file'), file());
-
-      await waitFor(() => expect(onImport).toHaveBeenCalledWith(imported));
-    });
-
-    it('shows why a file could not be imported, and can be dismissed', async () => {
-      mockParse.mockRejectedValue(new Error('Not a valid JSON file.'));
-      const { onImport } = renderCrate();
-
-      await userEvent.upload(screen.getByLabelText('Import a crate file'), file());
-
-      expect(await screen.findByRole('alert')).toHaveTextContent('Not a valid JSON file.');
-      expect(onImport).not.toHaveBeenCalled();
-
-      await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    });
-
-    it('clears an earlier error when another file is chosen', async () => {
-      mockParse.mockRejectedValueOnce(new Error('Bad file.')).mockResolvedValueOnce([]);
-      renderCrate();
-      const input = screen.getByLabelText('Import a crate file');
-
-      await userEvent.upload(input, file());
-      await screen.findByRole('alert');
-      fireEvent.change(input, { target: { files: [file()] } });
-
-      await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
-    });
-
-    it('opens the file chooser from the Import button', async () => {
-      renderCrate();
-      const input = screen.getByLabelText('Import a crate file') as HTMLInputElement;
-      const click = vi.spyOn(input, 'click');
-
-      await userEvent.click(screen.getByRole('button', { name: 'Import' }));
-
-      expect(click).toHaveBeenCalled();
     });
   });
 });

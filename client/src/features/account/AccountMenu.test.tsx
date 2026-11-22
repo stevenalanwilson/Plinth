@@ -151,16 +151,24 @@ describe('AccountMenu signed out', () => {
 describe('AccountMenu signed in', () => {
   const account = { email: 'person@example.com' };
 
-  it('shows who is signed in instead of offering to sign in', () => {
+  it('offers the account instead of offering to sign in', () => {
     renderMenu({ account });
 
-    expect(screen.getByRole('button', { name: 'person@example.com' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
+  });
+
+  it('says who is signed in once the account is opened', async () => {
+    renderMenu({ account });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
+
+    expect(screen.getByText('Signed in as person@example.com.')).toBeInTheDocument();
   });
 
   it('signs out, and closes', async () => {
     renderMenu({ account });
-    await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
 
@@ -171,7 +179,7 @@ describe('AccountMenu signed in', () => {
   it('says the crate is saved when it is', async () => {
     renderMenu({ account });
 
-    await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     expect(screen.getByRole('status')).toHaveTextContent('Your crate is saved to your account.');
   });
@@ -182,7 +190,7 @@ describe('AccountMenu signed in', () => {
   ])('says it is saving while the crate %s', async (_name, props) => {
     renderMenu({ account, ...props });
 
-    await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     expect(screen.getByRole('status')).toHaveTextContent('Saving your crate…');
   });
@@ -190,7 +198,7 @@ describe('AccountMenu signed in', () => {
   it('says so, as a problem, when saving failed', async () => {
     renderMenu({ account, status: 'failed', hasUnsynced: true });
 
-    await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     expect(screen.getByRole('status')).toHaveTextContent(/Couldn't save your crate/);
     expect(screen.getByRole('status')).toHaveClass('account-error');
@@ -199,7 +207,7 @@ describe('AccountMenu signed in', () => {
   it('says the crate is too big, and what to do, when the account is full', async () => {
     renderMenu({ account, status: 'full', hasUnsynced: true });
 
-    await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     expect(screen.getByRole('status')).toHaveTextContent(/too big to save any more/);
     expect(screen.getByRole('status')).toHaveClass('account-error');
@@ -209,7 +217,7 @@ describe('AccountMenu signed in', () => {
     async function trySigningOut(): Promise<void> {
       onSignOut.mockRejectedValueOnce(new UnsyncedCrateError());
       renderMenu({ account, hasUnsynced: true, status: 'failed' });
-      await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Account' }));
       await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     }
 
@@ -243,7 +251,7 @@ describe('AccountMenu signed in', () => {
   it('shows why signing out failed, and stays open', async () => {
     onSignOut.mockRejectedValue(new Error('Something went wrong signing out.'));
     renderMenu({ account });
-    await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
 
@@ -252,7 +260,7 @@ describe('AccountMenu signed in', () => {
 
   it('asks twice before deleting the account', async () => {
     renderMenu({ account });
-    await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete account' }));
     expect(onDeleteAccount).not.toHaveBeenCalled();
@@ -264,7 +272,7 @@ describe('AccountMenu signed in', () => {
   it('says what deleting does, and what it leaves', async () => {
     renderMenu({ account });
 
-    await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     expect(screen.getByText(/the crate saved with it/)).toBeInTheDocument();
     expect(screen.getByText(/crate on this device\s+stays/)).toBeInTheDocument();
@@ -274,7 +282,7 @@ describe('AccountMenu signed in', () => {
   it('shows why it failed, and stays open, when the account could not be deleted', async () => {
     onDeleteAccount.mockRejectedValue(new Error("Couldn't delete the account."));
     renderMenu({ account });
-    await userEvent.click(screen.getByRole('button', { name: 'person@example.com' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete account' }));
     await userEvent.click(screen.getByRole('button', { name: 'Tap again to delete' }));

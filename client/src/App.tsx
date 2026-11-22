@@ -5,6 +5,8 @@ import { PreferencesPanel, sectionLabelStyle } from './features/preferences/Pref
 import { RecommendationCard } from './features/recommendation/RecommendationCard';
 import { HistoryGrid } from './features/history/HistoryGrid';
 import { CratePage } from './features/crate/CratePage';
+import { CrateMenu } from './features/crate/CrateMenu';
+import { PageHeader } from './components/PageHeader';
 import { InsightsPage } from './features/stats/InsightsPage';
 import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPanel';
 import { VibePresets } from './features/presets/VibePresets';
@@ -150,6 +152,13 @@ export default function App(): React.ReactElement {
               setIsAccountMenuOpen(true);
             }}
           />
+          <CrateMenu
+            view="crate"
+            onNavigate={setPage}
+            history={history}
+            onImport={importHistory}
+            onClear={clearHistory}
+          />
           <CratePage
             history={history}
             onSelect={(id) => {
@@ -157,14 +166,18 @@ export default function App(): React.ReactElement {
               setPage('home');
             }}
             onRemove={removeFromHistory}
-            onClear={clearHistory}
-            onImport={importHistory}
             onFeedback={setFeedback}
-            onOpenInsights={() => setPage('insights')}
           />
         </div>
       ) : page === 'insights' ? (
         <div className="app-full">
+          <CrateMenu
+            view="insights"
+            onNavigate={setPage}
+            history={history}
+            onImport={importHistory}
+            onClear={clearHistory}
+          />
           <InsightsPage history={history} />
         </div>
       ) : page === 'essentials' ? (
@@ -179,6 +192,9 @@ export default function App(): React.ReactElement {
         </div>
       ) : (
         <>
+          <div className="app-page-title">
+            <PageHeader title="Discover" />
+          </div>
           <div className="app-sidebar">
             {isFirstVisit && (
               <VibePresets

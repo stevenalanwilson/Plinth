@@ -1,8 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { HistoryEntry } from '../../types/history';
 import { FeedbackStatus } from '../../types/feedback';
-import { downloadLibrary, parseLibraryFile } from '../../services/libraryExport';
-import { ConfirmButton } from '../../components/ConfirmButton';
 import { HistoryItem } from '../history/HistoryItem';
 import { WantList } from './WantList';
 import {
@@ -18,11 +16,8 @@ interface CratePageProps {
   /** Brings an album back as the pick on screen. */
   readonly onSelect: (id: string) => void;
   readonly onRemove: (id: string) => void;
-  readonly onClear: () => void;
-  readonly onImport: (entries: HistoryEntry[]) => void;
   /** Sets or clears the answer on an album. */
   readonly onFeedback: (id: string, status: FeedbackStatus | null) => void;
-  readonly onOpenInsights: () => void;
 }
 
 const EMPTY_MESSAGES: Record<CrateFilter, string> = {
@@ -39,85 +34,16 @@ export function CratePage({
   history,
   onSelect,
   onRemove,
-  onClear,
-  onImport,
   onFeedback,
-  onOpenInsights,
 }: CratePageProps): React.ReactElement {
   const [filter, setFilter] = useState<CrateFilter>('all');
-  const [importError, setImportError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const counts = countCrate(history);
   const shown = filterCrate(history, filter);
   const isEmpty = history.length === 0;
 
-  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImportError(null);
-    // Reset input so the same file can be re-selected if needed
-    e.target.value = '';
-    void parseLibraryFile(file)
-      .then((entries) => onImport(entries))
-      .catch((err: unknown) => {
-        setImportError(err instanceof Error ? err.message : 'Failed to import file.');
-      });
-  }
-
   return (
-    <section className="crate" aria-labelledby="crate-title">
-      <div className="crate-header">
-        <h2 id="crate-title" className="crate-title">
-          Your crate
-        </h2>
-        <div className="crate-actions">
-          <button type="button" className="crate-action" onClick={onOpenInsights}>
-            Insights
-          </button>
-          <button
-            type="button"
-            className="crate-action"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Import
-          </button>
-          <button
-            type="button"
-            className="crate-action"
-            disabled={isEmpty}
-            onClick={() => downloadLibrary(history)}
-          >
-            Export
-          </button>
-          <ConfirmButton
-            label="Clear crate"
-            confirmLabel="Tap again to clear it all"
-            className="crate-action crate-action-danger"
-            disabled={isEmpty}
-            onConfirm={onClear}
-          />
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json"
-          aria-label="Import a crate file"
-          className="visually-hidden"
-          tabIndex={-1}
-          onChange={handleImportFile}
-        />
-      </div>
-
-      {importError !== null && (
-        <p className="crate-import-error" role="alert">
-          {importError}{' '}
-          <button type="button" aria-label="Dismiss" onClick={() => setImportError(null)}>
-            ✕
-          </button>
-        </p>
-      )}
-
+    <section className="crate" aria-label="Your Crate">
       {isEmpty ? (
         <p className="crate-empty">
           Your crate is empty. Albums Plinth picks for you appear here. Mark the ones you own or
