@@ -9,7 +9,6 @@ import {
 import { ServiceLinks } from '../../components/ServiceLinks';
 import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
 import { ShareButton } from '../../components/ShareButton';
-import { EmptyResult } from '../example/EmptyResult';
 import { FeedbackButtons } from '../feedback/FeedbackButtons';
 import { FeedbackStatus } from '../../types/feedback';
 
@@ -26,6 +25,8 @@ interface RecommendationCardProps {
   /** The verdict already given on this pick, or null for none. */
   feedback: FeedbackStatus | null;
   onFeedback: (status: FeedbackStatus | null) => void;
+  /** What to show before there's a pick, chosen by the page so it can react to the settings. */
+  emptyState?: React.ReactNode;
 }
 
 export function RecommendationCard({
@@ -39,6 +40,7 @@ export function RecommendationCard({
   onSeedArtist,
   feedback,
   onFeedback,
+  emptyState = null,
 }: RecommendationCardProps): React.ReactElement {
   const [imgErrored, setImgErrored] = useState(false);
 
@@ -119,7 +121,7 @@ export function RecommendationCard({
     );
   }
 
-  if (!recommendation) return <EmptyResult />;
+  if (!recommendation) return <>{emptyState}</>;
 
   const year =
     recommendation.year.length > 0 ? recommendation.year : (artworkResponse?.year ?? '—');
