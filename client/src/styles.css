@@ -1802,9 +1802,9 @@ body::before {
 }
 
 /* Artist suggestions: a list under the box, over what follows it. */
-.artist-search { position: relative; flex: 1; min-width: 0; }
-.artist-search .essentials-input { width: 100%; box-sizing: border-box; }
-.artist-suggestions {
+.search-box { position: relative; flex: 1; min-width: 0; }
+.search-box .essentials-input { width: 100%; box-sizing: border-box; }
+.search-box-options {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
@@ -1820,8 +1820,8 @@ body::before {
   max-height: 320px;
   overflow-y: auto;
 }
-.artist-suggestions[hidden] { display: none; }
-.artist-suggestion {
+.search-box-options[hidden] { display: none; }
+.search-box-option {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -1830,13 +1830,13 @@ body::before {
   border-radius: 6px;
   cursor: pointer;
 }
-.artist-suggestion[aria-selected='true'] { background: var(--surface2); }
-.artist-suggestion-name { font-size: 13px; color: var(--text); }
-.artist-suggestion-detail { font-size: 11px; color: var(--muted); }
+.search-box-option[aria-selected='true'] { background: var(--surface2); }
+.search-box-option-name { font-size: 13px; color: var(--text); }
+.search-box-option-detail { font-size: 11px; color: var(--muted); }
 
 /* Shown in the artist box while suggestions are on their way. */
-.artist-search .essentials-input { padding-right: 40px; }
-.artist-search-spinner {
+.search-box .essentials-input { padding-right: 40px; }
+.search-box-spinner {
   position: absolute;
   top: 50%;
   right: 14px;
@@ -1850,7 +1850,7 @@ body::before {
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .artist-search-spinner { animation: albumPulse 1.4s ease-in-out infinite; }
+  .search-box-spinner { animation: albumPulse 1.4s ease-in-out infinite; }
 }
 
 /* The vibe pills are drawn like the genre and mood pills (see pillStyle), so only the space
