@@ -8,3 +8,6 @@ export const slugSchema = z
   .string()
   .max(120)
   .regex(/^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u);
+
+/** What is typed into an album search: a few letters at least, and not a paragraph. */
+export const albumSearchQuerySchema = z.string().trim().min(2).max(80);

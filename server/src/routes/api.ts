@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { createRecommendHandler } from '../controllers/recommendController';
 import { createAlbumHandler } from '../controllers/albumController';
 import { createAlbumDetailsHandler } from '../controllers/albumDetailsController';
+import { handleAlbumSearch } from '../controllers/albumSearchController';
 import { handleArtwork } from '../controllers/artworkController';
 import { handleArtistRelations } from '../controllers/artistRelationsController';
 import { handleImage } from '../controllers/imageController';
@@ -155,6 +156,16 @@ const albumDetailsLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
+// Asked as someone types, like the artist suggestions, but each search is a MusicBrainz query
+// that waits its turn in a line of one a second, so this is tighter. Repeats come from the cache.
+const albumSearchLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' },
+});
+
 export function createApiRouter({
   albums,
   devices,
@@ -183,6 +194,8 @@ export function createApiRouter({
   );
   router.post('/library/sync', librarySyncLimiter, createLibrarySyncHandler(library));
   router.post('/recommend', recommendLimiter, createRecommendHandler(albums, dailyLimit));
+  // Before the slug route below, or "search" would be read as an album's slug.
+  router.get('/albums/search', albumSearchLimiter, handleAlbumSearch);
   router.get('/albums/:slug', albumLimiter, createAlbumHandler(albums));
   router.get('/albums/:slug/details', albumDetailsLimiter, createAlbumDetailsHandler(albums));
   router.post(

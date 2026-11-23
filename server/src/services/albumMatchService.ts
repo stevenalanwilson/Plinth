@@ -54,7 +54,7 @@ export type AlbumLookup =
   | { readonly status: 'not_found' }
   | { readonly status: 'lookup_failed' };
 
-function creditedArtist(candidate: ReleaseGroupCandidate): string {
+export function creditedArtist(candidate: ReleaseGroupCandidate): string {
   return (candidate['artist-credit'] ?? [])
     .map((credit) => `${credit.name}${credit.joinphrase ?? ''}`)
     .join('');
@@ -91,7 +91,7 @@ function titleMatches(candidate: ReleaseGroupCandidate, album: string): boolean 
   );
 }
 
-function releaseYear(candidate: ReleaseGroupCandidate): string | null {
+export function releaseYear(candidate: ReleaseGroupCandidate): string | null {
   return candidate['first-release-date']?.substring(0, 4) || null;
 }
 
