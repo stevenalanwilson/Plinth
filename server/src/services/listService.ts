@@ -3,7 +3,7 @@ import { AlbumRepository } from '../repositories/albumRepository';
 import { ListOwner, ListRepository, StoredList } from '../repositories/listRepository';
 import { newListId } from '../utils/listIds';
 import { AlbumByIdLookup } from './albumLookupService';
-import { getAlbum, saveAlbum } from './albumService';
+import { getAlbum, saveAlbum, toAlbumResponse } from './albumService';
 
 /** How many albums a list of each kind holds. */
 const LIST_SIZES: Readonly<Record<ListKind, number>> = { top: 3 };
@@ -84,16 +84,23 @@ function isOwnedBy(list: StoredList, viewer: ListOwner | null): boolean {
   return viewer !== null && list.owner.kind === viewer.kind && list.owner.id === viewer.id;
 }
 
+/**
+ * The list as it is sent out. With `withCovers`, each album's cover is looked up if that hasn't
+ * been done (once, then kept), which can take seconds: that is for a list being shown to
+ * someone. Without, covers are only as known already, so saving doesn't wait on them.
+ */
 async function toResponse(
   { albums }: ListDependencies,
   list: StoredList,
   viewer: ListOwner | null,
   now: Date,
+  withCovers: boolean,
 ): Promise<ListResponse> {
   const found = await Promise.all(
     list.releaseGroupIds.map(async (releaseGroupId) => {
       const stored = await albums.findByReleaseGroupId(releaseGroupId);
-      return stored ? getAlbum(albums, stored.slug, now) : null;
+      if (!stored) return null;
+      return withCovers ? getAlbum(albums, stored.slug, now) : toAlbumResponse(stored);
     }),
   );
   return {
@@ -131,7 +138,7 @@ export async function createList(
     releaseGroupIds,
     now,
   });
-  return toResponse(deps, list, owner, now);
+  return toResponse(deps, list, owner, now, false);
 }
 
 /** Puts these albums, in this order, in the owner's list. Null if the owner has no such list. */
@@ -149,7 +156,7 @@ export async function replaceListAlbums(
   await storeAlbums(deps, releaseGroupIds);
 
   const changed = await deps.lists.replaceAlbums(id, owner, releaseGroupIds, now);
-  return changed ? toResponse(deps, changed, owner, now) : null;
+  return changed ? toResponse(deps, changed, owner, now, false) : null;
 }
 
 /** Removes the owner's list, returning whether there was one. */
@@ -165,7 +172,7 @@ export async function getList(
   now: Date = new Date(),
 ): Promise<ListResponse | null> {
   const list = await deps.lists.findById(id);
-  return list ? toResponse(deps, list, viewer, now) : null;
+  return list ? toResponse(deps, list, viewer, now, true) : null;
 }
 
 export async function getOwnLists(
@@ -174,5 +181,6 @@ export async function getOwnLists(
   now: Date = new Date(),
 ): Promise<ListResponse[]> {
   const lists = await deps.lists.findByOwner(owner);
-  return Promise.all(lists.map((list) => toResponse(deps, list, owner, now)));
+  // For editing, which doesn't need covers; the list page, through getList, fills them in.
+  return Promise.all(lists.map((list) => toResponse(deps, list, owner, now, false)));
 }

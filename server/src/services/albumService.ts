@@ -64,7 +64,7 @@ async function withArtwork(
   }
 }
 
-function toAlbumResponse(album: StoredAlbum): AlbumResponse {
+export function toAlbumResponse(album: StoredAlbum): AlbumResponse {
   return {
     slug: album.slug,
     releaseGroupId: album.releaseGroupId,

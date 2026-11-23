@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArtistEssentialsResponse, ConnectedAlbum, EssentialAlbum } from '@shared/types';
 import { ListeningLinks } from '../../components/ListeningLinks';
-import { EssentialCover } from './EssentialCover';
+import { AlbumCover } from '../../components/AlbumCover';
 
 interface EssentialsResultProps {
   readonly result: ArtistEssentialsResponse;
@@ -22,7 +22,7 @@ function EssentialAlbumCard({ entry, artist, size, byline }: AlbumCardProps): Re
   return (
     <article className="essentials-album-row" data-size={size}>
       <div className="essentials-album-cover">
-        <EssentialCover artist={artist} album={entry.album} releaseGroupId={entry.releaseGroupId} />
+        <AlbumCover artist={artist} album={entry.album} releaseGroupId={entry.releaseGroupId} />
       </div>
       <div className="essentials-album-body">
         <div className="essentials-album-heading">

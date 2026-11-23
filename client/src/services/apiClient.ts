@@ -1,11 +1,16 @@
 import {
   AccountResponse,
   AccountStatusResponse,
+  AlbumSearchResponse,
   ArtistSuggestionsResponse,
   DeviceRegistrationResponse,
   IDEMPOTENCY_KEY_HEADER,
   LibrarySyncRequest,
   LibrarySyncResponse,
+  ListKind,
+  ListQualifier,
+  ListResponse,
+  ListsResponse,
   AlbumDetailsResponse,
   AlbumResponse,
   RecommendationRequest,
@@ -125,7 +130,7 @@ interface PostOptions {
  * only read, and are cached or cheap, don't carry it.
  */
 async function sendAsDevice<T>(
-  method: 'POST' | 'DELETE',
+  method: 'POST' | 'PUT' | 'DELETE',
   path: string,
   body: unknown,
   signal?: AbortSignal,
@@ -301,6 +306,69 @@ export function fetchArtistSuggestions(
   signal?: AbortSignal,
 ): Promise<ArtistSuggestionsResponse> {
   return get<ArtistSuggestionsResponse>(`${API_V1}/artist-suggestions`, { q: query }, signal);
+}
+
+/** Albums whose title or artist matches what has been typed, best match first. */
+export function searchAlbums(query: string, signal?: AbortSignal): Promise<AlbumSearchResponse> {
+  return get<AlbumSearchResponse>(`${API_V1}/albums/search`, { q: query }, signal);
+}
+
+/**
+ * The lists this device, or the account it is signed in to, has made. A browser with no device
+ * token has made none, so it is not asked to get one just to find that out.
+ */
+export async function fetchOwnLists(signal?: AbortSignal): Promise<ListsResponse> {
+  const token = getStoredToken();
+  if (!token) return { lists: [] };
+
+  const res = await fetchWithTimeout(
+    `${API_BASE}${API_V1}/lists`,
+    { headers: { Authorization: `Bearer ${token}` } },
+    signal,
+  );
+  if (res.status === 401) {
+    // The server doesn't know this token, so it has made no lists. It gets a new one when it
+    // next makes a request that needs one.
+    clearDeviceToken();
+    return { lists: [] };
+  }
+  if (!res.ok) throw await toApiError(res);
+  return res.json() as Promise<ListsResponse>;
+}
+
+export interface NewListRequest {
+  readonly kind: ListKind;
+  readonly qualifier: ListQualifier;
+  /** MusicBrainz release group IDs, best first. */
+  readonly releaseGroupIds: readonly string[];
+}
+
+/** Makes this device's list. Fails with status 409 if it already has one of this kind. */
+export function createList(request: NewListRequest, signal?: AbortSignal): Promise<ListResponse> {
+  return post<ListResponse>(`${API_V1}/lists`, request, signal);
+}
+
+/** Puts these albums, in this order, in the list, replacing what it held. */
+export function replaceList(
+  id: string,
+  releaseGroupIds: readonly string[],
+  signal?: AbortSignal,
+): Promise<ListResponse> {
+  return sendAsDevice<ListResponse>(
+    'PUT',
+    `${API_V1}/lists/${encodeURIComponent(id)}`,
+    { releaseGroupIds },
+    signal,
+  );
+}
+
+export async function deleteList(id: string, signal?: AbortSignal): Promise<void> {
+  await sendAsDevice<void>(
+    'DELETE',
+    `${API_V1}/lists/${encodeURIComponent(id)}`,
+    undefined,
+    signal,
+  );
 }
 
 /** Emails a one-use sign-in link to the address. */

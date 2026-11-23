@@ -171,7 +171,7 @@ describe('ArtistSearchBox', () => {
   it('shows a spinner, and says it is busy, while artists are being looked up', async () => {
     const { container } = render(<Harness options={[]} isSearching />);
 
-    expect(container.querySelector('.artist-search-spinner')).toBeInTheDocument();
+    expect(container.querySelector('.search-box-spinner')).toBeInTheDocument();
     expect(screen.getByRole('combobox')).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByRole('status')).toHaveTextContent('Searching for artists');
   });
@@ -179,7 +179,7 @@ describe('ArtistSearchBox', () => {
   it('shows no spinner when nothing is being looked up', () => {
     const { container } = render(<Harness options={[]} />);
 
-    expect(container.querySelector('.artist-search-spinner')).not.toBeInTheDocument();
+    expect(container.querySelector('.search-box-spinner')).not.toBeInTheDocument();
     expect(screen.getByRole('combobox')).toHaveAttribute('aria-busy', 'false');
   });
 
@@ -189,7 +189,7 @@ describe('ArtistSearchBox', () => {
     await typeIn();
 
     expect(screen.getAllByRole('option')).toHaveLength(3);
-    expect(container.querySelector('.artist-search-spinner')).toBeInTheDocument();
+    expect(container.querySelector('.search-box-spinner')).toBeInTheDocument();
   });
 
   it('can be switched off while something is being looked up', () => {

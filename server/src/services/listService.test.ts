@@ -72,7 +72,7 @@ describe('listTitle', () => {
 });
 
 describe('createList', () => {
-  it('makes the list, with the albums in order and their covers', async () => {
+  it('makes the list, with the albums in order', async () => {
     const list = await createList(deps, ME, input(['rg-nevermind', 'rg-blue']), NOW);
 
     expect(list).toMatchObject({
@@ -89,8 +89,18 @@ describe('createList', () => {
       slug: 'nirvana-nevermind',
       artist: 'Nirvana',
       year: '1991',
-      artworkUrl: 'https://img/cover.jpg',
     });
+  });
+
+  it('does not wait on covers, which would only slow saving', async () => {
+    const { fetchArtwork } = await import('./artworkService');
+    vi.mocked(fetchArtwork).mockClear();
+
+    const list = await createList(deps, ME, input(['rg-blue']), NOW);
+    await replaceListAlbums(deps, ME, list.id, ['rg-blue', 'rg-nevermind'], NOW);
+    await getOwnLists(deps, ME, NOW);
+
+    expect(fetchArtwork).not.toHaveBeenCalled();
   });
 
   it('stores each album as a real Plinth album, so it has a page of its own', async () => {
@@ -196,6 +206,14 @@ describe('replaceListAlbums', () => {
 });
 
 describe('getList', () => {
+  it('shows each album with its cover', async () => {
+    const { id } = await createList(deps, ME, input(['rg-blue']), NOW);
+
+    const list = await getList(deps, null, id, NOW);
+
+    expect(list?.albums[0].artworkUrl).toBe('https://img/cover.jpg');
+  });
+
   it('shows a list to anyone who has its code, and says who owns it', async () => {
     const { id } = await createList(deps, ME, input(['rg-blue']), NOW);
 
