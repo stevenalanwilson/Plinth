@@ -2044,3 +2044,100 @@ body::before {
   .top-three-slot { flex-wrap: wrap; gap: 10px 12px; }
   .top-three-controls { flex-basis: 100%; justify-content: flex-end; }
 }
+
+/* ─── A shared list ───────────────────────────────────── */
+
+.list-page-card { animation: fadeUp 0.4s ease both; }
+
+.list-page-title {
+  font-family: var(--serif);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.15;
+  margin-bottom: 20px;
+}
+
+.list-page-notice {
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent2);
+  border-radius: var(--radius);
+  background: rgba(200, 169, 110, 0.08);
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.list-page-albums {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.list-page-album {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.list-page-rank {
+  flex-shrink: 0;
+  width: 32px;
+  text-align: center;
+  font-family: var(--serif);
+  font-size: 40px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.list-page-cover {
+  display: block;
+  flex-shrink: 0;
+  width: 168px;
+  height: 168px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.list-page-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.list-page-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-page-album-title {
+  margin-bottom: 6px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 26px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.list-page-album-title a { color: var(--text); text-decoration: none; }
+.list-page-album-title a:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+.list-page-info .album-page-year { margin-bottom: 14px; }
+
+/* A phone has room for a smaller cover beside the name, with the icons under it. */
+@media (max-width: 560px) {
+  .list-page-album { gap: 12px; padding: 12px; }
+  .list-page-rank { width: 20px; font-size: 30px; }
+  .list-page-cover { width: 96px; height: 96px; }
+  .list-page-album-title { font-size: 20px; }
+  .list-page-info .album-page-year { margin-bottom: 10px; }
+}

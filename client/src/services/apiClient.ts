@@ -336,6 +336,31 @@ export async function fetchOwnLists(signal?: AbortSignal): Promise<ListsResponse
   return res.json() as Promise<ListsResponse>;
 }
 
+/**
+ * A list, by the code in its link, as anyone who has it may read it. A device that has a token
+ * sends it, so the answer says whether the list is the device's own; one that hasn't is not
+ * asked to get one just to look. A token the server doesn't know is dropped and the list read
+ * again as a visitor, so a stale token can't stop someone seeing a list shared with them.
+ */
+export async function fetchList(id: string, signal?: AbortSignal): Promise<ListResponse> {
+  const url = `${API_BASE}${API_V1}/lists/${encodeURIComponent(id)}`;
+  const read = (token: string | null): Promise<Response> =>
+    fetchWithTimeout(
+      url,
+      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+      signal,
+    );
+
+  const token = getStoredToken();
+  let res = await read(token);
+  if (res.status === 401 && token) {
+    clearDeviceToken();
+    res = await read(null);
+  }
+  if (!res.ok) throw await toApiError(res);
+  return res.json() as Promise<ListResponse>;
+}
+
 export interface NewListRequest {
   readonly kind: ListKind;
   readonly qualifier: ListQualifier;

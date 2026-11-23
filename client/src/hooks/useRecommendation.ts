@@ -96,7 +96,11 @@ interface UseRecommendationReturn {
   error: string | null;
   /** The day's picks are used up: shown calmly, as it isn't a fault. */
   isLimitReached: boolean;
-  fetchRecommendation: (pivot?: PivotHint, seedArtist?: string) => Promise<void>;
+  /**
+   * Gets a pick. A `vibe` is for this pick only, in place of what is typed, and is put in the
+   * vibe box so the person can see what the pick was asked for.
+   */
+  fetchRecommendation: (pivot?: PivotHint, seedArtist?: string, vibe?: string) => Promise<void>;
   clearHistory: () => void;
   removeFromHistory: (id: string) => void;
   selectFromHistory: (id: string) => void;
@@ -360,7 +364,7 @@ export function useRecommendation(): UseRecommendationReturn {
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchRecommendation = useCallback(
-    async (pivot?: PivotHint, seedArtist?: string): Promise<void> => {
+    async (pivot?: PivotHint, seedArtist?: string, vibe?: string): Promise<void> => {
       // Cancel any in-flight request before starting a new one.
       abortControllerRef.current?.abort();
       const controller = new AbortController();
@@ -368,6 +372,7 @@ export function useRecommendation(): UseRecommendationReturn {
 
       setIsLoading(true);
       setFailure(null);
+      if (vibe !== undefined) setVibeQuery(vibe);
 
       const alreadySuggested = historyRef.current.map((e) => albumLabel(e.recommendation));
 
@@ -378,7 +383,7 @@ export function useRecommendation(): UseRecommendationReturn {
             alreadySuggested,
             pivot,
             seedArtist,
-            vibeQuery: vibeQuery.trim() || undefined,
+            vibeQuery: (vibe ?? vibeQuery).trim() || undefined,
             entry: takeSharedLinkEntry(),
             taste: buildTaste(historyRef.current),
             ...startPick(),

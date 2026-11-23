@@ -683,3 +683,34 @@ describe('useRecommendation saving to an account', () => {
     });
   });
 });
+
+describe('useRecommendation vibe for one pick', () => {
+  it('uses a vibe given for this pick instead of what is typed, and shows it in the vibe box', async () => {
+    const { result } = renderHook(() => useRecommendation());
+    act(() => result.current.updateVibeQuery('something quiet'));
+
+    await act(async () => {
+      await result.current.fetchRecommendation(
+        undefined,
+        undefined,
+        'In the spirit of Kind of Blue',
+      );
+    });
+
+    expect(mockFetchRecommendation.mock.calls[0][0].vibeQuery).toBe(
+      'In the spirit of Kind of Blue',
+    );
+    expect(result.current.vibeQuery).toBe('In the spirit of Kind of Blue');
+  });
+
+  it('keeps using what is typed when no vibe is given', async () => {
+    const { result } = renderHook(() => useRecommendation());
+    act(() => result.current.updateVibeQuery('something quiet'));
+
+    await act(async () => {
+      await result.current.fetchRecommendation();
+    });
+
+    expect(mockFetchRecommendation.mock.calls[0][0].vibeQuery).toBe('something quiet');
+  });
+});

@@ -3,6 +3,7 @@ import {
   ApiError,
   createList,
   deleteList,
+  fetchList,
   fetchOwnLists,
   replaceList,
   searchAlbums,
@@ -168,5 +169,69 @@ describe('deleteList', () => {
     expect(requestedUrl()).toBe('/api/v1/lists/abcdefghjk');
     expect(init().method).toBe('DELETE');
     expect(headers().Authorization).toBe('Bearer pld_existing');
+  });
+});
+
+describe('fetchList', () => {
+  it('asks for the list by its code, carrying this device’s token so it can tell if it is the owner', async () => {
+    fetchMock.mockResolvedValueOnce(json({ id: 'abcdefghjk', isOwner: true }));
+
+    expect(await fetchList('abcdefghjk')).toEqual({ id: 'abcdefghjk', isOwner: true });
+
+    expect(requestedUrl()).toBe('/api/v1/lists/abcdefghjk');
+    expect(headers().Authorization).toBe('Bearer pld_existing');
+  });
+
+  it('asks without a token, and gets none, for a visitor who has never used Plinth', async () => {
+    localStorage.clear();
+    fetchMock.mockResolvedValueOnce(json({ id: 'abcdefghjk', isOwner: false }));
+
+    await fetchList('abcdefghjk');
+
+    expect(headers()).not.toHaveProperty('Authorization');
+    expect(localStorage.getItem('plinth-device-token')).toBeNull();
+  });
+
+  it('reads the list as a visitor, and forgets the token, when the server does not know it', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ error: 'Invalid or expired device token.' }, 401))
+      .mockResolvedValueOnce(json({ id: 'abcdefghjk', isOwner: false }));
+
+    expect(await fetchList('abcdefghjk')).toEqual({ id: 'abcdefghjk', isOwner: false });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(headers(1)).not.toHaveProperty('Authorization');
+    expect(localStorage.getItem('plinth-device-token')).toBeNull();
+  });
+
+  it('says it was not found, with the status, for a list that is not there or not finished', async () => {
+    fetchMock.mockResolvedValueOnce(json({ error: 'List not found' }, 404));
+
+    await expect(fetchList('abcdefghjk')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('encodes the code', async () => {
+    fetchMock.mockResolvedValueOnce(json({}));
+
+    await fetchList('a/b');
+
+    expect(requestedUrl()).toBe('/api/v1/lists/a%2Fb');
+  });
+
+  it('can be cancelled', async () => {
+    const controller = new AbortController();
+    fetchMock.mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        }),
+    );
+
+    const pending = fetchList('abcdefghjk', controller.signal);
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 });
