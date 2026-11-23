@@ -43,6 +43,9 @@ import { createPostgresSignInLinkRepository } from './repositories/postgresSignI
 import { LibraryRepository } from './repositories/libraryRepository';
 import { createInMemoryLibraryRepository } from './repositories/inMemoryLibraryRepository';
 import { createPostgresLibraryRepository } from './repositories/postgresLibraryRepository';
+import { ListRepository } from './repositories/listRepository';
+import { createInMemoryListRepository } from './repositories/inMemoryListRepository';
+import { createPostgresListRepository } from './repositories/postgresListRepository';
 import { startSignInLinkCleanup } from './services/signInService';
 import { signInChannel } from './utils/signInChannel';
 
@@ -55,6 +58,7 @@ interface Storage {
   readonly accounts: AccountRepository;
   readonly signInLinks: SignInLinkRepository;
   readonly library: LibraryRepository;
+  readonly lists: ListRepository;
   readonly cache: CacheStore;
   readonly pool: Pool | null;
 }
@@ -76,6 +80,7 @@ async function connectStorage(): Promise<Storage> {
       accounts: createInMemoryAccountRepository(),
       signInLinks: createInMemorySignInLinkRepository(),
       library: createInMemoryLibraryRepository(),
+      lists: createInMemoryListRepository(),
       cache: createInMemoryCacheStore(),
       pool: null,
     };
@@ -91,6 +96,7 @@ async function connectStorage(): Promise<Storage> {
     accounts: createPostgresAccountRepository(pool),
     signInLinks: createPostgresSignInLinkRepository(pool),
     library: createPostgresLibraryRepository(pool),
+    lists: createPostgresListRepository(pool),
     cache: createPostgresCacheStore(pool),
     pool,
   };
@@ -109,7 +115,7 @@ async function start(): Promise<void> {
     logger.warn({ missing }, 'sign-in is switched off: these settings are missing');
   }
 
-  const { albums, devices, usage, accounts, signInLinks, library, cache, pool } =
+  const { albums, devices, usage, accounts, signInLinks, library, lists, cache, pool } =
     await connectStorage();
   configureLookupCache(cache);
   const stopCacheCleanup = startCacheCleanup(cache);
@@ -131,6 +137,7 @@ async function start(): Promise<void> {
     accounts,
     signInLinks,
     library,
+    lists,
     signInChannel: channel,
     indexTemplate,
     trustProxyHops: proxyHops,

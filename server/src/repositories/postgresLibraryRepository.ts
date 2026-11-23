@@ -1,4 +1,5 @@
 import { Pool, PoolClient } from 'pg';
+import { inTransaction } from '../db/transaction';
 import { LibraryItem } from '@shared/types';
 import {
   LibraryChanges,
@@ -35,21 +36,6 @@ async function countRecords(client: PoolClient, accountId: string): Promise<numb
     [accountId],
   );
   return rows[0].total;
-}
-
-async function inTransaction<T>(pool: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await work(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
 }
 
 export function createPostgresLibraryRepository(pool: Pool): LibraryRepository {

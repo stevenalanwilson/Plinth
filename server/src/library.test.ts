@@ -9,6 +9,7 @@ vi.mock('./logger', async () => {
 });
 
 import { createApp } from './app';
+import { createInMemoryListRepository } from './repositories/inMemoryListRepository';
 import { createInMemoryAccountRepository } from './repositories/inMemoryAccountRepository';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
@@ -39,6 +40,7 @@ async function start(): Promise<void> {
     accounts,
     signInLinks: createInMemorySignInLinkRepository(),
     library,
+    lists: createInMemoryListRepository(),
     signInChannel: {
       sender: {
         send: async (message): Promise<void> => {

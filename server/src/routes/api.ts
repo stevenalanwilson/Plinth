@@ -18,13 +18,16 @@ import {
   createVerifySignInHandler,
 } from '../controllers/authController';
 import { createLibrarySyncHandler } from '../controllers/libraryController';
+import { createListHandlers } from '../controllers/listController';
 import { createDeviceAuth } from '../middleware/deviceAuth';
 import { AlbumRepository } from '../repositories/albumRepository';
 import { DeviceRepository } from '../repositories/deviceRepository';
 import { AccountRepository } from '../repositories/accountRepository';
 import { SignInLinkRepository } from '../repositories/signInLinkRepository';
 import { LibraryRepository } from '../repositories/libraryRepository';
+import { ListRepository } from '../repositories/listRepository';
 import { DailyPickLimiter } from '../services/dailyLimitService';
+import { lookUpAlbumById } from '../services/albumLookupService';
 import { SignInChannel } from '../utils/signInChannel';
 
 export interface ApiDependencies {
@@ -34,6 +37,7 @@ export interface ApiDependencies {
   readonly accounts: AccountRepository;
   readonly signInLinks: SignInLinkRepository;
   readonly library: LibraryRepository;
+  readonly lists: ListRepository;
   /** How sign-in links are sent, or null when sign-in isn't set up and the routes say so. */
   readonly signInChannel: SignInChannel | null;
 }
@@ -166,6 +170,26 @@ const albumSearchLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
+// Reading a list is open to anyone with its link, and a shared link can be opened by many people
+// at once, but each read is a few queries, so this only stops hammering.
+const listReadLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' },
+});
+
+// Saving a list may look albums up in MusicBrainz, which queues at one request a second, and a
+// person builds a list in a handful of saves.
+const listWriteLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' },
+});
+
 export function createApiRouter({
   albums,
   devices,
@@ -173,9 +197,11 @@ export function createApiRouter({
   accounts,
   signInLinks,
   library,
+  lists,
   signInChannel,
 }: ApiDependencies): Router {
   const router = Router();
+  const listHandlers = createListHandlers({ lists, albums, lookUpAlbum: lookUpAlbumById });
   // Before the check below, so a client holding a stale token can still ask for a new one.
   router.post('/devices', deviceLimiter, createRegisterDeviceHandler(devices));
   router.use(createDeviceAuth(devices));
@@ -183,16 +209,21 @@ export function createApiRouter({
   router.post(
     '/auth/verify',
     verifyLimiter,
-    createVerifySignInHandler({ links: signInLinks, accounts, devices }),
+    createVerifySignInHandler({ links: signInLinks, accounts, devices, lists }),
   );
   router.get('/auth/me', accountLimiter, createAccountHandler(accounts, signInChannel));
   router.post('/auth/sign-out', accountLimiter, createSignOutHandler(devices));
   router.delete(
     '/auth/account',
     accountLimiter,
-    createDeleteAccountHandler({ accounts, devices, links: signInLinks, library }),
+    createDeleteAccountHandler({ accounts, devices, links: signInLinks, library, lists }),
   );
   router.post('/library/sync', librarySyncLimiter, createLibrarySyncHandler(library));
+  router.get('/lists', listReadLimiter, listHandlers.mine);
+  router.post('/lists', listWriteLimiter, listHandlers.create);
+  router.get('/lists/:id', listReadLimiter, listHandlers.read);
+  router.put('/lists/:id', listWriteLimiter, listHandlers.replace);
+  router.delete('/lists/:id', listWriteLimiter, listHandlers.remove);
   router.post('/recommend', recommendLimiter, createRecommendHandler(albums, dailyLimit));
   // Before the slug route below, or "search" would be read as an album's slug.
   router.get('/albums/search', albumSearchLimiter, handleAlbumSearch);
