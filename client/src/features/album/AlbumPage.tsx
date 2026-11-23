@@ -1,23 +1,12 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlbumResponse } from '@shared/types';
 import { ArtworkImage } from '../../components/ArtworkImage';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { ListenAndShare } from '../../components/ListenAndShare';
 import { AlbumDetails } from './AlbumDetails';
 import { useAlbum } from './useAlbum';
 import { moreLikeThisState } from '../recommendation/moreLikeThis';
-
-const DEFAULT_TITLE = 'Plinth';
-
-function useDocumentTitle(title: string | null): void {
-  useEffect(() => {
-    if (title === null) return;
-    document.title = title;
-    return () => {
-      document.title = DEFAULT_TITLE;
-    };
-  }, [title]);
-}
 
 function Header(): React.ReactElement {
   return (
