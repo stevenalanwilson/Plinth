@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlbumResponse } from '@shared/types';
-import { getProxiedArtworkUrl } from '../../services/apiClient';
-import { PlaceholderSleeve } from '../../components/PlaceholderSleeve';
+import { ArtworkImage } from '../../components/ArtworkImage';
 import { ListenAndShare } from '../../components/ListenAndShare';
 import { AlbumDetails } from './AlbumDetails';
 import { useAlbum } from './useAlbum';
@@ -63,21 +62,12 @@ function Message({ children }: { readonly children: React.ReactNode }): React.Re
 }
 
 function AlbumCard({ album }: { readonly album: AlbumResponse }): React.ReactElement {
-  const [coverFailed, setCoverFailed] = useState(false);
   const details = [...album.genres, ...(album.country ? [album.country] : [])].join(' · ');
 
   return (
     <article className="album-page-card">
       <div className="album-page-cover">
-        {album.artworkUrl && !coverFailed ? (
-          <img
-            src={getProxiedArtworkUrl(album.artworkUrl)}
-            alt={`${album.album} album artwork`}
-            onError={() => setCoverFailed(true)}
-          />
-        ) : (
-          <PlaceholderSleeve artist={album.artist} album={album.album} />
-        )}
+        <ArtworkImage artist={album.artist} album={album.album} artworkUrl={album.artworkUrl} />
       </div>
       <div className="album-page-info">
         <h1 className="album-page-title">{album.album}</h1>
