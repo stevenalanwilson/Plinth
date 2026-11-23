@@ -13,6 +13,7 @@ vi.mock('./services/recommendationService', async (importOriginal) => ({
 }));
 
 import { createApp } from './app';
+import { createInMemoryListRepository } from './repositories/inMemoryListRepository';
 import { createInMemoryAccountRepository } from './repositories/inMemoryAccountRepository';
 import { createInMemoryAlbumRepository } from './repositories/inMemoryAlbumRepository';
 import { createInMemoryDeviceRepository } from './repositories/inMemoryDeviceRepository';
@@ -62,6 +63,7 @@ async function start(options: { sender?: EmailSender | null } = {}): Promise<voi
     accounts: createInMemoryAccountRepository(),
     signInLinks: createInMemorySignInLinkRepository(),
     library: createInMemoryLibraryRepository(),
+    lists: createInMemoryListRepository(),
     signInChannel: options.sender === null ? null : { sender, baseUrl: 'https://plinth.example' },
     dailyLimit: createDailyPickLimiter({
       usage: createInMemoryUsageRepository(),

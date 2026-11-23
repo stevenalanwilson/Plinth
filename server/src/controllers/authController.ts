@@ -13,6 +13,7 @@ import {
   signOut,
   TooManySignInRequestsError,
   verifySignIn,
+  VerifyDependencies,
 } from '../services/signInService';
 import { SignInChannel } from '../utils/signInChannel';
 import { logger } from '../logger';
@@ -69,11 +70,7 @@ export function createSignInHandler(
   };
 }
 
-export function createVerifySignInHandler(deps: {
-  readonly links: SignInLinkRepository;
-  readonly accounts: AccountRepository;
-  readonly devices: DeviceRepository;
-}): Handler {
+export function createVerifySignInHandler(deps: VerifyDependencies): Handler {
   return async (req, res) => {
     noStore(res);
     const token = (req.body as Record<string, unknown> | undefined)?.token;

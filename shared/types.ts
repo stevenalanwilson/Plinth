@@ -335,6 +335,32 @@ export interface ArtistSuggestionsResponse {
 }
 
 /** An album found by searching MusicBrainz. Its cover is looked up from the artist and title. */
+/** What sort of list: "top" is a person's best albums, in order. */
+export type ListKind = 'top';
+
+/** What a list is about: all time for now; later a genre, a month or a year. */
+export type ListQualifier = 'all-time';
+
+export interface ListResponse {
+  /** A short code that can't be guessed; anyone who has it can read the list. */
+  readonly id: string;
+  readonly kind: ListKind;
+  readonly qualifier: ListQualifier;
+  /** How many albums the list holds when it is full. It may have fewer while being built. */
+  readonly size: number;
+  /** For example "My top 3 albums of all time". */
+  readonly title: string;
+  /** The albums in order, best first. */
+  readonly albums: readonly AlbumResponse[];
+  readonly updatedAt: string;
+  /** True when the person asking made the list, so they can change it. */
+  readonly isOwner: boolean;
+}
+
+export interface ListsResponse {
+  readonly lists: readonly ListResponse[];
+}
+
 export interface AlbumSearchResult {
   /** MusicBrainz release group ID. */
   readonly releaseGroupId: string;

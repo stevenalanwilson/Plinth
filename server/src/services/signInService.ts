@@ -3,6 +3,7 @@ import { AccountRepository } from '../repositories/accountRepository';
 import { DeviceRepository } from '../repositories/deviceRepository';
 import { SignInLinkRepository } from '../repositories/signInLinkRepository';
 import { LibraryRepository } from '../repositories/libraryRepository';
+import { ListRepository } from '../repositories/listRepository';
 import { EmailSender } from './emailSender';
 import { logger } from '../logger';
 
@@ -110,6 +111,7 @@ export interface VerifyDependencies {
   readonly links: SignInLinkRepository;
   readonly accounts: AccountRepository;
   readonly devices: DeviceRepository;
+  readonly lists: ListRepository;
 }
 
 export interface SignedIn {
@@ -120,10 +122,11 @@ export interface SignedIn {
 
 /**
  * Uses a link up and signs the device that opened it in to the account for its email, making the
- * account the first time. Returns null for a link that is wrong, used, or expired.
+ * account the first time. Lists the device made while anonymous become the account's. Returns
+ * null for a link that is wrong, used, or expired.
  */
 export async function verifySignIn(
-  { links, accounts, devices }: VerifyDependencies,
+  { links, accounts, devices, lists }: VerifyDependencies,
   token: string,
   deviceId: string,
   now: Date = new Date(),
@@ -136,6 +139,16 @@ export async function verifySignIn(
 
   const { account, created } = await accounts.findOrCreateByEmail(email, now);
   await devices.linkToAccount(deviceId, account.id);
+  try {
+    await lists.moveToAccount(deviceId, account.id);
+  } catch (error) {
+    // The link is used up, so failing here would leave the person unable to sign in. Their list
+    // is still safe, and is moved the next time they sign in.
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'moving lists to the account failed',
+    );
+  }
   return { email: account.email, created };
 }
 
@@ -149,15 +162,16 @@ export interface DeleteAccountDependencies {
   readonly devices: DeviceRepository;
   readonly links: SignInLinkRepository;
   readonly library: LibraryRepository;
+  readonly lists: ListRepository;
 }
 
 /**
  * Removes an account and everything kept about it: every device is signed out, its saved crate
- * is removed, and the links sent to its email are removed. The account itself goes last, so a failure part way can be
- * tried again. Returns false if there was no such account.
+ * and its lists are removed, and the links sent to its email are removed. The account itself goes
+ * last, so a failure part way can be tried again. Returns false if there was no such account.
  */
 export async function deleteAccount(
-  { accounts, devices, links, library }: DeleteAccountDependencies,
+  { accounts, devices, links, library, lists }: DeleteAccountDependencies,
   accountId: string,
 ): Promise<boolean> {
   const account = await accounts.findById(accountId);
@@ -165,6 +179,7 @@ export async function deleteAccount(
 
   await devices.unlinkAllFromAccount(accountId);
   await library.removeAll(accountId);
+  await lists.removeAllForAccount(accountId);
   await links.deleteForEmail(account.email);
   return accounts.delete(accountId);
 }

@@ -21,6 +21,7 @@ import { EmailMessage, EmailSender } from './emailSender';
 import { createInMemoryAccountRepository } from '../repositories/inMemoryAccountRepository';
 import { createInMemoryDeviceRepository } from '../repositories/inMemoryDeviceRepository';
 import { createInMemoryLibraryRepository } from '../repositories/inMemoryLibraryRepository';
+import { createInMemoryListRepository } from '../repositories/inMemoryListRepository';
 import { createInMemorySignInLinkRepository } from '../repositories/inMemorySignInLinkRepository';
 import { logger } from '../logger';
 
@@ -33,6 +34,7 @@ function setup(): {
   accounts: ReturnType<typeof createInMemoryAccountRepository>;
   devices: ReturnType<typeof createInMemoryDeviceRepository>;
   library: ReturnType<typeof createInMemoryLibraryRepository>;
+  lists: ReturnType<typeof createInMemoryListRepository>;
   sent: EmailMessage[];
   sender: EmailSender;
   request: (email: string, now?: Date) => Promise<void>;
@@ -42,6 +44,7 @@ function setup(): {
   const accounts = createInMemoryAccountRepository();
   const devices = createInMemoryDeviceRepository();
   const library = createInMemoryLibraryRepository();
+  const lists = createInMemoryListRepository();
   const sent: EmailMessage[] = [];
   const sender: EmailSender = {
     send: async (message): Promise<void> => {
@@ -53,6 +56,7 @@ function setup(): {
     accounts,
     devices,
     library,
+    lists,
     sent,
     sender,
     request: (email: string, now: Date = NOW): Promise<void> =>
@@ -198,7 +202,12 @@ describe('requestSignIn', () => {
     ).catch(() => undefined);
     const device = await devices.create('hash-a', NOW);
 
-    const signedIn = await verifySignIn({ links, accounts, devices }, earlier, device.id, after(1));
+    const signedIn = await verifySignIn(
+      { links, accounts, devices, lists: createInMemoryListRepository() },
+      earlier,
+      device.id,
+      after(1),
+    );
 
     expect(signedIn?.email).toBe('a@example.com');
   });
@@ -322,6 +331,44 @@ describe('signOut', () => {
   });
 });
 
+describe('verifySignIn and lists', () => {
+  async function aList(env: ReturnType<typeof setup>, deviceId: string): Promise<string> {
+    const list = await env.lists.create({
+      id: 'abcdefghjk',
+      owner: { kind: 'device', id: deviceId },
+      kind: 'top',
+      qualifier: 'all-time',
+      size: 3,
+      releaseGroupIds: [],
+      now: NOW,
+    });
+    return list.id;
+  }
+
+  it('hands the lists the device made while anonymous to the account', async () => {
+    const env = setup();
+    await env.request('a@example.com');
+    const device = await env.devices.create('hash-a', NOW);
+    const listId = await aList(env, device.id);
+
+    await verifySignIn(env, env.tokenSentTo('a@example.com'), device.id, after(1));
+
+    const accountId = (await env.devices.findByTokenHash('hash-a'))?.accountId as string;
+    expect((await env.lists.findById(listId))?.owner).toEqual({ kind: 'account', id: accountId });
+  });
+
+  it('still signs in when the lists could not be moved', async () => {
+    const env = setup();
+    await env.request('a@example.com');
+    const device = await env.devices.create('hash-a', NOW);
+    vi.spyOn(env.lists, 'moveToAccount').mockRejectedValue(new Error('database is down'));
+
+    const signedIn = await verifySignIn(env, env.tokenSentTo('a@example.com'), device.id, after(1));
+
+    expect(signedIn?.email).toBe('a@example.com');
+  });
+});
+
 describe('deleteAccount', () => {
   async function accountWithTwoDevices(): Promise<{
     env: ReturnType<typeof setup>;
@@ -384,6 +431,23 @@ describe('deleteAccount', () => {
         maxRecords: 1_000,
       }),
     ).toEqual([]);
+  });
+
+  it('removes its lists', async () => {
+    const { env, accountId } = await accountWithTwoDevices();
+    const list = await env.lists.create({
+      id: 'abcdefghjk',
+      owner: { kind: 'account', id: accountId },
+      kind: 'top',
+      qualifier: 'all-time',
+      size: 3,
+      releaseGroupIds: [],
+      now: NOW,
+    });
+
+    await deleteAccount(env, accountId);
+
+    expect(await env.lists.findById(list.id)).toBeNull();
   });
 
   it('removes the links still waiting to be used', async () => {
