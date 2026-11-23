@@ -134,6 +134,27 @@
 
 ---
 
+## Phase 8 — Shareable lists (~2–3 weeks for the MVP)
+
+**Goal:** people post their taste, and every post brings in a new visitor.
+
+**MVP:** one list per person, "My top 3 albums of all time", that anyone can make and share without an account.
+
+**Order:** P8.1 → P8.2 → P8.3 and P8.4 → P8.5 → P8.6. It doesn't depend on Phases 5–7 and can be interleaved with them. Themed lists (P8.7) wait until the top 3 shows people share it.
+
+- [ ] **P8.1 Album search** — `GET /api/v1/albums/search?q=` searches MusicBrainz release groups of primary type Album, leaving out bootlegs by the same rules as the album matching, and returns cover, title, artist and year. Validate it with Zod and rate-limit it like the other routes
+- [ ] **P8.2 Lists in the database and API** — `lists` and `list_items` tables and `/api/v1/lists` (create, edit, delete and a public read). A list has an owner (the device token, joining the account on sign-in as the crate does), a `kind` (`top`), a `qualifier` (`all-time`) and a `size` (3), so genre, month and year lists later need no migration; there is one list per owner, kind and qualifier. Each album is stored as a real Plinth album, so it has a permalink and a cover. The id is a short code that can't be guessed. Deleting a list, or an account, removes it
+- [ ] **P8.3 Top 3 builder** — three ordered slots; search any album, with the crate offered first; reorder with buttons as well as dragging; the same album can't be in two slots; a part-filled list can be saved but only shared once it has three. It works by keyboard and on a phone
+- [ ] **P8.4 Public list page with preview tags** — `/list/:id` shows the three covers large, with title, artist, year and the same icon links as an album page, plus "Make your own top 3" and "Find me something like these" (which starts a Discover pick). The server adds the preview tags, as it does for album pages. The page is open to anyone with the link but isn't listed or indexed, and editing a list changes the same link
+- [ ] **P8.5 Generated preview image** — a 1200×630 PNG of the three covers in order, numbered, with the list's title and the Plinth mark, so a shared link shows a card worth posting on WhatsApp, Bluesky and Slack. It needs an image library (the repo has none yet; compositing with sharp is the likely route). Covers come through the image proxy, a missing cover is drawn as a placeholder tile, and a failure falls back to the default card. The image is cached, with a hash of the list in its address so platforms fetch a fresh one after an edit
+- [ ] **P8.6 Share, sign-in invite, logging and privacy page** — a Share button (copy the link, or the share sheet on a phone). The first time someone who isn't signed in shares, they are invited to sign in so the list is kept (Sign in or Not now; sharing works either way), with the weekly dig email (P6.2) offered as a separate opt-in that isn't ticked for them. Log lists created, edited, viewed (crawler or person) and shared. Update `/privacy` for the lists
+- [ ] **P8.7 Themed lists (explore)** — "My top 3 hip hop albums" (a genre from the existing list), "albums of the month" or of the year, longer lists, several lists per person and a "My lists" page. A monthly list gives people a reason to come back each month. Likely a Plinth+ feature (P6.3); the all-time top 3 and its card stay free, since sharing is how people find Plinth
+- [ ] **P8.8 Image for Stories (explore)** — a download sized for Instagram Stories, where links don't show a preview
+
+**Done when:** a shared link shows a card with the three covers and opens a working page for someone who has never visited, and some of those visitors make a pick of their own.
+
+---
+
 ## Metrics to track throughout
 
 - **Cost per recommendation** (API plus lookups), compared with the cache hit rate
@@ -141,6 +162,10 @@
 - **Return rate** — users back within 7 days
 - **Crate activity** — feedback taps per session
 - **Platform mix** — sessions on the web, the installed PWA and iOS
+- **List share rate** — lists shared ÷ lists made (from Phase 8)
+- **Lists per new visitor** — new visitors who go on to make a top 3
+- **List link conversion** — visits from a list link that go on to make a pick
+- **Outbound clicks on list pages** — listening-link clicks per page view, once clicks are logged, to judge affiliate links (P6.1) before building them
 
 ---
 
