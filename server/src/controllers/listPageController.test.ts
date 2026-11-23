@@ -102,6 +102,19 @@ describe('list page', () => {
     expect(html).toContain('<div id="root"></div>');
   });
 
+  it('points the preview at the list’s own picture', async () => {
+    await storeList();
+
+    const html = await (await fetch(`${baseUrl}/list/${LIST_ID}`)).text();
+
+    expect(html).toMatch(
+      new RegExp(
+        `property="og:image" content="https://plinth.example/api/v1/lists/${LIST_ID}/image\\?v=[0-9a-f]{12}"`,
+      ),
+    );
+    expect(html).toContain('name="twitter:card" content="summary_large_image"');
+  });
+
   it('asks search engines to leave it out, in the page and in the headers', async () => {
     await storeList();
 

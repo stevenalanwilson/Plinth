@@ -1,4 +1,5 @@
 import { AlbumResponse, ListResponse } from '@shared/types';
+import { listImageHash } from './listImageHash';
 
 const SITE_NAME = 'Plinth';
 const DEFAULT_DESCRIPTION = 'Plinth recommends whole records, picked for you.';
@@ -76,16 +77,18 @@ function joinNames(names: readonly string[]): string {
 
 /**
  * A shared list. It is open to anyone with the link but isn't listed anywhere, so search engines
- * are asked to leave it out. It uses the Plinth card until the list has a picture of its own.
+ * are asked to leave it out. Its card shows the three covers, in a picture whose address carries a
+ * hash of what it shows, so a platform fetches a fresh one after the list changes.
  */
 export function listPageHead(list: ListResponse, publicUrl: string): PageHead {
+  const albums = joinNames(list.albums.map((a) => `${a.album} by ${a.artist}`));
   return {
     title: `${list.title} · ${SITE_NAME}`,
     shareTitle: list.title,
-    description: `${joinNames(list.albums.map((a) => `${a.album} by ${a.artist}`))}.`,
+    description: `${albums}.`,
     url: `${publicUrl}/list/${encodeURIComponent(list.id)}`,
-    imageUrl: defaultImage(publicUrl),
-    imageAlt: `${SITE_NAME}: whole records, picked for you`,
+    imageUrl: `${publicUrl}/api/v1/lists/${encodeURIComponent(list.id)}/image?v=${listImageHash(list.albums)}`,
+    imageAlt: `${list.title}: ${albums}`,
     card: 'summary_large_image',
     noindex: true,
   };
