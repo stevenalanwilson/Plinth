@@ -19,6 +19,7 @@ import {
 } from '../controllers/authController';
 import { createLibrarySyncHandler } from '../controllers/libraryController';
 import { createListHandlers } from '../controllers/listController';
+import { createListImageHandler } from '../controllers/listImageController';
 import { createDeviceAuth } from '../middleware/deviceAuth';
 import { AlbumRepository } from '../repositories/albumRepository';
 import { DeviceRepository } from '../repositories/deviceRepository';
@@ -190,6 +191,17 @@ const listWriteLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
+// Drawing a list's picture takes a few hundred milliseconds of processor time and fetches its
+// covers, and a shared link brings every platform that previews it. After the first drawing each
+// picture is kept, so this only stops someone asking for many different ones.
+const listImageLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' },
+});
+
 export function createApiRouter({
   albums,
   devices,
@@ -219,6 +231,7 @@ export function createApiRouter({
     createDeleteAccountHandler({ accounts, devices, links: signInLinks, library, lists }),
   );
   router.post('/library/sync', librarySyncLimiter, createLibrarySyncHandler(library));
+  router.get('/lists/:id/image', listImageLimiter, createListImageHandler({ lists, albums }));
   router.get('/lists', listReadLimiter, listHandlers.mine);
   router.post('/lists', listWriteLimiter, listHandlers.create);
   router.get('/lists/:id', listReadLimiter, listHandlers.read);

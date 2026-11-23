@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AlbumResponse, ListResponse } from '@shared/types';
+import { listImageHash } from './listImageHash';
 import {
   albumPageHead,
   defaultPageHead,
@@ -95,7 +96,15 @@ describe('albumPageHead', () => {
 });
 
 function listedAlbum(album: string, artist: string, slug: string): AlbumResponse {
-  return { ...ALBUM, slug, album, artist, hook: null, artworkUrl: null };
+  return {
+    ...ALBUM,
+    slug,
+    releaseGroupId: `rg-${slug}`,
+    album,
+    artist,
+    hook: null,
+    artworkUrl: null,
+  };
 }
 
 const LIST: ListResponse = {
@@ -131,11 +140,25 @@ describe('listPageHead', () => {
     expect(listPageHead(LIST, SITE).url).toBe('https://plinth.example/list/abcdefghjk');
   });
 
-  it('uses the Plinth card until the list has a picture of its own', () => {
+  it('shows the list’s own picture, at an address that carries a hash of what it shows', () => {
     const head = listPageHead(LIST, SITE);
 
-    expect(head.imageUrl).toBe(`${SITE}/og-default.png`);
+    expect(head.imageUrl).toBe(
+      `${SITE}/api/v1/lists/abcdefghjk/image?v=${listImageHash(LIST.albums)}`,
+    );
     expect(head.card).toBe('summary_large_image');
+  });
+
+  it('gives the picture a new address when the list changes', () => {
+    const reordered = { ...LIST, albums: [...LIST.albums].reverse() };
+
+    expect(listPageHead(reordered, SITE).imageUrl).not.toBe(listPageHead(LIST, SITE).imageUrl);
+  });
+
+  it('describes the picture for those who cannot see it', () => {
+    expect(listPageHead(LIST, SITE).imageAlt).toBe(
+      'My top 3 albums of all time: Nevermind by Nirvana, Abbey Road by The Beatles and Kind of Blue by Miles Davis',
+    );
   });
 
   it('is kept out of search results', () => {
