@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { AlbumResponse } from '@shared/types';
+import { AlbumResponse, ListResponse } from '@shared/types';
 import {
   albumPageHead,
   defaultPageHead,
   escapeHtml,
   injectHead,
+  listPageHead,
   PageHead,
   renderHeadTags,
 } from './albumPageService';
@@ -93,6 +94,55 @@ describe('albumPageHead', () => {
   });
 });
 
+function listedAlbum(album: string, artist: string, slug: string): AlbumResponse {
+  return { ...ALBUM, slug, album, artist, hook: null, artworkUrl: null };
+}
+
+const LIST: ListResponse = {
+  id: 'abcdefghjk',
+  kind: 'top',
+  qualifier: 'all-time',
+  size: 3,
+  title: 'My top 3 albums of all time',
+  albums: [
+    listedAlbum('Nevermind', 'Nirvana', 'nirvana-nevermind'),
+    listedAlbum('Abbey Road', 'The Beatles', 'the-beatles-abbey-road'),
+    listedAlbum('Kind of Blue', 'Miles Davis', 'miles-davis-kind-of-blue'),
+  ],
+  updatedAt: '2026-11-24T12:00:00.000Z',
+  isOwner: false,
+};
+
+describe('listPageHead', () => {
+  it('titles the page with the list’s own title', () => {
+    const head = listPageHead(LIST, SITE);
+
+    expect(head.title).toBe('My top 3 albums of all time · Plinth');
+    expect(head.shareTitle).toBe('My top 3 albums of all time');
+  });
+
+  it('describes the list by its albums, in order', () => {
+    expect(listPageHead(LIST, SITE).description).toBe(
+      'Nevermind by Nirvana, Abbey Road by The Beatles and Kind of Blue by Miles Davis.',
+    );
+  });
+
+  it('points the link at the list page, with an absolute URL', () => {
+    expect(listPageHead(LIST, SITE).url).toBe('https://plinth.example/list/abcdefghjk');
+  });
+
+  it('uses the Plinth card until the list has a picture of its own', () => {
+    const head = listPageHead(LIST, SITE);
+
+    expect(head.imageUrl).toBe(`${SITE}/og-default.png`);
+    expect(head.card).toBe('summary_large_image');
+  });
+
+  it('is kept out of search results', () => {
+    expect(listPageHead(LIST, SITE).noindex).toBe(true);
+  });
+});
+
 describe('defaultPageHead', () => {
   it('describes Plinth itself, with the Plinth card', () => {
     const head = defaultPageHead(SITE);
@@ -124,6 +174,13 @@ describe('renderHeadTags', () => {
       '<link rel="canonical" href="https://plinth.example/album/the-sound-jeopardy" />',
     );
     expect(tags).toContain('<meta name="description" content="');
+  });
+
+  it('asks search engines to leave out a page that says so, and says nothing otherwise', () => {
+    expect(renderHeadTags({ ...head, noindex: true })).toContain(
+      '<meta name="robots" content="noindex" />',
+    );
+    expect(renderHeadTags(head)).not.toContain('robots');
   });
 
   it('escapes everything it prints, so text from MusicBrainz or Claude cannot inject markup', () => {

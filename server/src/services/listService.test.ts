@@ -59,6 +59,8 @@ beforeEach(() => {
   deps = { lists, albums, lookUpAlbum, newId: (): string => `code${(codes += 1)}` };
 });
 
+const FULL = ['rg-blue', 'rg-nevermind', 'rg-thriller'];
+
 const input = (releaseGroupIds: string[]): ListInput => ({
   kind: 'top',
   qualifier: 'all-time',
@@ -207,7 +209,7 @@ describe('replaceListAlbums', () => {
 
 describe('getList', () => {
   it('shows each album with its cover', async () => {
-    const { id } = await createList(deps, ME, input(['rg-blue']), NOW);
+    const { id } = await createList(deps, ME, input(FULL), NOW);
 
     const list = await getList(deps, null, id, NOW);
 
@@ -215,11 +217,19 @@ describe('getList', () => {
   });
 
   it('shows a list to anyone who has its code, and says who owns it', async () => {
-    const { id } = await createList(deps, ME, input(['rg-blue']), NOW);
+    const { id } = await createList(deps, ME, input(FULL), NOW);
 
     expect((await getList(deps, ME, id, NOW))?.isOwner).toBe(true);
     expect((await getList(deps, SOMEONE_ELSE, id, NOW))?.isOwner).toBe(false);
     expect((await getList(deps, null, id, NOW))?.isOwner).toBe(false);
+  });
+
+  it('shows a list that is not finished to its owner only, since it is only shared once full', async () => {
+    const { id } = await createList(deps, ME, input(['rg-blue', 'rg-nevermind']), NOW);
+
+    expect((await getList(deps, ME, id, NOW))?.albums).toHaveLength(2);
+    expect(await getList(deps, SOMEONE_ELSE, id, NOW)).toBeNull();
+    expect(await getList(deps, null, id, NOW)).toBeNull();
   });
 
   it('finds nothing for a code that was never made', async () => {
@@ -229,7 +239,7 @@ describe('getList', () => {
   it('still shows the list when a cover cannot be found', async () => {
     const { fetchArtwork } = await import('./artworkService');
     vi.mocked(fetchArtwork).mockRejectedValueOnce(new Error('Cover Art Archive is down'));
-    const { id } = await createList(deps, ME, input(['rg-blue']), NOW);
+    const { id } = await createList(deps, ME, input(FULL), NOW);
 
     const list = await getList(deps, null, id, new Date(NOW.getTime() + 1));
 
@@ -254,13 +264,13 @@ describe('deleteList', () => {
     const { id } = await createList(deps, ME, input(['rg-blue']), NOW);
 
     expect(await deleteList(deps, ME, id)).toBe(true);
-    expect(await getList(deps, null, id, NOW)).toBeNull();
+    expect(await getList(deps, ME, id, NOW)).toBeNull();
   });
 
   it('does not remove someone else’s list', async () => {
     const { id } = await createList(deps, ME, input([]), NOW);
 
     expect(await deleteList(deps, SOMEONE_ELSE, id)).toBe(false);
-    expect(await getList(deps, null, id, NOW)).not.toBeNull();
+    expect(await getList(deps, ME, id, NOW)).not.toBeNull();
   });
 });

@@ -30,6 +30,20 @@ describe('ListenAndShare', () => {
     expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
   });
 
+  it('can be given its own name, so several on one page are told apart', () => {
+    render(
+      <ListenAndShare
+        artist="The Sound"
+        album="Jeopardy"
+        appleMusicUrl={null}
+        hook={null}
+        label="Listen to Jeopardy"
+      />,
+    );
+
+    expect(screen.getByRole('group', { name: 'Listen to Jeopardy' })).toBeInTheDocument();
+  });
+
   it('passes the Apple Music link through', () => {
     render(
       <ListenAndShare

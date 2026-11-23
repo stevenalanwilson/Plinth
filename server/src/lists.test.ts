@@ -30,9 +30,11 @@ const mockFetch = vi.mocked(musicBrainzFetch);
 
 const BLUE = '8e8a594f-2175-38c7-a871-abb68ec363e7';
 const NEVERMIND = '1b022e01-4da6-387b-8658-8678046e4cef';
+const THRILLER = '8d6bbb0c-8a0a-3b3b-9a6e-1f1c7d7d2c11';
 const CATALOGUE: Record<string, { title: string; artist: string; date: string }> = {
   [BLUE]: { title: 'Kind of Blue', artist: 'Miles Davis', date: '1959-08-17' },
   [NEVERMIND]: { title: 'Nevermind', artist: 'Nirvana', date: '1991-09-24' },
+  [THRILLER]: { title: 'Thriller', artist: 'Michael Jackson', date: '1982-11-30' },
 };
 
 let server: Server;
@@ -129,7 +131,7 @@ describe('lists through the real API', () => {
   it('shows the list to anyone with its code, and only the owner may change it', async () => {
     const owner = await newDeviceToken();
     const stranger = await newDeviceToken();
-    const { id } = await makeList(owner, [BLUE]);
+    const { id } = await makeList(owner, [BLUE, NEVERMIND, THRILLER]);
 
     const asVisitor = await send('GET', `/lists/${id}`, null);
     const asOwner = await send('GET', `/lists/${id}`, owner);
@@ -155,6 +157,9 @@ describe('lists through the real API', () => {
   it('changes the albums and their order, keeping the same code', async () => {
     const token = await newDeviceToken();
     const { id } = await makeList(token, [BLUE]);
+    // Not shared until it is full, so only its owner can read it yet.
+    expect((await send('GET', `/lists/${id}`, null)).status).toBe(404);
+    expect((await send('GET', `/lists/${id}`, token)).status).toBe(200);
 
     const res = await send('PUT', `/lists/${id}`, token, { releaseGroupIds: [NEVERMIND, BLUE] });
     const list = (await res.json()) as { id: string; albums: { album: string }[] };
@@ -167,7 +172,7 @@ describe('lists through the real API', () => {
   it('answers 404, as for a list that is not there, when someone else tries to change or remove it', async () => {
     const owner = await newDeviceToken();
     const stranger = await newDeviceToken();
-    const { id } = await makeList(owner, [BLUE]);
+    const { id } = await makeList(owner, [BLUE, NEVERMIND, THRILLER]);
 
     expect((await send('PUT', `/lists/${id}`, stranger, { releaseGroupIds: [] })).status).toBe(404);
     expect((await send('DELETE', `/lists/${id}`, stranger)).status).toBe(404);

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { PivotHint } from '@shared/types';
 import { useRecommendation } from './hooks/useRecommendation';
 import { PreferencesPanel, sectionLabelStyle } from './features/preferences/PreferencesPanel';
@@ -8,6 +9,8 @@ import { CratePage } from './features/crate/CratePage';
 import { CrateMenu } from './features/crate/CrateMenu';
 import { TopThreePage } from './features/lists/TopThreePage';
 import { albumsInCrate } from './features/lists/topThree';
+import { pageFromState, vibeFromState } from './features/lists/listNavigation';
+import { useStartFromNavigation } from './hooks/useStartFromNavigation';
 import { PageHeader } from './components/PageHeader';
 import { InsightsPage } from './features/stats/InsightsPage';
 import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPanel';
@@ -22,7 +25,9 @@ import { useAccountSession } from './features/account/useAccountSession';
 type Page = 'home' | 'crate' | 'insights' | 'top3' | 'essentials';
 
 export default function App(): React.ReactElement {
-  const [page, setPage] = useState<Page>('home');
+  const location = useLocation();
+  // A list page's "Make your own top 3" opens straight on it, so there is no flash of Discover.
+  const [page, setPage] = useState<Page>(() => pageFromState(location.state) ?? 'home');
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const {
     preferences,
@@ -59,6 +64,16 @@ export default function App(): React.ReactElement {
   useMoreLikeThisFromNavigation(
     useCallback((pivot: PivotHint) => void fetchRecommendation(pivot), [fetchRecommendation]),
   );
+  // A list page's "Find me something like these" starts a pick from the list's albums at once.
+  useStartFromNavigation(
+    vibeFromState,
+    useCallback(
+      (vibe: string) => void fetchRecommendation(undefined, undefined, vibe),
+      [fetchRecommendation],
+    ),
+  );
+  // Clears the request that opened the top 3 page, so reloading doesn't open it again.
+  useStartFromNavigation(pageFromState, setPage);
   // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives.
   const [isFirstVisit] = useState(recommendation === null);
   // A different handful of presets on each load, kept for the visit so they don't reshuffle

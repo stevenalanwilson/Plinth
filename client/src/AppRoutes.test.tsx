@@ -7,6 +7,10 @@ vi.mock('./features/album/AlbumPage', () => ({
   AlbumPage: () => <div>Album page</div>,
 }));
 
+vi.mock('./features/lists/ListPage', () => ({
+  ListPage: () => <div>List page</div>,
+}));
+
 vi.mock('./features/account/SignInPage', () => ({
   SignInPage: () => <div>Sign-in page</div>,
 }));
@@ -29,6 +33,18 @@ describe('AppRoutes', () => {
     renderAt('/album/the-sound-jeopardy');
 
     expect(screen.getByText('Album page')).toBeInTheDocument();
+  });
+
+  it('shows the list page at /list/:id', () => {
+    renderAt('/list/abcdefghjk');
+
+    expect(screen.getByText('List page')).toBeInTheDocument();
+  });
+
+  it('does not treat a bare /list as a list page', () => {
+    renderAt('/list');
+
+    expect(screen.getByText('Discover app')).toBeInTheDocument();
   });
 
   it('shows the app at the root', () => {

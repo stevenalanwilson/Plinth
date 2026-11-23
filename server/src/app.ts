@@ -6,6 +6,7 @@ import pinoHttp from 'pino-http';
 import { logger } from './logger';
 import { ApiDependencies, createApiRouter } from './routes/api';
 import { createAlbumPageHandler } from './controllers/albumPageController';
+import { createListPageHandler } from './controllers/listPageController';
 
 export interface AppDependencies extends ApiDependencies {
   /** The built client's index.html, or null when there is no build (development). */
@@ -50,12 +51,20 @@ export function createApp(dependencies: AppDependencies): Express {
     res.status(404).json({ error: 'Not found' });
   });
 
-  // Album pages carry their own link preview tags. This comes before the catch-all below, which
-  // would otherwise serve them the same index.html as every other page.
+  // Album and list pages carry their own link preview tags. These come before the catch-all
+  // below, which would otherwise serve them the same index.html as every other page.
   if (dependencies.indexTemplate) {
     app.get(
       '/album/:slug',
       createAlbumPageHandler({
+        albums: dependencies.albums,
+        template: dependencies.indexTemplate,
+      }),
+    );
+    app.get(
+      '/list/:id',
+      createListPageHandler({
+        lists: dependencies.lists,
         albums: dependencies.albums,
         template: dependencies.indexTemplate,
       }),
