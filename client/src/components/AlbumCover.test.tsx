@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { coverArtUrl } from './EssentialCover';
+import { coverArtUrl } from './AlbumCover';
 
 describe('coverArtUrl', () => {
   it('asks the Cover Art Archive for the release group’s front cover', () => {
