@@ -17,6 +17,9 @@ export interface ListDependencies {
   readonly newId?: () => string;
 }
 
+/** What reading a list needs: it never writes, or asks MusicBrainz anything. */
+export type ListReadDependencies = Pick<ListDependencies, 'lists' | 'albums'>;
+
 export interface ListInput {
   readonly kind: ListKind;
   readonly qualifier: ListQualifier;
@@ -90,7 +93,7 @@ function isOwnedBy(list: StoredList, viewer: ListOwner | null): boolean {
  * someone. Without, covers are only as known already, so saving doesn't wait on them.
  */
 async function toResponse(
-  { albums }: ListDependencies,
+  { albums }: ListReadDependencies,
   list: StoredList,
   viewer: ListOwner | null,
   now: Date,
@@ -164,19 +167,27 @@ export function deleteList(deps: ListDependencies, owner: ListOwner, id: string)
   return deps.lists.delete(id, owner);
 }
 
-/** A list for anyone who has its code. `viewer` only decides whether they may change it. */
+/**
+ * A list for anyone who has its code, once it is full: a list is only shared when it has all its
+ * albums, so one that isn't finished is shown to its owner alone. `viewer` also decides whether
+ * they may change it.
+ */
 export async function getList(
-  deps: ListDependencies,
+  deps: ListReadDependencies,
   viewer: ListOwner | null,
   id: string,
   now: Date = new Date(),
 ): Promise<ListResponse | null> {
   const list = await deps.lists.findById(id);
-  return list ? toResponse(deps, list, viewer, now, true) : null;
+  if (!list) return null;
+
+  const isFull = list.releaseGroupIds.length >= list.size;
+  if (!isFull && !isOwnedBy(list, viewer)) return null;
+  return toResponse(deps, list, viewer, now, true);
 }
 
 export async function getOwnLists(
-  deps: ListDependencies,
+  deps: ListReadDependencies,
   owner: ListOwner,
   now: Date = new Date(),
 ): Promise<ListResponse[]> {

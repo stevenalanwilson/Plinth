@@ -130,6 +130,28 @@ describe('createApp album pages', () => {
   });
 });
 
+describe('createApp list pages', () => {
+  it('serves /list/:id from its own handler, not the app’s catch-all, when the client is built', async () => {
+    const res = await fetch(`${baseUrl}/list/abcdefghjk`);
+
+    // No such list, so 404 with the app: the catch-all would have said 200.
+    expect(res.status).toBe(404);
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+    expect(await res.text()).toContain('<div id="root"></div>');
+  });
+
+  it('adds no list route when there is no build, as in development', async () => {
+    await stop();
+    await start(null);
+
+    const res = await fetch(`${baseUrl}/list/abcdefghjk`);
+
+    expect(res.headers.get('x-robots-tag')).toBeNull();
+    await stop();
+    await start(TEMPLATE);
+  });
+});
+
 describe('createApp proxy trust', () => {
   interface Running {
     readonly server: Server;
