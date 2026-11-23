@@ -6,23 +6,29 @@ On Railway, open the service's logs and search for the message text (the `msg` f
 
 ## The log lines
 
-| Message                         | Fields                                 | Written when                                                                                                                                                                                                                                               | Phase |
-| ------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| `album page served`             | `slug`, `found`, `crawler`             | The server renders an album page. `crawler` is true for link-preview fetchers (WhatsApp, Slack, Bluesky and the like) and other bots.                                                                                                                      | 2     |
-| `pick requested after arriving` | `entry`                                | A pick is asked for as the first pick of a visit that began on a shared album link.                                                                                                                                                                        | 2     |
-| `pick requested`                | `pickNumber`, `ratedThisVisit`         | Every pick asked for, whether or not it succeeds.                                                                                                                                                                                                          | 3     |
-| `pick replayed for a retry`     | none                                   | A pick was asked for again with the same key (the browser retrying after a dropped connection) and answered from the first result, so Claude wasn't called a second time.                                                                                  | 4     |
-| `daily limit reached`           | `scope`                                | A pick, or an artist's essentials (which count as a pick), was turned away because a daily limit was used up. `scope` is `visitor` (that device's own limit) or `global` (the day's total). The request is not a pick: it writes no `pick requested` line. | 4     |
-| `sign-in link requested`        | none                                   | A sign-in link was emailed. The address is never logged.                                                                                                                                                                                                   | 4     |
-| `signed in`                     | `newAccount`                           | Someone opened a link and signed in. `newAccount` is true the first time that address has been used.                                                                                                                                                       | 4     |
-| `signed out`                    | none                                   | A signed-in device signed out.                                                                                                                                                                                                                             | 4     |
-| `account deleted`               | none                                   | Someone deleted their account.                                                                                                                                                                                                                             | 4     |
-| `library synced`                | `sent`, `removed`, `returned`          | A signed-in device saved its changes to the crate. Counts of albums and removals it sent, and of albums returned to it. Never what is in the crate.                                                                                                        | 4     |
-| `library full`                  | none                                   | A save was refused because the account already holds the most it may (5,000 albums and removals together). Nothing was saved. If this ever shows up, the cap is worth a look.                                                                              | 4     |
-| `pick requested with taste`     | `avoid`, `liked`, `disliked`           | A pick is asked for by someone who has answered at least one album. These are counts of albums, never which ones.                                                                                                                                          | 3     |
-| `recommendation regenerated`    | `reason`, `attempt`, `artist`, `album` | Claude's pick was thrown away and asked for again. `reason` is `duplicate` (seen before), `rated` (the listener had answered it) or `not_found` (MusicBrainz doesn't have it).                                                                             | 0, 3  |
-| `repeat pick shown`             | `artist`, `album`                      | No fresh pick could be found, so the listener is shown an album they had been shown before, as a last resort.                                                                                                                                              | 3     |
-| `no fresh recommendation`       | `rated`                                | Every attempt was an album the listener had answered, so the request failed.                                                                                                                                                                               | 3     |
+| Message                         | Fields                                      | Written when                                                                                                                                                                                                                                               | Phase |
+| ------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `album page served`             | `slug`, `found`, `crawler`                  | The server renders an album page. `crawler` is true for link-preview fetchers (WhatsApp, Slack, Bluesky and the like) and other bots.                                                                                                                      | 2     |
+| `pick requested after arriving` | `entry`                                     | A pick is asked for as the first pick of a visit that began on a shared link. `entry` is `shared-link` for an album page and `shared-list` for a list page.                                                                                                | 2     |
+| `list created`                  | `kind`, `qualifier`, `albumCount`, `isFull` | Someone saved a new list. `albumCount` is how many albums it has and `isFull` whether it has all of them (a list is only shared once it does).                                                                                                             | 8     |
+| `list edited`                   | `kind`, `qualifier`, `albumCount`, `isFull` | Someone changed the albums, or their order, in a list they had saved.                                                                                                                                                                                      | 8     |
+| `list deleted`                  | none                                        | Someone deleted a list.                                                                                                                                                                                                                                    | 8     |
+| `list shared`                   | `isOwner`                                   | Someone tapped Share on a finished list. `isOwner` is true when it was the list's own owner, false when a visitor passed it on. This counts taps: closing the share sheet without sending still counts.                                                    | 8     |
+| `list page served`              | `found`, `crawler`                          | The server renders a list page, as it does for album pages. `crawler` is true for link-preview fetchers. The list's code is never written.                                                                                                                 | 8     |
+| `list image drawn`              | `covers`, `drawMs`                          | A list's preview picture was drawn, not served from memory. `covers` is how many covers it had, and `drawMs` how long it took, almost all of it fetching covers.                                                                                           | 8     |
+| `pick requested`                | `pickNumber`, `ratedThisVisit`              | Every pick asked for, whether or not it succeeds.                                                                                                                                                                                                          | 3     |
+| `pick replayed for a retry`     | none                                        | A pick was asked for again with the same key (the browser retrying after a dropped connection) and answered from the first result, so Claude wasn't called a second time.                                                                                  | 4     |
+| `daily limit reached`           | `scope`                                     | A pick, or an artist's essentials (which count as a pick), was turned away because a daily limit was used up. `scope` is `visitor` (that device's own limit) or `global` (the day's total). The request is not a pick: it writes no `pick requested` line. | 4     |
+| `sign-in link requested`        | none                                        | A sign-in link was emailed. The address is never logged.                                                                                                                                                                                                   | 4     |
+| `signed in`                     | `newAccount`                                | Someone opened a link and signed in. `newAccount` is true the first time that address has been used.                                                                                                                                                       | 4     |
+| `signed out`                    | none                                        | A signed-in device signed out.                                                                                                                                                                                                                             | 4     |
+| `account deleted`               | none                                        | Someone deleted their account.                                                                                                                                                                                                                             | 4     |
+| `library synced`                | `sent`, `removed`, `returned`               | A signed-in device saved its changes to the crate. Counts of albums and removals it sent, and of albums returned to it. Never what is in the crate.                                                                                                        | 4     |
+| `library full`                  | none                                        | A save was refused because the account already holds the most it may (5,000 albums and removals together). Nothing was saved. If this ever shows up, the cap is worth a look.                                                                              | 4     |
+| `pick requested with taste`     | `avoid`, `liked`, `disliked`                | A pick is asked for by someone who has answered at least one album. These are counts of albums, never which ones.                                                                                                                                          | 3     |
+| `recommendation regenerated`    | `reason`, `attempt`, `artist`, `album`      | Claude's pick was thrown away and asked for again. `reason` is `duplicate` (seen before), `rated` (the listener had answered it) or `not_found` (MusicBrainz doesn't have it).                                                                             | 0, 3  |
+| `repeat pick shown`             | `artist`, `album`                           | No fresh pick could be found, so the listener is shown an album they had been shown before, as a last resort.                                                                                                                                              | 3     |
+| `no fresh recommendation`       | `rated`                                     | Every attempt was an album the listener had answered, so the request failed.                                                                                                                                                                               | 3     |
 
 ### Retries
 
@@ -121,6 +127,41 @@ This one is a check you do, not a number from the logs, because the logs say not
 5. Sign out on the phone. Its crate should leave that device and come back when you sign in again.
 
 The logs can show whether people are doing it. `sign-in link requested` against `signed in` says how many links are opened, `signed in` with `newAccount` true counts new accounts, and `library synced` counts saves and checks (see Accounts above). They can't say whether a crate arrived on a second device.
+
+## Phase 8: do people share a top 3, and do those who open one try Plinth?
+
+> Done when: a shared link shows a card with the three covers and opens a working page for someone who has never visited, and some of those visitors make a pick of their own.
+
+The lines carry how many albums a list has, never which list or whose: a list's code is what lets someone in, so it is not written down.
+
+### Do people share what they make?
+
+```
+list share rate = count of "list shared" where isOwner is true
+                  ÷ count of "list created" where isFull is true
+```
+
+Both over the same period. It is an estimate, in two ways: a list that became full by being edited is in no `list created` line with `isFull` true, and Share taps count every tap, including a second tap on the same list. Read it as "shares per list made", and watch which way it moves rather than the exact figure.
+
+`list shared` with `isOwner` false counts visitors passing a list on, which is the loop working: someone who saw a list liked it enough to send it.
+
+### Do people who open a shared list try a pick?
+
+```
+list link conversion = count of "pick requested after arriving" where entry is "shared-list"
+                       ÷ count of "list page served" where crawler is false (and found is true)
+```
+
+The same caveats as for album links apply (see Phase 2): a reload counts again, a visitor with two tabs counts twice, and a browser that blocks session storage is never counted as having tried a pick.
+
+### Whether the preview card is working
+
+`list page served` with `crawler` true is a link-preview fetcher reading the page. Each should be followed by the picture being asked for: `list image drawn` is written only the first time, since later requests are served from memory, so it will be fewer than the page lines. If previews look wrong in a chat app, `drawMs` shows whether drawing was slow, and the `list image cover failed` warnings show covers that couldn't be fetched (a placeholder is drawn for them).
+
+### What the logs can't tell you
+
+- **Lists made per new visitor.** The roadmap asks for it, but nothing identifies a visitor, so the logs can't say which `list created` lines came from people new to Plinth.
+- **Outbound clicks on list pages.** Clicks on the listening links aren't logged, so this can't be read yet. It is needed to judge affiliate links (P6.1) before building them.
 
 ## What this can't tell you
 
