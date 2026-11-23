@@ -334,6 +334,20 @@ export interface ArtistSuggestionsResponse {
   readonly suggestions: readonly ArtistSuggestion[];
 }
 
+/** An album found by searching MusicBrainz. Its cover is looked up from the artist and title. */
+export interface AlbumSearchResult {
+  /** MusicBrainz release group ID. */
+  readonly releaseGroupId: string;
+  readonly artist: string;
+  readonly album: string;
+  /** Year of first release; null when MusicBrainz has no date. */
+  readonly year: string | null;
+}
+
+export interface AlbumSearchResponse {
+  readonly results: readonly AlbumSearchResult[];
+}
+
 export interface ArtistEssentialsResponse {
   readonly artist: string;
   /** Two or three of the artist's own albums to start with, in the order to listen. */
