@@ -51,7 +51,7 @@ beforeEach(() => {
 });
 
 describe('CrateMenu', () => {
-  describe('the two pages', () => {
+  describe('the pages', () => {
     it('names the crate page and marks My crate as the one you are on', () => {
       renderMenu({ view: 'crate' });
 
@@ -84,6 +84,30 @@ describe('CrateMenu', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'My crate' }));
       expect(onNavigate).toHaveBeenCalledWith('crate');
+    });
+    it('names the top 3 page and marks My top 3 as the one you are on', () => {
+      renderMenu({ view: 'top3' });
+
+      expect(screen.getByRole('heading', { name: 'My top 3' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'My top 3' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    });
+
+    it('goes to My top 3 when it is tapped', async () => {
+      const { onNavigate } = renderMenu({ view: 'crate' });
+
+      await userEvent.click(screen.getByRole('button', { name: 'My top 3' }));
+
+      expect(onNavigate).toHaveBeenCalledWith('top3');
+    });
+
+    it('leaves out the actions on the whole crate where they do not apply', () => {
+      renderMenu({ view: 'top3' });
+
+      expect(screen.queryByRole('group', { name: 'Crate actions' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
     });
   });
 

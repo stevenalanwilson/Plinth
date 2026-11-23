@@ -6,6 +6,8 @@ import { RecommendationCard } from './features/recommendation/RecommendationCard
 import { HistoryGrid } from './features/history/HistoryGrid';
 import { CratePage } from './features/crate/CratePage';
 import { CrateMenu } from './features/crate/CrateMenu';
+import { TopThreePage } from './features/lists/TopThreePage';
+import { albumsInCrate } from './features/lists/topThree';
 import { PageHeader } from './components/PageHeader';
 import { InsightsPage } from './features/stats/InsightsPage';
 import { ArtistEssentialsPanel } from './features/essentials/ArtistEssentialsPanel';
@@ -17,7 +19,7 @@ import { VibeTutorial } from './features/tutorial/VibeTutorial';
 import { SaveCrateNudge } from './features/account/SaveCrateNudge';
 import { useAccountSession } from './features/account/useAccountSession';
 
-type Page = 'home' | 'crate' | 'insights' | 'essentials';
+type Page = 'home' | 'crate' | 'insights' | 'top3' | 'essentials';
 
 export default function App(): React.ReactElement {
   const [page, setPage] = useState<Page>('home');
@@ -68,6 +70,8 @@ export default function App(): React.ReactElement {
   const endDemo = useCallback(() => setIsDemoOver(true), []);
   const isDemoPlaying =
     page === 'home' && recommendation === null && !isLoading && error === null && !isDemoOver;
+  // Offered first when choosing a top 3, from the crate as it is now.
+  const crateAlbums = useMemo(() => albumsInCrate(history), [history]);
   // Offered first when searching Artist Essentials, from the crate as it is now.
   const crateArtists = useMemo(
     () => history.map((entry) => entry.recommendation.artist),
@@ -127,7 +131,7 @@ export default function App(): React.ReactElement {
             <button
               type="button"
               className="nav-tab"
-              data-active={page === 'crate' || page === 'insights'}
+              data-active={page === 'crate' || page === 'insights' || page === 'top3'}
               onClick={() => setPage('crate')}
             >
               Crate
@@ -194,6 +198,17 @@ export default function App(): React.ReactElement {
             onClear={clearHistory}
           />
           <InsightsPage history={history} />
+        </div>
+      ) : page === 'top3' ? (
+        <div className="app-full">
+          <CrateMenu
+            view="top3"
+            onNavigate={setPage}
+            history={history}
+            onImport={importHistory}
+            onClear={clearHistory}
+          />
+          <TopThreePage crateAlbums={crateAlbums} />
         </div>
       ) : page === 'essentials' ? (
         <div className="app-full">
