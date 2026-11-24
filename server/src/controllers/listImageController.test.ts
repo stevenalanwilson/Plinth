@@ -80,6 +80,16 @@ async function start(maxCachedImages?: number): Promise<void> {
       maxCachedImages,
     }),
   );
+  app.get(
+    '/lists/:id/story',
+    createListImageHandler({
+      lists,
+      albums,
+      renderImage: render,
+      fetchCover,
+      shape: 'story',
+    }),
+  );
   server = app.listen(0);
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -296,5 +306,89 @@ describe('list image', () => {
       .mock.calls.find(([, message]) => message === 'list image drawn');
     expect(call).toBeDefined();
     expect(call?.[0]).toEqual({ covers: 3, drawMs: expect.any(Number) });
+  });
+});
+
+describe('list story', () => {
+  async function currentStory(): Promise<Response> {
+    const redirect = await fetch(`${baseUrl}/lists/${LIST_ID}/story`, { redirect: 'manual' });
+    return fetch(`${baseUrl}${redirect.headers.get('location') ?? ''}`);
+  }
+
+  it('sends an address with no hash, or an old one, to the current address of the story', async () => {
+    const res = await fetch(`${baseUrl}/lists/${LIST_ID}/story?v=old`, { redirect: 'manual' });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toMatch(
+      new RegExp(`^/lists/${LIST_ID}/story\\?v=[0-9a-f]{12}$`),
+    );
+  });
+
+  it('serves the picture as a JPEG that may be kept, which other sites may ask for', async () => {
+    const res = await currentStory();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/jpeg');
+    expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(res.headers.get('cross-origin-resource-policy')).toBe('cross-origin');
+    expect(Buffer.from(await res.arrayBuffer()).equals(PICTURE)).toBe(true);
+  });
+
+  it('draws the tall picture, naming each album in order, where the card is drawn without names', async () => {
+    await currentStory();
+    await currentImage();
+
+    const [story, card] = render.mock.calls.map(([content]) => content);
+    expect(story.shape).toBe('story');
+    expect(story.albums).toEqual([
+      { album: 'Nevermind', artist: 'Nirvana' },
+      { album: 'Abbey Road', artist: 'The Beatles' },
+      { album: 'Kind of Blue', artist: 'Miles Davis' },
+    ]);
+    expect(card.shape ?? 'card').toBe('card');
+  });
+
+  it('keeps the story and the card apart, since they look different', async () => {
+    await currentImage();
+    await currentStory();
+    await currentStory();
+
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
+  it('says it was drawn once, and counts every time one is asked for, never saying whose or which', async () => {
+    await currentStory();
+    await currentStory();
+
+    const messages = vi
+      .mocked(logger.info)
+      .mock.calls.map(([fields, message]) => [fields, message]);
+    expect(messages.filter(([, message]) => message === 'list story drawn')).toHaveLength(1);
+    expect(messages.filter(([, message]) => message === 'list story served')).toEqual([
+      [{}, 'list story served'],
+      [{}, 'list story served'],
+    ]);
+  });
+
+  it('answers 502, not the Plinth card, when it cannot be drawn, and does not keep that', async () => {
+    render.mockRejectedValueOnce(new Error('the renderer is broken'));
+    const redirect = await fetch(`${baseUrl}/lists/${LIST_ID}/story`, { redirect: 'manual' });
+    const address = `${baseUrl}${redirect.headers.get('location')}`;
+
+    const failed = await fetch(address, { redirect: 'manual' });
+    const retried = await fetch(address);
+
+    expect(failed.status).toBe(502);
+    expect(failed.headers.get('cache-control')).toBe('no-store');
+    expect(retried.status).toBe(200);
+  });
+
+  it('is a 404, as for the card, for a list that is not there or not finished', async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await storeList({ albumCount: 2 });
+    await start();
+
+    expect((await fetch(`${baseUrl}/lists/${LIST_ID}/story`)).status).toBe(404);
+    expect((await fetch(`${baseUrl}/lists/zzzzzzzzzz/story`)).status).toBe(404);
   });
 });

@@ -6,6 +6,9 @@ import { Resvg } from '@resvg/resvg-js';
 
 export const LIST_IMAGE_WIDTH = 1200;
 export const LIST_IMAGE_HEIGHT = 630;
+/** The size of a Story on Instagram and the like: 9 by 16. */
+export const LIST_STORY_WIDTH = 1080;
+export const LIST_STORY_HEIGHT = 1920;
 export const LIST_IMAGE_CONTENT_TYPE = 'image/jpeg';
 // A photographic cover makes a PNG of 700 KB, and WhatsApp drops previews much above 300 KB. A
 // JPEG at this quality is about a fifth of that and shows no visible difference at card size.
@@ -14,6 +17,15 @@ const JPEG_QUALITY = 85;
 const COVER_SIZE = 340;
 const PADDING = 48;
 const GAP = 32;
+// A Story has the app's own controls over its top and bottom, so nothing important goes there.
+const STORY_PADDING_TOP = 230;
+const STORY_PADDING_BOTTOM = 250;
+const STORY_PADDING_SIDE = 72;
+const STORY_GAP = 36;
+const STORY_TEXT_GAP = 40;
+const SITE_NAME = 'plinth.rocks';
+const MAX_ALBUM_TITLE = 80;
+const MAX_ARTIST_NAME = 50;
 const FONT_FAMILY = 'DM Serif Display';
 // The site's own colours, so a shared card looks like the page it opens.
 const COLORS = {
@@ -23,6 +35,7 @@ const COLORS = {
   border: 'rgba(255, 255, 255, 0.14)',
   text: '#f0ede8',
   accent: '#c8a96e',
+  muted: '#a29d94',
 };
 
 /** An album's cover as it was fetched: the bytes, and the content type they came with. */
@@ -31,10 +44,20 @@ export interface ListImageCover {
   readonly contentType: string;
 }
 
+/**
+ * The card is the picture a shared link shows, wide, with the covers alone. The story is tall,
+ * for posting where a link shows no preview, so it also says what each album is.
+ */
+export type ListImageShape = 'card' | 'story';
+
 export interface ListImageContent {
   readonly title: string;
   /** In order, best first; null where an album has no cover, which gets a placeholder. */
   readonly covers: readonly (ListImageCover | null)[];
+  /** Which picture to draw; the card if not said. */
+  readonly shape?: ListImageShape;
+  /** The albums in the same order as the covers, named on a story. */
+  readonly albums?: readonly { readonly album: string; readonly artist: string }[];
 }
 
 type Style = Record<string, string | number>;
@@ -90,24 +113,24 @@ function isDrawable(cover: ListImageCover | null): cover is ListImageCover {
   return signatures.some((signature) => signature.every((byte, i) => cover.bytes[i] === byte));
 }
 
-function coverTile(cover: ListImageCover | null): Node {
+function coverTile(cover: ListImageCover | null, size: number): Node {
   if (isDrawable(cover)) {
     const source = `data:${cover.contentType};base64,${cover.bytes.toString('base64')}`;
     return {
       type: 'img',
       props: {
         src: source,
-        width: COVER_SIZE,
-        height: COVER_SIZE,
-        style: { width: COVER_SIZE, height: COVER_SIZE, borderRadius: 10, objectFit: 'cover' },
+        width: size,
+        height: size,
+        style: { width: size, height: size, borderRadius: 10, objectFit: 'cover' },
       },
     };
   }
   // A record on a dark sleeve, for an album with no cover: never a wrong picture.
   return box(
     {
-      width: COVER_SIZE,
-      height: COVER_SIZE,
+      width: size,
+      height: size,
       borderRadius: 10,
       background: COLORS.surface,
       border: `1px solid ${COLORS.border}`,
@@ -116,9 +139,9 @@ function coverTile(cover: ListImageCover | null): Node {
     },
     box(
       {
-        width: 220,
-        height: 220,
-        borderRadius: 110,
+        width: size * 0.65,
+        height: size * 0.65,
+        borderRadius: size,
         background: COLORS.deepSurface,
         border: `2px solid ${COLORS.border}`,
         alignItems: 'center',
@@ -129,7 +152,7 @@ function coverTile(cover: ListImageCover | null): Node {
   );
 }
 
-function slot(cover: ListImageCover | null, rank: number): Node {
+function slot(cover: ListImageCover | null, rank: number, size: number): Node {
   const badge = box(
     {
       position: 'absolute',
@@ -149,12 +172,12 @@ function slot(cover: ListImageCover | null, rank: number): Node {
   return box(
     {
       position: 'relative',
-      width: COVER_SIZE,
-      height: COVER_SIZE,
+      width: size,
+      height: size,
       borderRadius: 10,
       boxShadow: '0 12px 30px rgba(0, 0, 0, 0.6)',
     },
-    [coverTile(cover), badge],
+    [coverTile(cover, size), badge],
   );
 }
 
@@ -178,23 +201,86 @@ function layout({ title, covers }: ListImageContent): Node {
       ]),
       box(
         { flex: 1, alignItems: 'center', justifyContent: 'center', gap: GAP },
-        covers.map((cover, index) => slot(cover, index + 1)),
+        covers.map((cover, index) => slot(cover, index + 1, COVER_SIZE)),
       ),
     ],
   );
 }
 
+function shorten(text: string, length: number): string {
+  return text.length <= length ? text : `${text.slice(0, length - 1).trimEnd()}…`;
+}
+
+function storyRow(
+  cover: ListImageCover | null,
+  rank: number,
+  named: { readonly album: string; readonly artist: string } | undefined,
+): Node {
+  const text = named
+    ? [
+        box({ fontSize: 46, lineHeight: 1.15 }, shorten(named.album, MAX_ALBUM_TITLE)),
+        box(
+          { fontSize: 34, lineHeight: 1.2, color: COLORS.muted, marginTop: 10 },
+          shorten(named.artist, MAX_ARTIST_NAME),
+        ),
+      ]
+    : [];
+  return box({ alignItems: 'center', gap: STORY_TEXT_GAP }, [
+    slot(cover, rank, COVER_SIZE),
+    // flex-basis 0 with a minimum width of 0 lets a long title wrap instead of pushing the row wider.
+    box({ flexDirection: 'column', flex: 1, minWidth: 0 }, text),
+  ]);
+}
+
+function storyLayout({ title, covers, albums }: ListImageContent): Node {
+  return box(
+    {
+      width: LIST_STORY_WIDTH,
+      height: LIST_STORY_HEIGHT,
+      flexDirection: 'column',
+      boxSizing: 'border-box',
+      paddingTop: STORY_PADDING_TOP,
+      paddingBottom: STORY_PADDING_BOTTOM,
+      paddingLeft: STORY_PADDING_SIDE,
+      paddingRight: STORY_PADDING_SIDE,
+      background: COLORS.background,
+      color: COLORS.text,
+      fontFamily: FONT_FAMILY,
+    },
+    [
+      box({ flexDirection: 'column', height: 200 }, [
+        box({ fontSize: 52, fontStyle: 'italic', color: COLORS.accent }, 'Plinth'),
+        box({ fontSize: 64, lineHeight: 1.1, marginTop: 14 }, title),
+      ]),
+      box(
+        { flexDirection: 'column', gap: STORY_GAP },
+        covers.map((cover, index) => storyRow(cover, index + 1, albums?.[index])),
+      ),
+      box({ flex: 1, alignItems: 'flex-end', fontSize: 36, color: COLORS.muted }, SITE_NAME),
+    ],
+  );
+}
+
+function dimensionsOf(shape: ListImageShape): { width: number; height: number } {
+  return shape === 'story'
+    ? { width: LIST_STORY_WIDTH, height: LIST_STORY_HEIGHT }
+    : { width: LIST_IMAGE_WIDTH, height: LIST_IMAGE_HEIGHT };
+}
+
 async function draw(content: ListImageContent): Promise<Buffer> {
   const { normal, italic } = loadFonts();
-  const svg = await satori(layout(content) as unknown as Parameters<typeof satori>[0], {
-    width: LIST_IMAGE_WIDTH,
-    height: LIST_IMAGE_HEIGHT,
+  const shape = content.shape ?? 'card';
+  const { width, height } = dimensionsOf(shape);
+  const tree = shape === 'story' ? storyLayout(content) : layout(content);
+  const svg = await satori(tree as unknown as Parameters<typeof satori>[0], {
+    width,
+    height,
     fonts: [
       { name: FONT_FAMILY, data: normal, weight: 400, style: 'normal' },
       { name: FONT_FAMILY, data: italic, weight: 400, style: 'italic' },
     ],
   });
-  const drawn = new Resvg(svg, { fitTo: { mode: 'width', value: LIST_IMAGE_WIDTH } }).render();
+  const drawn = new Resvg(svg, { fitTo: { mode: 'width', value: width } }).render();
   // The background is opaque all over, so there is no transparency for a JPEG to lose.
   const encoded = jpeg.encode(
     { data: drawn.pixels, width: drawn.width, height: drawn.height },

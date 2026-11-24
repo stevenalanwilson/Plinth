@@ -9,6 +9,7 @@ import {
   LIST_IMAGE_CONTENT_TYPE,
   ListImageContent,
   ListImageCover,
+  ListImageShape,
   renderListImage,
 } from '../services/listImageService';
 import { getList } from '../services/listService';
@@ -23,6 +24,11 @@ interface ListImageDependencies {
   readonly fetchCover?: (url: string) => Promise<ImageResult>;
   /** How many pictures are kept to be served again; about 130 KB each. */
   readonly maxCachedImages?: number;
+  /**
+   * Which picture this serves: the card a shared link shows, or the tall story to post where a
+   * link shows no preview. Each handler keeps its own pictures.
+   */
+  readonly shape?: ListImageShape;
 }
 
 const DEFAULT_MAX_CACHED_IMAGES = 40;
@@ -50,6 +56,7 @@ export function createListImageHandler({
   renderImage = renderListImage,
   fetchCover = fetchImageBytes,
   maxCachedImages = DEFAULT_MAX_CACHED_IMAGES,
+  shape = 'card',
 }: ListImageDependencies): (req: Request, res: Response) => Promise<void> {
   // A Map keeps the order things were added in, so the first key is the one used least recently.
   const kept = new Map<string, Buffer>();
@@ -79,10 +86,15 @@ export function createListImageHandler({
   async function draw(title: string, listAlbums: readonly AlbumResponse[]): Promise<Buffer> {
     const started = Date.now();
     const covers = await Promise.all(listAlbums.map(coverOf));
-    const picture = await renderImage({ title, covers });
+    const picture = await renderImage({
+      title,
+      covers,
+      shape,
+      albums: listAlbums.map(({ album, artist }) => ({ album, artist })),
+    });
     logger.info(
       { covers: covers.filter((cover) => cover !== null).length, drawMs: Date.now() - started },
-      'list image drawn',
+      shape === 'story' ? 'list story drawn' : 'list image drawn',
     );
     return picture;
   }
@@ -135,6 +147,9 @@ export function createListImageHandler({
       }
 
       const picture = await pictureFor(hash, list.title, list.albums);
+      // Only the button that saves a story asks for one, so each is a person making a story;
+      // the logs never say whose or which list.
+      if (shape === 'story') logger.info({}, 'list story served');
       res
         .set({
           'Content-Type': LIST_IMAGE_CONTENT_TYPE,
@@ -143,7 +158,13 @@ export function createListImageHandler({
         .send(picture);
     } catch (error) {
       logger.error({ error: describeError(error) }, 'list image failed');
-      res.set('Cache-Control', 'no-store').redirect(302, DEFAULT_CARD);
+      res.set('Cache-Control', 'no-store');
+      // The Plinth card is the wrong shape for a story, and nobody would want to post it.
+      if (shape === 'story') {
+        res.status(502).json({ error: "Couldn't make the picture. Please try again." });
+        return;
+      }
+      res.redirect(302, DEFAULT_CARD);
     }
   };
 }

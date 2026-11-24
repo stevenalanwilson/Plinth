@@ -241,6 +241,11 @@ export function createApiRouter({
   );
   router.post('/library/sync', librarySyncLimiter, createLibrarySyncHandler(library));
   router.get('/lists/:id/image', listImageLimiter, createListImageHandler({ lists, albums }));
+  router.get(
+    '/lists/:id/story',
+    listImageLimiter,
+    createListImageHandler({ lists, albums, shape: 'story' }),
+  );
   router.get('/lists', listReadLimiter, listHandlers.mine);
   router.post('/lists', listWriteLimiter, listHandlers.create);
   router.get('/lists/:id', listReadLimiter, listHandlers.read);

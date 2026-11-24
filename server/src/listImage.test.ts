@@ -125,6 +125,18 @@ describe('list picture through the real API', () => {
     );
   });
 
+  it('has a tall one to post as a Story: a 1080 by 1920 JPEG, reached by following the redirect', async () => {
+    const id = await makeList(IDS);
+
+    const res = await fetch(`${baseUrl}/api/v1/lists/${id}/story`);
+    const { width, height } = jpeg.decode(Buffer.from(await res.arrayBuffer()));
+
+    expect(res.status).toBe(200);
+    expect(res.url).toMatch(new RegExp(`/api/v1/lists/${id}/story\\?v=[0-9a-f]{12}$`));
+    expect(res.headers.get('content-type')).toBe('image/jpeg');
+    expect([width, height]).toEqual([1080, 1920]);
+  });
+
   it('is not there for a list that does not exist', async () => {
     const res = await fetch(`${baseUrl}/api/v1/lists/zzzzzzzzzz/image`);
 
