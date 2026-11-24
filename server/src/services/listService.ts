@@ -1,4 +1,4 @@
-import { ListKind, ListQualifier, ListResponse } from '@shared/types';
+import { ListKind, ListQualifier, ListResponse, listTitle } from '@shared/types';
 import { AlbumRepository } from '../repositories/albumRepository';
 import { ListOwner, ListRepository, StoredList } from '../repositories/listRepository';
 import { newListId } from '../utils/listIds';
@@ -49,11 +49,6 @@ export class InvalidListError extends Error {
     super(message);
     this.name = 'InvalidListError';
   }
-}
-
-/** For example "My top 3 albums of all time". */
-export function listTitle(kind: ListKind, qualifier: ListQualifier, size: number): string {
-  return `My ${kind} ${size} albums of ${qualifier === 'all-time' ? 'all time' : qualifier}`;
 }
 
 function checkAlbums(releaseGroupIds: readonly string[], size: number): void {
