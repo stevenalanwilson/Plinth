@@ -5,6 +5,7 @@ import { ArtworkImage } from '../../components/ArtworkImage';
 import { ListenAndShare } from '../../components/ListenAndShare';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { likeTheseState, openTopThreeState } from './listNavigation';
+import { ShareListButton } from './ShareListButton';
 import { useList } from './useList';
 
 function Header(): React.ReactElement {
@@ -119,7 +120,12 @@ export function ListPage(): React.ReactElement {
         {state.status === 'loading' && <Message>Loading list…</Message>}
         {state.status === 'ready' && (
           <article className="list-page-card">
-            <h1 className="list-page-title">{state.list.title}</h1>
+            <div className="list-page-heading">
+              <h1 className="list-page-title">{state.list.title}</h1>
+              {state.list.albums.length >= state.list.size && (
+                <ShareListButton list={state.list} variant="icon" />
+              )}
+            </div>
             <UnfinishedNotice list={state.list} />
             <ListedAlbums list={state.list} />
           </article>

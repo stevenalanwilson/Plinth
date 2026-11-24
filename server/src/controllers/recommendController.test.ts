@@ -345,6 +345,17 @@ describe('recommend handler: where the visit began', () => {
     );
   });
 
+  it('counts a pick asked for after arriving on a shared list, apart from one after an album', async () => {
+    const { res } = makeRes();
+
+    await handleRecommend(makeReq({ ...body, entry: 'shared-list' }), res);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      { entry: 'shared-list' },
+      'pick requested after arriving',
+    );
+  });
+
   it('counts it even when the pick fails', async () => {
     mockGetRecommendation.mockRejectedValue(new Error('Claude is down'));
     const { res } = makeRes();

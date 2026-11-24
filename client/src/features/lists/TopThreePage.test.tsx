@@ -9,12 +9,14 @@ vi.mock('../../services/apiClient', async (importOriginal) => ({
   createList: vi.fn(),
   replaceList: vi.fn(),
   deleteList: vi.fn(),
+  noteListShared: vi.fn(),
 }));
 
 vi.mock('./useAlbumSearch', () => ({ useAlbumSearch: vi.fn() }));
 
 import {
   ApiError,
+  noteListShared,
   createList,
   deleteList,
   fetchOwnLists,
@@ -29,6 +31,10 @@ const mockCreate = vi.mocked(createList);
 const mockReplace = vi.mocked(replaceList);
 const mockDelete = vi.mocked(deleteList);
 const mockSearch = vi.mocked(useAlbumSearch);
+const mockNoteShared = vi.mocked(noteListShared);
+
+const onSignIn = vi.fn();
+const SIGNED_OUT = { isSignedIn: false, isChecking: false, isSignInAvailable: true, onSignIn };
 
 const BLUE: PickedAlbum = {
   releaseGroupId: 'rg-blue',
@@ -77,8 +83,11 @@ function savedList(...albums: PickedAlbum[]): ListResponse {
 
 let searchState: { options: AlbumOption[]; isSearching: boolean; hasFailed: boolean };
 
-async function openPage(crate: PickedAlbum[] = []): Promise<void> {
-  render(<TopThreePage crateAlbums={crate} />);
+async function openPage(
+  crate: PickedAlbum[] = [],
+  signIn: typeof SIGNED_OUT = SIGNED_OUT,
+): Promise<void> {
+  render(<TopThreePage crateAlbums={crate} signIn={signIn} />);
   await screen.findByRole('list', { name: 'Your top 3' });
 }
 
@@ -89,8 +98,17 @@ function slotTitles(): string[] {
     .map((slot) => slot.querySelector('.top-three-title')?.textContent ?? 'empty');
 }
 
+const writeText = vi.fn();
+
 beforeEach(() => {
   vi.clearAllMocks();
+  writeText.mockResolvedValue(undefined);
+  window.matchMedia = vi
+    .fn()
+    .mockReturnValue({ matches: false }) as unknown as typeof window.matchMedia;
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+  localStorage.clear();
   mockFetchOwn.mockResolvedValue({ lists: [] });
   searchState = { options: [], isSearching: false, hasFailed: false };
   mockSearch.mockImplementation(() => searchState);
@@ -98,7 +116,7 @@ beforeEach(() => {
 
 describe('TopThreePage loading', () => {
   it('says it is loading, then shows three empty slots', async () => {
-    render(<TopThreePage crateAlbums={[]} />);
+    render(<TopThreePage crateAlbums={[]} signIn={SIGNED_OUT} />);
     expect(screen.getByRole('status')).toHaveTextContent('Loading your list');
 
     await screen.findByRole('list', { name: 'Your top 3' });
@@ -118,7 +136,7 @@ describe('TopThreePage loading', () => {
 
   it('says it could not load, and tries again when asked', async () => {
     mockFetchOwn.mockRejectedValueOnce(new Error('network down'));
-    render(<TopThreePage crateAlbums={[]} />);
+    render(<TopThreePage crateAlbums={[]} signIn={SIGNED_OUT} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent("couldn't load your list");
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
@@ -318,5 +336,123 @@ describe('TopThreePage deleting', () => {
 
     await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('abcdefghjk'));
     await waitFor(() => expect(slotTitles()).toEqual(['empty', 'empty', 'empty']));
+  });
+});
+
+describe('TopThreePage sharing', () => {
+  it('offers to share a list that is saved and has all three albums', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [savedList(BLUE, NEVERMIND, THRILLER)] });
+
+    await openPage();
+
+    expect(screen.getByRole('button', { name: 'Share my top 3' })).toBeEnabled();
+  });
+
+  it('copies the link to the list’s page, tells the server, and confirms it', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [savedList(BLUE, NEVERMIND, THRILLER)] });
+    await openPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Share my top 3' }));
+
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/list/abcdefghjk`);
+    expect(mockNoteShared).toHaveBeenCalledWith('abcdefghjk');
+    expect(screen.getByRole('button', { name: 'Link copied' })).toBeInTheDocument();
+  });
+
+  it('links to how the list looks to those it is shared with', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [savedList(BLUE, NEVERMIND, THRILLER)] });
+
+    await openPage();
+
+    expect(screen.getByRole('link', { name: 'View your page' })).toHaveAttribute(
+      'href',
+      '/list/abcdefghjk',
+    );
+  });
+
+  it('has nothing to share before there is a saved list', async () => {
+    await openPage();
+
+    expect(screen.queryByRole('button', { name: 'Share my top 3' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View your page' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer to share a list that is not finished, since it is only shared once full', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [savedList(BLUE, NEVERMIND)] });
+
+    await openPage();
+
+    expect(screen.queryByRole('button', { name: 'Share my top 3' })).not.toBeInTheDocument();
+  });
+
+  it('says to save first when all three are chosen but not saved, as the link would show less', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [savedList(BLUE, NEVERMIND)] });
+    await openPage();
+    searchState.options = [optionFor(THRILLER)];
+    await userEvent.type(screen.getByRole('combobox'), 'thr');
+    await userEvent.click(screen.getByRole('option', { name: /Thriller/ }));
+
+    expect(screen.queryByRole('button', { name: 'Share my top 3' })).not.toBeInTheDocument();
+    expect(screen.getByText('Save your list to share it.')).toBeInTheDocument();
+  });
+
+  it('says to save changes first when a finished list has been changed since it was saved', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [savedList(BLUE, NEVERMIND, THRILLER)] });
+    await openPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Move Nevermind up' }));
+
+    expect(screen.queryByRole('button', { name: 'Share my top 3' })).not.toBeInTheDocument();
+    expect(screen.getByText('Save your list to share it.')).toBeInTheDocument();
+  });
+});
+
+describe('TopThreePage inviting someone to sign in', () => {
+  beforeEach(() => {
+    mockFetchOwn.mockResolvedValue({ lists: [savedList(BLUE, NEVERMIND, THRILLER)] });
+  });
+
+  it('does not invite before they have shared', async () => {
+    await openPage();
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('invites them once they have shared, and sharing has already happened', async () => {
+    await openPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Share my top 3' }));
+
+    expect(writeText).toHaveBeenCalled();
+    expect(screen.getByRole('note')).toHaveTextContent('Your top 3 is shared');
+  });
+
+  it('opens the way to signing in', async () => {
+    await openPage();
+    await userEvent.click(screen.getByRole('button', { name: 'Share my top 3' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(onSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('still shares when they say Not now, and does not ask again', async () => {
+    await openPage();
+    await userEvent.click(screen.getByRole('button', { name: 'Share my top 3' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Not now' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Link copied' }));
+
+    expect(writeText).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('does not invite someone who is signed in', async () => {
+    await openPage([], { ...SIGNED_OUT, isSignedIn: true });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Share my top 3' }));
+
+    expect(writeText).toHaveBeenCalled();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 });

@@ -2049,12 +2049,19 @@ body::before {
 
 .list-page-card { animation: fadeUp 0.4s ease both; }
 
+.list-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
 .list-page-title {
   font-family: var(--serif);
   font-size: 28px;
   font-weight: 400;
   line-height: 1.15;
-  margin-bottom: 20px;
 }
 
 .list-page-notice {
@@ -2140,4 +2147,14 @@ body::before {
   .list-page-cover { width: 96px; height: 96px; }
   .list-page-album-title { font-size: 20px; }
   .list-page-info .album-page-year { margin-bottom: 10px; }
+}
+
+/* The labelled Share button beside Save in the builder. */
+.share-list-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 12px;
+  white-space: nowrap;
 }

@@ -31,12 +31,13 @@ export function PrivacyPage(): React.ReactElement {
       <h2>On the server</h2>
       <ul>
         <li>
-          <strong>Albums that have been picked:</strong> the artist, title and year, so a shared
-          link keeps working. They aren&apos;t tied to anyone.
+          <strong>Albums that have been picked or added to a list:</strong> the artist, title and
+          year, so a shared link keeps working. They aren&apos;t tied to anyone.
         </li>
         <li>
           <strong>Your device:</strong> the random code is kept only in a scrambled form, with when
-          it was first and last used. A device not used for a year is forgotten.
+          it was first and last used. A device not used for a year is forgotten, along with its
+          lists.
         </li>
         <li>
           <strong>How many picks you&apos;ve had today:</strong> counted against your device, or
@@ -68,6 +69,28 @@ export function PrivacyPage(): React.ReactElement {
         account. Sign in again to bring it back.
       </p>
 
+      <h2>If you make a top 3</h2>
+      <p>
+        A top 3 is a list of albums you choose, in order. When you save one, Plinth keeps the albums
+        in it, their order, when you made it and last changed it, and who it belongs to: your
+        device, or your account once you sign in, when it moves across. It has an address made from
+        a short random code.
+      </p>
+      <p>
+        <strong>Anyone who has the link can see it</strong>: the albums, their covers and their
+        order. It isn&apos;t listed anywhere on Plinth and search engines are asked to leave it out,
+        but the link is all that keeps it private, so send it only to people you would show it to.
+        When you share it, apps that build link previews (WhatsApp, Slack, Bluesky and the like)
+        fetch the page and a picture of the three covers, which Plinth draws for them. They may keep
+        their own copy. A list that isn&apos;t finished, with fewer than three albums, can only be
+        seen by you.
+      </p>
+      <p>
+        <strong>You can delete it from My top 3</strong> whenever you like, which removes the page
+        and its picture, so the link shows nothing. Deleting your account deletes it too, and a
+        device not used for a year is forgotten along with its list.
+      </p>
+
       <h2>When you ask for a pick</h2>
       <p>
         What you ask for, including any text you type and the names of albums you&apos;ve answered,
@@ -79,8 +102,9 @@ export function PrivacyPage(): React.ReactElement {
       <p>
         Like most servers, Plinth&apos;s and its host&apos;s logs record the address and browser
         type of each request, to keep the service running and safe. Plinth&apos;s own logs also
-        count things, such as how many picks were asked for. They never contain your email address,
-        your device code, or your crate.
+        count things, such as how many picks were asked for and how many lists were made, changed
+        and shared. They never contain your email address, your device code, your crate, or which
+        list was made, changed or viewed.
       </p>
     </main>
   );

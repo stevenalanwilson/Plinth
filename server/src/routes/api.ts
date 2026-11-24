@@ -191,6 +191,15 @@ const listWriteLimiter = rateLimit({
   message: { error: 'Too many requests, please try again in a minute.' },
 });
 
+// Telling the server a list was shared is one tap on Share, so this only stops hammering.
+const listShareLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' },
+});
+
 // Drawing a list's picture takes a few hundred milliseconds of processor time and fetches its
 // covers, and a shared link brings every platform that previews it. After the first drawing each
 // picture is kept, so this only stops someone asking for many different ones.
@@ -235,6 +244,7 @@ export function createApiRouter({
   router.get('/lists', listReadLimiter, listHandlers.mine);
   router.post('/lists', listWriteLimiter, listHandlers.create);
   router.get('/lists/:id', listReadLimiter, listHandlers.read);
+  router.post('/lists/:id/shared', listShareLimiter, listHandlers.shared);
   router.put('/lists/:id', listWriteLimiter, listHandlers.replace);
   router.delete('/lists/:id', listWriteLimiter, listHandlers.remove);
   router.post('/recommend', recommendLimiter, createRecommendHandler(albums, dailyLimit));

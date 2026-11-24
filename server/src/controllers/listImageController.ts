@@ -111,6 +111,10 @@ export function createListImageHandler({
   }
 
   return async (req, res) => {
+    // On every answer, redirects included: a browser checks each one, so a redirect that said
+    // otherwise would stop it before it reached the picture. Link previews are built from this
+    // address by other sites, and a client served from another address asks for it too.
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     const id = listIdSchema.safeParse(req.params.id);
     if (!id.success) {
       res.status(404).json({ error: 'List not found' });
@@ -135,8 +139,6 @@ export function createListImageHandler({
         .set({
           'Content-Type': LIST_IMAGE_CONTENT_TYPE,
           'Cache-Control': KEEP_FOR_A_YEAR,
-          // Link previews are built from this address by other sites.
-          'Cross-Origin-Resource-Policy': 'cross-origin',
         })
         .send(picture);
     } catch (error) {

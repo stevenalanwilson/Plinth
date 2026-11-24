@@ -297,3 +297,66 @@ describe('useTopThree deleting', () => {
     expect(result.current.albums).toEqual([]);
   });
 });
+
+describe('useTopThree sharing', () => {
+  it('has nothing to share before a list is saved', async () => {
+    const { result } = await loaded();
+    act(() => result.current.add(A));
+    act(() => result.current.add(B));
+    act(() => result.current.add(C));
+
+    expect(result.current.shareable).toBeNull();
+  });
+
+  it('can share a saved list that has all three albums', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [saved('a', 'b', 'c')] });
+
+    const { result } = await loaded();
+
+    expect(result.current.shareable).toEqual({
+      id: 'abcdefghjk',
+      title: 'My top 3 albums of all time',
+      albums: [pick('a'), pick('b'), pick('c')],
+    });
+  });
+
+  it('cannot share a list that is not finished, since it is only shared once it has three', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [saved('a', 'b')] });
+
+    const { result } = await loaded();
+
+    expect(result.current.shareable).toBeNull();
+  });
+
+  it('cannot share while there are changes not saved, which the link would not show', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [saved('a', 'b', 'c')] });
+    const { result } = await loaded();
+
+    act(() => result.current.move(0, 1));
+
+    expect(result.current.shareable).toBeNull();
+  });
+
+  it('can be shared as soon as a finished list is saved', async () => {
+    mockCreate.mockResolvedValue(saved('a', 'b', 'c'));
+    const { result } = await loaded();
+    act(() => result.current.add(A));
+    act(() => result.current.add(B));
+    act(() => result.current.add(C));
+    expect(result.current.shareable).toBeNull();
+
+    await act(() => result.current.save());
+
+    expect(result.current.shareable?.id).toBe('abcdefghjk');
+  });
+
+  it('cannot be shared once the list is deleted', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [saved('a', 'b', 'c')] });
+    mockDelete.mockResolvedValue(undefined);
+    const { result } = await loaded();
+
+    await act(() => result.current.discard());
+
+    expect(result.current.shareable).toBeNull();
+  });
+});

@@ -1,3 +1,5 @@
+import { joinNames } from './listText';
+
 /** The server's limit on a vibe, in characters. */
 export const MAX_VIBE_LENGTH = 300;
 
@@ -25,12 +27,6 @@ function isNamedAlbum(value: unknown): value is NamedAlbum {
   if (typeof value !== 'object' || value === null) return false;
   const { artist, album } = value as Record<string, unknown>;
   return typeof artist === 'string' && !!artist && typeof album === 'string' && !!album;
-}
-
-/** "A", "A and B", "A, B and C". */
-function joinNames(names: readonly string[]): string {
-  if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
 function shorten(text: string, length: number): string {

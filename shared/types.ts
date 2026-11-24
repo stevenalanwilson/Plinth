@@ -207,7 +207,7 @@ export const DAILY_LIMIT_CODE = 'daily-limit';
 /** Sent with a pick so the server can tell a retry from a new request. */
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
 
-export const VISIT_ENTRIES = ['shared-link'] as const;
+export const VISIT_ENTRIES = ['shared-link', 'shared-list'] as const;
 export type VisitEntry = (typeof VISIT_ENTRIES)[number];
 
 export interface RecommendationResponse {

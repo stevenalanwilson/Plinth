@@ -361,6 +361,24 @@ export async function fetchList(id: string, signal?: AbortSignal): Promise<ListR
   return res.json() as Promise<ListResponse>;
 }
 
+/**
+ * Called when someone taps Share on a list. It tells the server, which counts shares in its logs,
+ * and asks for the list's picture, so that it is drawn and kept before a platform asks for it:
+ * the first drawing takes seconds, and a link preview won't wait that long. Neither is waited
+ * for and neither can fail, since neither may get in the way of sharing.
+ */
+export function noteListShared(id: string): void {
+  const base = `${API_BASE}${API_V1}/lists/${encodeURIComponent(id)}`;
+  const token = getStoredToken();
+  fetch(`${base}/shared`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    // Still sent if the page is left, as it is when the share sheet opens another app.
+    keepalive: true,
+  }).catch(() => undefined);
+  fetch(`${base}/image`, { mode: 'no-cors' }).catch(() => undefined);
+}
+
 export interface NewListRequest {
   readonly kind: ListKind;
   readonly qualifier: ListQualifier;
