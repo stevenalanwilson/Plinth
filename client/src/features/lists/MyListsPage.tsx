@@ -30,7 +30,7 @@ export function MyListsPage({ onOpen }: MyListsPageProps): React.ReactElement {
 
   if (status === 'loading') {
     return (
-      <section className="my-lists" aria-label="My lists">
+      <section className="my-lists" aria-label="Your lists">
         <p role="status" className="top-three-note">
           Loading your lists…
         </p>
@@ -40,7 +40,7 @@ export function MyListsPage({ onOpen }: MyListsPageProps): React.ReactElement {
 
   if (status === 'failed') {
     return (
-      <section className="my-lists" aria-label="My lists">
+      <section className="my-lists" aria-label="Your lists">
         <p role="alert" className="top-three-note">
           We couldn&apos;t load your lists.
         </p>
@@ -62,7 +62,7 @@ export function MyListsPage({ onOpen }: MyListsPageProps): React.ReactElement {
   ];
 
   return (
-    <section className="my-lists" aria-label="My lists">
+    <section className="my-lists" aria-label="Your lists">
       <p className="top-three-intro">
         Your three best albums, of all time and in any genre you like. Each list has a link of its
         own to share.

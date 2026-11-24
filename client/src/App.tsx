@@ -159,12 +159,18 @@ export default function App(): React.ReactElement {
             <button
               type="button"
               className="nav-tab"
-              data-active={
-                page === 'crate' || page === 'insights' || page === 'lists' || page === 'builder'
-              }
+              data-active={page === 'crate' || page === 'insights'}
               onClick={() => setPage('crate')}
             >
-              Crate
+              Your Crate
+            </button>
+            <button
+              type="button"
+              className="nav-tab"
+              data-active={page === 'lists' || page === 'builder'}
+              onClick={() => setPage('lists')}
+            >
+              Your lists
             </button>
             <button
               type="button"
@@ -227,13 +233,7 @@ export default function App(): React.ReactElement {
         </div>
       ) : page === 'lists' || page === 'builder' ? (
         <div className="app-full">
-          <CrateMenu
-            view="lists"
-            onNavigate={setPage}
-            history={history}
-            onImport={importHistory}
-            onClear={clearHistory}
-          />
+          <PageHeader title="Your lists" />
           {page === 'lists' ? (
             <MyListsPage onOpen={openBuilder} />
           ) : (

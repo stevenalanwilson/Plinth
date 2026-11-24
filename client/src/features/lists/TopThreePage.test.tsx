@@ -140,7 +140,7 @@ describe('TopThreePage loading', () => {
   it('goes back to the lists when asked', async () => {
     await openPage();
 
-    await userEvent.click(screen.getByRole('button', { name: '← My lists' }));
+    await userEvent.click(screen.getByRole('button', { name: '← Your lists' }));
 
     expect(onBack).toHaveBeenCalledTimes(1);
   });

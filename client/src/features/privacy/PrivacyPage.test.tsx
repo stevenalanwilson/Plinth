@@ -76,7 +76,7 @@ describe('PrivacyPage', () => {
     it('says how to delete one, and what else removes it', () => {
       renderPage();
 
-      expect(screen.getByText(/You can delete it from My lists/)).toBeInTheDocument();
+      expect(screen.getByText(/You can delete it from Your lists/)).toBeInTheDocument();
       expect(screen.getByText(/Deleting your account deletes it too/)).toBeInTheDocument();
       expect(
         screen.getByText(/not used for a year is forgotten along with its list/),

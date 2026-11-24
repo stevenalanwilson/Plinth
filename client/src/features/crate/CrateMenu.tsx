@@ -5,7 +5,7 @@ import { ConfirmButton } from '../../components/ConfirmButton';
 import { PageHeader } from '../../components/PageHeader';
 
 /** The pages under Crate in the main menu. */
-export type CrateView = 'crate' | 'insights' | 'lists';
+export type CrateView = 'crate' | 'insights';
 
 interface CrateMenuProps {
   readonly view: CrateView;
@@ -22,7 +22,6 @@ const VIEWS: readonly {
 }[] = [
   { view: 'crate', label: 'My crate', title: 'Your Crate' },
   { view: 'insights', label: 'Insights', title: 'Insights' },
-  { view: 'lists', label: 'My lists', title: 'My lists' },
 ];
 
 /**
@@ -72,32 +71,30 @@ export function CrateMenu({
               </button>
             ))}
           </nav>
-          {view !== 'lists' && (
-            <div className="crate-tools" role="group" aria-label="Crate actions">
-              <button
-                type="button"
-                className="crate-action"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Import
-              </button>
-              <button
-                type="button"
-                className="crate-action"
-                disabled={isEmpty}
-                onClick={() => downloadLibrary(history)}
-              >
-                Export
-              </button>
-              <ConfirmButton
-                label="Clear crate"
-                confirmLabel="Tap again to clear it all"
-                className="crate-action crate-action-danger"
-                disabled={isEmpty}
-                onConfirm={onClear}
-              />
-            </div>
-          )}
+          <div className="crate-tools" role="group" aria-label="Crate actions">
+            <button
+              type="button"
+              className="crate-action"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Import
+            </button>
+            <button
+              type="button"
+              className="crate-action"
+              disabled={isEmpty}
+              onClick={() => downloadLibrary(history)}
+            >
+              Export
+            </button>
+            <ConfirmButton
+              label="Clear crate"
+              confirmLabel="Tap again to clear it all"
+              className="crate-action crate-action-danger"
+              disabled={isEmpty}
+              onConfirm={onClear}
+            />
+          </div>
         </div>
         <input
           ref={fileInputRef}
