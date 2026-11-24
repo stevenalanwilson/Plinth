@@ -30,7 +30,7 @@ interface PendingFocus {
 function BackToLists({ onBack }: { readonly onBack: () => void }): React.ReactElement {
   return (
     <button type="button" className="crate-action top-three-back" onClick={onBack}>
-      ← My lists
+      ← Your lists
     </button>
   );
 }

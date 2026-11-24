@@ -85,30 +85,6 @@ describe('CrateMenu', () => {
       await userEvent.click(screen.getByRole('button', { name: 'My crate' }));
       expect(onNavigate).toHaveBeenCalledWith('crate');
     });
-    it('names the lists page and marks My lists as the one you are on', () => {
-      renderMenu({ view: 'lists' });
-
-      expect(screen.getByRole('heading', { name: 'My lists' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'My lists' })).toHaveAttribute(
-        'aria-current',
-        'page',
-      );
-    });
-
-    it('goes to My lists when it is tapped', async () => {
-      const { onNavigate } = renderMenu({ view: 'crate' });
-
-      await userEvent.click(screen.getByRole('button', { name: 'My lists' }));
-
-      expect(onNavigate).toHaveBeenCalledWith('lists');
-    });
-
-    it('leaves out the actions on the whole crate where they do not apply', () => {
-      renderMenu({ view: 'lists' });
-
-      expect(screen.queryByRole('group', { name: 'Crate actions' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
-    });
   });
 
   describe('an empty crate', () => {

@@ -92,7 +92,7 @@ export function PrivacyPage(): React.ReactElement {
         asked for it.
       </p>
       <p>
-        <strong>You can delete it from My lists</strong> whenever you like, which removes the page
+        <strong>You can delete it from Your lists</strong> whenever you like, which removes the page
         and its picture, so the link shows nothing. Deleting your account deletes it too, and a
         device not used for a year is forgotten along with its list.
       </p>
