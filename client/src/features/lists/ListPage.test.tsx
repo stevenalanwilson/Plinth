@@ -8,12 +8,15 @@ import { AlbumResponse, ListResponse } from '@shared/types';
 vi.mock('../../services/apiClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/apiClient')>()),
   fetchList: vi.fn(),
+  noteListShared: vi.fn(),
 }));
 
-import { ApiError, fetchList } from '../../services/apiClient';
+import { ApiError, fetchList, noteListShared } from '../../services/apiClient';
 import { ListPage } from './ListPage';
 
 const mockFetchList = vi.mocked(fetchList);
+const mockNoteShared = vi.mocked(noteListShared);
+const writeText = vi.fn();
 
 function album(
   title: string,
@@ -75,6 +78,12 @@ async function shown(): Promise<void> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  writeText.mockResolvedValue(undefined);
+  window.matchMedia = vi
+    .fn()
+    .mockReturnValue({ matches: false }) as unknown as typeof window.matchMedia;
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
   document.title = 'Plinth';
   mockFetchList.mockResolvedValue(list());
 });
@@ -150,7 +159,8 @@ describe('ListPage', () => {
 
     const group = screen.getByRole('group', { name: 'Listen to Abbey Road' });
     expect(within(group).getAllByRole('link')).toHaveLength(3);
-    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    // Sharing is for the list as a whole, not each album.
+    expect(within(group).queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
   });
 });
 
@@ -235,7 +245,7 @@ describe('ListPage for the owner', () => {
     renderPage();
     await shown();
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText(/isn't finished/)).not.toBeInTheDocument();
   });
 });
 
@@ -264,5 +274,44 @@ describe('ListPage when it cannot show the list', () => {
     await shown();
 
     expect(screen.getByRole('link', { name: 'Plinth' })).toHaveAttribute('href', '/');
+  });
+});
+
+describe('ListPage sharing', () => {
+  it('lets anyone pass a finished list on, copying the link to this page', async () => {
+    renderPage();
+    await shown();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Share' }));
+
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/list/abcdefghjk`);
+    expect(mockNoteShared).toHaveBeenCalledWith('abcdefghjk');
+  });
+
+  it('lets the owner share it too, with no invitation to sign in on this page', async () => {
+    mockFetchList.mockResolvedValue(list({ isOwner: true }));
+    renderPage();
+    await shown();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Share' }));
+
+    expect(writeText).toHaveBeenCalled();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('does not offer to share a list that is not finished', async () => {
+    mockFetchList.mockResolvedValue(list({ isOwner: true, albums: [NEVERMIND, ABBEY] }));
+    renderPage();
+    await shown();
+
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+  });
+
+  it('has no share button where there is no list', async () => {
+    mockFetchList.mockRejectedValue(new ApiError('List not found', 404));
+    renderPage();
+    await screen.findByText("We couldn't find that list.");
+
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
   });
 });

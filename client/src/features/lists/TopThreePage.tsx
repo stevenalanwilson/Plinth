@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { SearchCombobox } from '../../components/SearchCombobox';
+import { ShareListButton } from './ShareListButton';
+import { ShareListInvite, SignInOffer } from './ShareListInvite';
 import { PickedAlbum, TOP_THREE_SIZE } from './topThree';
 import { TopThreeSlot } from './TopThreeSlot';
 import { useAlbumSearch } from './useAlbumSearch';
@@ -9,6 +11,8 @@ import { useTopThree } from './useTopThree';
 interface TopThreePageProps {
   /** Albums in the person's crate, offered first when searching. */
   readonly crateAlbums: readonly PickedAlbum[];
+  /** Whether and how to invite someone to sign in once they have shared their list. */
+  readonly signIn: SignInOffer;
 }
 
 /** A button the focus should return to after an album moves, so a keyboard can keep going. */
@@ -23,10 +27,11 @@ const SLOTS = Array.from({ length: TOP_THREE_SIZE }, (_unused, index) => index);
  * Where someone picks their three best albums of all time, in order. Albums come from searching
  * (the crate first) and can be moved or removed; nothing is saved until the person says so.
  */
-export function TopThreePage({ crateAlbums }: TopThreePageProps): React.ReactElement {
+export function TopThreePage({ crateAlbums, signIn }: TopThreePageProps): React.ReactElement {
   const topThree = useTopThree();
   const { albums, isFull, status } = topThree;
   const [query, setQuery] = useState('');
+  const [hasShared, setHasShared] = useState(false);
   const search = useAlbumSearch({
     query,
     crateAlbums,
@@ -168,6 +173,22 @@ export function TopThreePage({ crateAlbums }: TopThreePageProps): React.ReactEle
             Saved.
           </p>
         )}
+        {topThree.shareable && (
+          <>
+            <ShareListButton
+              list={topThree.shareable}
+              variant="text"
+              label="Share my top 3"
+              onShare={() => setHasShared(true)}
+            />
+            <a href={`/list/${encodeURIComponent(topThree.shareable.id)}`} className="crate-action">
+              View your page
+            </a>
+          </>
+        )}
+        {isFull && !topThree.shareable && (
+          <p className="top-three-count">Save your list to share it.</p>
+        )}
         {topThree.hasSavedList && (
           <ConfirmButton
             label="Delete my top 3"
@@ -177,6 +198,8 @@ export function TopThreePage({ crateAlbums }: TopThreePageProps): React.ReactEle
           />
         )}
       </div>
+
+      <ShareListInvite hasShared={hasShared} {...signIn} />
 
       {topThree.saveError && (
         <p role="alert" className="top-three-note" data-tone="error">

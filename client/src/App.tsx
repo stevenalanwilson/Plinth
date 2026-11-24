@@ -64,6 +64,11 @@ export default function App(): React.ReactElement {
   useMoreLikeThisFromNavigation(
     useCallback((pivot: PivotHint) => void fetchRecommendation(pivot), [fetchRecommendation]),
   );
+  const openSignIn = useCallback((): void => {
+    // The menu is in the header, which may be out of sight on a long page.
+    window.scrollTo({ top: 0 });
+    setIsAccountMenuOpen(true);
+  }, []);
   // A list page's "Find me something like these" starts a pick from the list's albums at once.
   useStartFromNavigation(
     vibeFromState,
@@ -180,11 +185,7 @@ export default function App(): React.ReactElement {
             isSignedIn={account !== null}
             isChecking={isChecking}
             isSignInAvailable={isSignInAvailable}
-            onSignIn={() => {
-              // The menu is in the header, which may be out of sight on a long crate.
-              window.scrollTo({ top: 0 });
-              setIsAccountMenuOpen(true);
-            }}
+            onSignIn={openSignIn}
           />
           <CrateMenu
             view="crate"
@@ -223,7 +224,15 @@ export default function App(): React.ReactElement {
             onImport={importHistory}
             onClear={clearHistory}
           />
-          <TopThreePage crateAlbums={crateAlbums} />
+          <TopThreePage
+            crateAlbums={crateAlbums}
+            signIn={{
+              isSignedIn: account !== null,
+              isChecking,
+              isSignInAvailable,
+              onSignIn: openSignIn,
+            }}
+          />
         </div>
       ) : page === 'essentials' ? (
         <div className="app-full">

@@ -8,7 +8,7 @@ interface ShareButtonProps {
   readonly hook: string | null;
 }
 
-function ShareIcon(): React.ReactElement {
+export function ShareIcon(): React.ReactElement {
   return (
     <svg
       width={16}

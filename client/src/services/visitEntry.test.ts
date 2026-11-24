@@ -12,6 +12,34 @@ describe('visit entry', () => {
     expect(takeSharedLinkEntry()).toBe('shared-link');
   });
 
+  it('sends shared-list, apart from shared-link, for a visit that began on a list page', () => {
+    recordVisitEntry('/list/abcdefghjk');
+
+    expect(takeSharedLinkEntry()).toBe('shared-list');
+  });
+
+  it('sends a list visit only once too, and not as an album visit afterwards', () => {
+    recordVisitEntry('/list/abcdefghjk');
+    takeSharedLinkEntry();
+
+    expect(takeSharedLinkEntry()).toBeUndefined();
+  });
+
+  it('accepts a trailing slash on the list page', () => {
+    recordVisitEntry('/list/abcdefghjk/');
+
+    expect(takeSharedLinkEntry()).toBe('shared-list');
+  });
+
+  it.each(['/list', '/list/', '/list/a/b', '/lists/abcdefghjk'])(
+    'sends nothing for a visit that began on %s, which is not a list page',
+    (pathname) => {
+      recordVisitEntry(pathname);
+
+      expect(takeSharedLinkEntry()).toBeUndefined();
+    },
+  );
+
   it('sends it only once per visit', () => {
     recordVisitEntry('/album/the-sound-jeopardy');
     takeSharedLinkEntry();

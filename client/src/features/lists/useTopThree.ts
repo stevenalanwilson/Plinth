@@ -18,6 +18,14 @@ export type SaveState = 'idle' | 'saving' | 'saved' | 'failed';
 
 interface SavedList {
   readonly id: string;
+  readonly title: string;
+  readonly albums: readonly PickedAlbum[];
+}
+
+/** A saved list as far as sharing it is concerned. */
+export interface ShareableList {
+  readonly id: string;
+  readonly title: string;
   readonly albums: readonly PickedAlbum[];
 }
 
@@ -29,6 +37,12 @@ export interface TopThree {
   /** True when the albums, or their order, differ from what is saved. */
   readonly isDirty: boolean;
   readonly hasSavedList: boolean;
+  /**
+   * The list as it is saved, when it can be shared: it has all its albums, since a list is only
+   * shared once it is full, and nothing has been changed since, since the link shows what is
+   * saved. Null otherwise.
+   */
+  readonly shareable: ShareableList | null;
   readonly saveState: SaveState;
   /** Why the last save or delete failed. */
   readonly saveError: string | null;
@@ -44,7 +58,7 @@ export interface TopThree {
 }
 
 function toSaved(list: ListResponse): SavedList {
-  return { id: list.id, albums: fromListAlbums(list.albums) };
+  return { id: list.id, title: list.title, albums: fromListAlbums(list.albums) };
 }
 
 /**
@@ -84,6 +98,10 @@ export function useTopThree(): TopThree {
   }, []);
 
   const isDirty = hasChanged(saved?.albums ?? [], albums);
+  const shareable =
+    saved && saved.albums.length >= TOP_THREE_SIZE && !isDirty
+      ? { id: saved.id, title: saved.title, albums: saved.albums }
+      : null;
 
   const save = useCallback(async (): Promise<void> => {
     if (saveState === 'saving') return;
@@ -127,6 +145,7 @@ export function useTopThree(): TopThree {
     isFull: albums.length >= TOP_THREE_SIZE,
     isDirty,
     hasSavedList: saved !== null,
+    shareable,
     saveState,
     saveError,
     add: (album) => edit((current) => addAlbum(current, album)),

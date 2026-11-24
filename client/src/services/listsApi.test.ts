@@ -5,6 +5,7 @@ import {
   deleteList,
   fetchList,
   fetchOwnLists,
+  noteListShared,
   replaceList,
   searchAlbums,
 } from './apiClient';
@@ -233,5 +234,62 @@ describe('fetchList', () => {
     controller.abort();
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('noteListShared', () => {
+  it('tells the server the list was shared, as this device so it can say whose it was', () => {
+    noteListShared('abcdefghjk');
+
+    const call = fetchMock.mock.calls.findIndex(([url]) =>
+      String(url).endsWith('/lists/abcdefghjk/shared'),
+    );
+    expect(call).toBeGreaterThanOrEqual(0);
+    expect(init(call).method).toBe('POST');
+    expect(headers(call).Authorization).toBe('Bearer pld_existing');
+  });
+
+  it('asks for the list’s picture, so it is drawn and kept before a platform asks', () => {
+    noteListShared('abcdefghjk');
+
+    const call = fetchMock.mock.calls.findIndex(([url]) =>
+      String(url).endsWith('/lists/abcdefghjk/image'),
+    );
+    expect(call).toBeGreaterThanOrEqual(0);
+    // Only the drawing matters, not the picture, which can't be read across sites anyway.
+    expect(init(call).mode).toBe('no-cors');
+  });
+
+  it('does not get a token for a browser that has none', () => {
+    localStorage.clear();
+
+    noteListShared('abcdefghjk');
+
+    for (let call = 0; call < fetchMock.mock.calls.length; call += 1) {
+      expect(headers(call)).not.toHaveProperty('Authorization');
+    }
+    expect(localStorage.getItem('plinth-device-token')).toBeNull();
+  });
+
+  it('does not wait for either, so sharing is never held up', () => {
+    fetchMock.mockReturnValue(new Promise(() => undefined));
+
+    expect(noteListShared('abcdefghjk')).toBeUndefined();
+  });
+
+  it('never fails, however the requests do, so sharing is never broken', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    expect(() => noteListShared('abcdefghjk')).not.toThrow();
+    // Let the rejections settle: an unhandled one would fail the test run.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it('encodes the code', () => {
+    noteListShared('a/b');
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/lists/a%2Fb/shared'))).toBe(
+      true,
+    );
   });
 });
