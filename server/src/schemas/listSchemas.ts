@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIST_QUALIFIERS } from '@shared/types';
 import { isListId } from '../utils/listIds';
 
 // Zod schemas for the lists endpoints. Shapes only: how many albums a list may hold depends on
@@ -16,7 +17,7 @@ export const listIdSchema = z.string().refine(isListId);
 
 export const createListSchema = z.object({
   kind: z.enum(['top']),
-  qualifier: z.enum(['all-time']),
+  qualifier: z.enum(LIST_QUALIFIERS),
   releaseGroupIds: releaseGroupIdsSchema,
 });
 

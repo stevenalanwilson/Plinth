@@ -182,7 +182,7 @@ describe('noting that a list was shared', () => {
     const res = await send('POST', `/lists/${id}/shared`, token);
 
     expect(res.status).toBe(204);
-    expect(logged('list shared')).toEqual([{ isOwner: true }]);
+    expect(logged('list shared')).toEqual([{ isOwner: true, qualifier: 'all-time' }]);
   });
 
   it('logs it as not the owner’s when a visitor passes a list on', async () => {
@@ -191,7 +191,7 @@ describe('noting that a list was shared', () => {
     const res = await send('POST', `/lists/${id}/shared`, null);
 
     expect(res.status).toBe(204);
-    expect(logged('list shared')).toEqual([{ isOwner: false }]);
+    expect(logged('list shared')).toEqual([{ isOwner: false, qualifier: 'all-time' }]);
   });
 
   it('answers 404, and logs nothing, for a list that does not exist or could not be shared', async () => {

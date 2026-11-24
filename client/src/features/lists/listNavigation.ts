@@ -1,3 +1,4 @@
+import { LIST_QUALIFIERS, ListQualifier } from '@shared/types';
 import { joinNames } from './listText';
 
 /** The server's limit on a vibe, in characters. */
@@ -51,20 +52,18 @@ export function vibeFromState(state: unknown): string | null {
   return shorten(`${PREFIX}${joinNames(artists)}`, MAX_VIBE_LENGTH);
 }
 
-/** Navigation state that asks the home page to open the top 3 builder. */
+/** Navigation state that asks the home page to open the builder for one list. */
 export interface OpenTopThreeState {
-  readonly openTopThree: true;
+  readonly openTopThree: ListQualifier;
 }
 
-export function openTopThreeState(): OpenTopThreeState {
-  return { openTopThree: true };
+export function openTopThreeState(qualifier: ListQualifier): OpenTopThreeState {
+  return { openTopThree: qualifier };
 }
 
-/** The page asked for in navigation state, or null if there isn't a valid request. */
-export function pageFromState(state: unknown): 'top3' | null {
-  const isRequested =
-    typeof state === 'object' &&
-    state !== null &&
-    (state as { openTopThree?: unknown }).openTopThree === true;
-  return isRequested ? 'top3' : null;
+/** The list asked for in navigation state, or null if there isn't a valid request. */
+export function qualifierFromState(state: unknown): ListQualifier | null {
+  if (typeof state !== 'object' || state === null || !('openTopThree' in state)) return null;
+  const { openTopThree } = state as { openTopThree: unknown };
+  return LIST_QUALIFIERS.find((qualifier) => qualifier === openTopThree) ?? null;
 }

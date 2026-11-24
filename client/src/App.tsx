@@ -1,15 +1,16 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { PivotHint } from '@shared/types';
+import { ListQualifier, PivotHint } from '@shared/types';
 import { useRecommendation } from './hooks/useRecommendation';
 import { PreferencesPanel, sectionLabelStyle } from './features/preferences/PreferencesPanel';
 import { RecommendationCard } from './features/recommendation/RecommendationCard';
 import { HistoryGrid } from './features/history/HistoryGrid';
 import { CratePage } from './features/crate/CratePage';
 import { CrateMenu } from './features/crate/CrateMenu';
+import { MyListsPage } from './features/lists/MyListsPage';
 import { TopThreePage } from './features/lists/TopThreePage';
 import { albumsInCrate } from './features/lists/topThree';
-import { pageFromState, vibeFromState } from './features/lists/listNavigation';
+import { qualifierFromState, vibeFromState } from './features/lists/listNavigation';
 import { useStartFromNavigation } from './hooks/useStartFromNavigation';
 import { PageHeader } from './components/PageHeader';
 import { InsightsPage } from './features/stats/InsightsPage';
@@ -22,12 +23,19 @@ import { VibeTutorial } from './features/tutorial/VibeTutorial';
 import { SaveCrateNudge } from './features/account/SaveCrateNudge';
 import { useAccountSession } from './features/account/useAccountSession';
 
-type Page = 'home' | 'crate' | 'insights' | 'top3' | 'essentials';
+type Page = 'home' | 'crate' | 'insights' | 'lists' | 'builder' | 'essentials';
 
 export default function App(): React.ReactElement {
   const location = useLocation();
-  // A list page's "Make your own top 3" opens straight on it, so there is no flash of Discover.
-  const [page, setPage] = useState<Page>(() => pageFromState(location.state) ?? 'home');
+  // A list page's "Make your own top 3" opens straight on that list's builder, so there is no
+  // flash of Discover.
+  const [requestedList] = useState(() => qualifierFromState(location.state));
+  const [page, setPage] = useState<Page>(requestedList ? 'builder' : 'home');
+  const [builderList, setBuilderList] = useState<ListQualifier>(requestedList ?? 'all-time');
+  const openBuilder = useCallback((qualifier: ListQualifier): void => {
+    setBuilderList(qualifier);
+    setPage('builder');
+  }, []);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const {
     preferences,
@@ -77,8 +85,8 @@ export default function App(): React.ReactElement {
       [fetchRecommendation],
     ),
   );
-  // Clears the request that opened the top 3 page, so reloading doesn't open it again.
-  useStartFromNavigation(pageFromState, setPage);
+  // Clears the request that opened a list's builder, so reloading doesn't open it again.
+  useStartFromNavigation(qualifierFromState, openBuilder);
   // Fixed for the visit, so the page doesn't rearrange itself when the first pick arrives.
   const [isFirstVisit] = useState(recommendation === null);
   // A different handful of presets on each load, kept for the visit so they don't reshuffle
@@ -151,7 +159,9 @@ export default function App(): React.ReactElement {
             <button
               type="button"
               className="nav-tab"
-              data-active={page === 'crate' || page === 'insights' || page === 'top3'}
+              data-active={
+                page === 'crate' || page === 'insights' || page === 'lists' || page === 'builder'
+              }
               onClick={() => setPage('crate')}
             >
               Crate
@@ -215,24 +225,31 @@ export default function App(): React.ReactElement {
           />
           <InsightsPage history={history} />
         </div>
-      ) : page === 'top3' ? (
+      ) : page === 'lists' || page === 'builder' ? (
         <div className="app-full">
           <CrateMenu
-            view="top3"
+            view="lists"
             onNavigate={setPage}
             history={history}
             onImport={importHistory}
             onClear={clearHistory}
           />
-          <TopThreePage
-            crateAlbums={crateAlbums}
-            signIn={{
-              isSignedIn: account !== null,
-              isChecking,
-              isSignInAvailable,
-              onSignIn: openSignIn,
-            }}
-          />
+          {page === 'lists' ? (
+            <MyListsPage onOpen={openBuilder} />
+          ) : (
+            <TopThreePage
+              key={builderList}
+              qualifier={builderList}
+              onBack={() => setPage('lists')}
+              crateAlbums={crateAlbums}
+              signIn={{
+                isSignedIn: account !== null,
+                isChecking,
+                isSignInAvailable,
+                onSignIn: openSignIn,
+              }}
+            />
+          )}
         </div>
       ) : page === 'essentials' ? (
         <div className="app-full">

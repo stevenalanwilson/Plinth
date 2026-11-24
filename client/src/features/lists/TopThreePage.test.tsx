@@ -81,13 +81,14 @@ function savedList(...albums: PickedAlbum[]): ListResponse {
   };
 }
 
+const onBack = vi.fn();
 let searchState: { options: AlbumOption[]; isSearching: boolean; hasFailed: boolean };
 
 async function openPage(
   crate: PickedAlbum[] = [],
   signIn: typeof SIGNED_OUT = SIGNED_OUT,
 ): Promise<void> {
-  render(<TopThreePage crateAlbums={crate} signIn={signIn} />);
+  render(<TopThreePage qualifier="all-time" onBack={onBack} crateAlbums={crate} signIn={signIn} />);
   await screen.findByRole('list', { name: 'Your top 3' });
 }
 
@@ -116,7 +117,9 @@ beforeEach(() => {
 
 describe('TopThreePage loading', () => {
   it('says it is loading, then shows three empty slots', async () => {
-    render(<TopThreePage crateAlbums={[]} signIn={SIGNED_OUT} />);
+    render(
+      <TopThreePage qualifier="all-time" onBack={onBack} crateAlbums={[]} signIn={SIGNED_OUT} />,
+    );
     expect(screen.getByRole('status')).toHaveTextContent('Loading your list');
 
     await screen.findByRole('list', { name: 'Your top 3' });
@@ -134,9 +137,50 @@ describe('TopThreePage loading', () => {
     expect(slots[0]).toHaveTextContent('Nirvana · 1991');
   });
 
+  it('goes back to the lists when asked', async () => {
+    await openPage();
+
+    await userEvent.click(screen.getByRole('button', { name: '← My lists' }));
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('is about the list of its qualifier, and saves it under that', async () => {
+    mockCreate.mockResolvedValue({
+      ...savedList(BLUE),
+      qualifier: 'genre:hip-hop',
+      title: 'My top 3 hip-hop albums',
+    });
+    searchState = { options: [optionFor(BLUE)], isSearching: false, hasFailed: false };
+    render(
+      <TopThreePage
+        qualifier="genre:hip-hop"
+        onBack={onBack}
+        crateAlbums={[]}
+        signIn={SIGNED_OUT}
+      />,
+    );
+    await screen.findByRole('list', { name: 'Your top 3' });
+    expect(screen.getByText(/Your three best hip-hop albums, in order/)).toBeInTheDocument();
+
+    await userEvent.type(screen.getByRole('combobox'), 'kind');
+    await userEvent.click(await screen.findByRole('option', { name: /Kind of Blue/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save my top 3' }));
+
+    await waitFor(() =>
+      expect(mockCreate).toHaveBeenCalledWith({
+        kind: 'top',
+        qualifier: 'genre:hip-hop',
+        releaseGroupIds: ['rg-blue'],
+      }),
+    );
+  });
+
   it('says it could not load, and tries again when asked', async () => {
     mockFetchOwn.mockRejectedValueOnce(new Error('network down'));
-    render(<TopThreePage crateAlbums={[]} signIn={SIGNED_OUT} />);
+    render(
+      <TopThreePage qualifier="all-time" onBack={onBack} crateAlbums={[]} signIn={SIGNED_OUT} />,
+    );
 
     expect(await screen.findByRole('alert')).toHaveTextContent("couldn't load your list");
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));

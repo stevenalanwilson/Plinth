@@ -84,7 +84,7 @@ function WhatNext({ list }: { readonly list: ListResponse | null }): React.React
           <button
             type="button"
             className="album-page-cta-button"
-            onClick={() => navigate('/', { state: openTopThreeState() })}
+            onClick={() => navigate('/', { state: openTopThreeState(list.qualifier) })}
           >
             {list.isOwner ? 'Edit my top 3' : 'Make your own top 3'}
           </button>

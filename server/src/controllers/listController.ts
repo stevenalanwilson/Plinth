@@ -209,7 +209,7 @@ export function createListHandlers(deps: ListDependencies): ListHandlers {
           res.status(404).json({ error: 'List not found' });
           return;
         }
-        logger.info({ isOwner: list.isOwner }, 'list shared');
+        logger.info({ isOwner: list.isOwner, qualifier: list.qualifier }, 'list shared');
         res.status(204).end();
       } catch (error) {
         answerError(res, error, 'list share');

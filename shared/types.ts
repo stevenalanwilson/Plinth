@@ -338,8 +338,63 @@ export interface ArtistSuggestionsResponse {
 /** What sort of list: "top" is a person's best albums, in order. */
 export type ListKind = 'top';
 
-/** What a list is about: all time for now; later a genre, a month or a year. */
-export type ListQualifier = 'all-time';
+/** The genres people can choose, for their preferences and for a list of their best in a genre. */
+export const GENRE_OPTIONS = [
+  'Electronic',
+  'Post-punk',
+  'Ambient',
+  'Indie',
+  'Krautrock',
+  'Drum & Bass',
+  'Art Rock',
+  'Jazz',
+  'Folk',
+  'Metal',
+  'Hip-hop',
+  'Classical',
+] as const;
+
+export type Genre = (typeof GENRE_OPTIONS)[number];
+
+/** A list of a person's best in one genre: "genre:" and the genre in lower case, as in "genre:hip-hop". */
+export type GenreQualifier = `genre:${string}`;
+
+/** What a list is about: all time, or one genre. Later perhaps a month or a year. */
+export type ListQualifier = 'all-time' | GenreQualifier;
+
+export const ALL_TIME_QUALIFIER = 'all-time' satisfies ListQualifier;
+
+/** "Drum & Bass" becomes "drum-and-bass": letters and digits, joined by hyphens. */
+function genreSlug(genre: Genre): string {
+  return genre
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+export function genreQualifier(genre: Genre): GenreQualifier {
+  return `genre:${genreSlug(genre)}`;
+}
+
+/** Every qualifier a list may have. */
+export const LIST_QUALIFIERS: readonly [ListQualifier, ...ListQualifier[]] = [
+  ALL_TIME_QUALIFIER,
+  ...GENRE_OPTIONS.map(genreQualifier),
+];
+
+/** The genre a qualifier names, or null for all time and anything not a genre in the list. */
+export function genreOfQualifier(qualifier: string): Genre | null {
+  return GENRE_OPTIONS.find((genre) => genreQualifier(genre) === qualifier) ?? null;
+}
+
+/** For example "My top 3 albums of all time" or "My top 3 hip-hop albums". */
+export function listTitle(kind: ListKind, qualifier: ListQualifier, size: number): string {
+  const genre = genreOfQualifier(qualifier);
+  return genre
+    ? `My ${kind} ${size} ${genre.toLowerCase()} albums`
+    : `My ${kind} ${size} albums of all time`;
+}
 
 export interface ListResponse {
   /** A short code that can't be guessed; anyone who has it can read the list. */

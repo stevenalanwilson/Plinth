@@ -145,6 +145,12 @@ Both over the same period. It is an estimate, in two ways: a list that became fu
 
 `list shared` with `isOwner` false counts visitors passing a list on, which is the loop working: someone who saw a list liked it enough to send it.
 
+### Which lists do people make?
+
+`list created`, `list edited` and `list shared` lines carry the `qualifier`: `all-time` or `genre:` and the genre, as in `genre:hip-hop`. Counting `list created` by qualifier says which genres people reach for, and whether a genre list is made at all once the one of all time is. `list shared` says which kinds get passed on: lists of all time against lists of a genre, and the genres that are shared most.
+
+The qualifier is about what a list is, not who made it, so it adds nothing that points to a person. What the logs can't say is how many lists one person has: nothing in a line says whose it is.
+
 ### Do people who open a shared list try a pick?
 
 ```

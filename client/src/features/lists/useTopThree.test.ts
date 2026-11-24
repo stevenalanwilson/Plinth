@@ -66,7 +66,7 @@ const ids = (albums: readonly PickedAlbum[]): string[] => albums.map((a) => a.re
 async function loaded(): Promise<
   ReturnType<typeof renderHook<ReturnType<typeof useTopThree>, unknown>>
 > {
-  const view = renderHook(() => useTopThree());
+  const view = renderHook(() => useTopThree('all-time'));
   await waitFor(() => expect(view.result.current.status).toBe('ready'));
   return view;
 }
@@ -78,7 +78,7 @@ beforeEach(() => {
 
 describe('useTopThree loading', () => {
   it('starts loading, then is ready with an empty list when none was saved', async () => {
-    const view = renderHook(() => useTopThree());
+    const view = renderHook(() => useTopThree('all-time'));
     expect(view.result.current.status).toBe('loading');
 
     await waitFor(() => expect(view.result.current.status).toBe('ready'));
@@ -106,10 +106,33 @@ describe('useTopThree loading', () => {
     expect(result.current.albums).toEqual([]);
   });
 
+  it('shows only the list of its own qualifier, and saves a new one under it', async () => {
+    mockFetchOwn.mockResolvedValue({
+      lists: [saved('a'), { ...saved('b'), id: 'jazzjazzjz', qualifier: 'genre:jazz' }],
+    });
+    const view = renderHook(() => useTopThree('genre:jazz'));
+    await waitFor(() => expect(view.result.current.status).toBe('ready'));
+
+    expect(ids(view.result.current.albums)).toEqual(['b']);
+
+    mockFetchOwn.mockResolvedValue({ lists: [] });
+    const folk = renderHook(() => useTopThree('genre:folk'));
+    await waitFor(() => expect(folk.result.current.status).toBe('ready'));
+    mockCreate.mockResolvedValue({ ...saved('a'), qualifier: 'genre:folk' });
+    act(() => folk.result.current.add(A));
+    await act(() => folk.result.current.save());
+
+    expect(mockCreate).toHaveBeenCalledWith({
+      kind: 'top',
+      qualifier: 'genre:folk',
+      releaseGroupIds: ['a'],
+    });
+  });
+
   it('says it could not load, rather than showing an empty list that saving would then clash with', async () => {
     mockFetchOwn.mockRejectedValue(new Error('network down'));
 
-    const view = renderHook(() => useTopThree());
+    const view = renderHook(() => useTopThree('all-time'));
     await waitFor(() => expect(view.result.current.status).toBe('failed'));
 
     expect(view.result.current.albums).toEqual([]);
@@ -117,7 +140,7 @@ describe('useTopThree loading', () => {
 
   it('tries again when asked', async () => {
     mockFetchOwn.mockRejectedValueOnce(new Error('network down'));
-    const view = renderHook(() => useTopThree());
+    const view = renderHook(() => useTopThree('all-time'));
     await waitFor(() => expect(view.result.current.status).toBe('failed'));
 
     act(() => view.result.current.reload());

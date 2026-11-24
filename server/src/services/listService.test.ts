@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { listTitle } from '@shared/types';
 
 vi.mock('../logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
@@ -20,7 +21,6 @@ import {
   getList,
   getOwnLists,
   InvalidListError,
-  listTitle,
   ListDependencies,
   ListInput,
   replaceListAlbums,
@@ -70,6 +70,11 @@ const input = (releaseGroupIds: string[]): ListInput => ({
 describe('listTitle', () => {
   it('names a top 3 of all time', () => {
     expect(listTitle('top', 'all-time', 3)).toBe('My top 3 albums of all time');
+  });
+
+  it('names a top 3 of a genre', () => {
+    expect(listTitle('top', 'genre:hip-hop', 3)).toBe('My top 3 hip-hop albums');
+    expect(listTitle('top', 'genre:drum-and-bass', 3)).toBe('My top 3 drum & bass albums');
   });
 });
 
@@ -150,6 +155,33 @@ describe('createList', () => {
     await expect(createList(deps, ME, input(['rg-blue', 'rg-blue']), NOW)).rejects.toBeInstanceOf(
       InvalidListError,
     );
+  });
+
+  it('titles a genre list by its genre', async () => {
+    const list = await createList(
+      deps,
+      ME,
+      { kind: 'top', qualifier: 'genre:jazz', releaseGroupIds: ['rg-blue'] },
+      NOW,
+    );
+
+    expect(list).toMatchObject({ qualifier: 'genre:jazz', title: 'My top 3 jazz albums' });
+  });
+
+  it('lets one owner have a list for each qualifier, and each one is its own list', async () => {
+    const allTime = await createList(deps, ME, input(['rg-blue']), NOW);
+    const jazz = await createList(
+      deps,
+      ME,
+      { kind: 'top', qualifier: 'genre:jazz', releaseGroupIds: ['rg-blue', 'rg-nevermind'] },
+      NOW,
+    );
+
+    expect(jazz.id).not.toBe(allTime.id);
+    expect((await getOwnLists(deps, ME, NOW)).map((list) => list.qualifier)).toEqual([
+      'all-time',
+      'genre:jazz',
+    ]);
   });
 
   it('refuses a second list of the same kind for one owner', async () => {

@@ -172,7 +172,21 @@ describe('ListPage for a visitor', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Make your own top 3' }));
 
     expect(JSON.parse(screen.getByTestId('home-state').textContent ?? '')).toEqual({
-      openTopThree: true,
+      openTopThree: 'all-time',
+    });
+  });
+
+  it('sends them to make their own of the same genre, when the list is of a genre', async () => {
+    mockFetchList.mockResolvedValue(
+      list({ qualifier: 'genre:hip-hop', title: 'My top 3 hip-hop albums' }),
+    );
+    renderPage();
+    await shown();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Make your own top 3' }));
+
+    expect(JSON.parse(screen.getByTestId('home-state').textContent ?? '')).toEqual({
+      openTopThree: 'genre:hip-hop',
     });
   });
 
@@ -216,7 +230,7 @@ describe('ListPage for the owner', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Edit my top 3' }));
 
     expect(JSON.parse(screen.getByTestId('home-state').textContent ?? '')).toEqual({
-      openTopThree: true,
+      openTopThree: 'all-time',
     });
   });
 

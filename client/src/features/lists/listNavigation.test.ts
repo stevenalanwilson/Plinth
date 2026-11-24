@@ -3,7 +3,7 @@ import {
   likeTheseState,
   openTopThreeState,
   vibeFromState,
-  pageFromState,
+  qualifierFromState,
   MAX_VIBE_LENGTH,
 } from './listNavigation';
 
@@ -75,15 +75,21 @@ describe('like these', () => {
   });
 });
 
-describe('open my top 3', () => {
-  it('round-trips into the top 3 page', () => {
-    expect(pageFromState(openTopThreeState())).toBe('top3');
+describe('open a list to make', () => {
+  it('round-trips the list asked for', () => {
+    expect(qualifierFromState(openTopThreeState('all-time'))).toBe('all-time');
+    expect(qualifierFromState(openTopThreeState('genre:hip-hop'))).toBe('genre:hip-hop');
   });
 
-  it.each([null, undefined, 'openTopThree', {}, { openTopThree: false }, { openTopThree: 'yes' }])(
-    'ignores %j',
-    (state) => {
-      expect(pageFromState(state)).toBeNull();
-    },
-  );
+  it.each([
+    null,
+    undefined,
+    'openTopThree',
+    {},
+    { openTopThree: true },
+    { openTopThree: 'yes' },
+    { openTopThree: 'genre:polka' },
+  ])('ignores %j', (state) => {
+    expect(qualifierFromState(state)).toBeNull();
+  });
 });
