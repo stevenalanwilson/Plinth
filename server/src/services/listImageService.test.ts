@@ -5,6 +5,8 @@ import {
   LIST_IMAGE_CONTENT_TYPE,
   LIST_IMAGE_HEIGHT,
   LIST_IMAGE_WIDTH,
+  LIST_STORY_HEIGHT,
+  LIST_STORY_WIDTH,
   ListImageCover,
   renderListImage,
 } from './listImageService';
@@ -117,5 +119,46 @@ describe('renderListImage', () => {
     const png = await renderListImage({ title: 'My 上位3枚 albums', covers: THREE });
 
     expect(sizeOf(png)).toEqual({ width: 1200, height: 630 });
+  });
+});
+
+describe('renderListImage as a story', () => {
+  const NAMED = [
+    { album: 'Kind of Blue', artist: 'Miles Davis' },
+    { album: 'Nevermind', artist: 'Nirvana' },
+    { album: 'Thriller', artist: 'Michael Jackson' },
+  ];
+  const story = { title: TITLE, covers: THREE, shape: 'story', albums: NAMED } as const;
+
+  it('draws a JPEG the size of a Story, 1080 by 1920', async () => {
+    const picture = await renderListImage(story);
+
+    expect(picture.subarray(0, 3).equals(JPEG_SIGNATURE)).toBe(true);
+    expect(sizeOf(picture)).toEqual({ width: LIST_STORY_WIDTH, height: LIST_STORY_HEIGHT });
+    expect(LIST_STORY_WIDTH).toBe(1080);
+    expect(LIST_STORY_HEIGHT).toBe(1920);
+  });
+
+  it('is nothing like the card, and names the albums, so a different name is a different picture', async () => {
+    const card = await renderListImage({ title: TITLE, covers: THREE });
+    const one = await renderListImage(story);
+    const renamed = await renderListImage({
+      ...story,
+      albums: NAMED.map((named) => ({ ...named, album: 'Something else' })),
+    });
+
+    expect(one.equals(card)).toBe(false);
+    expect(one.equals(renamed)).toBe(false);
+  });
+
+  it('copes with a placeholder in place of a cover, and with very long names', async () => {
+    const long = 'A very long album title that goes on and on '.repeat(6);
+    const picture = await renderListImage({
+      ...story,
+      covers: [THREE[0], null, THREE[2]],
+      albums: NAMED.map(() => ({ album: long, artist: long })),
+    });
+
+    expect(sizeOf(picture)).toEqual({ width: 1080, height: 1920 });
   });
 });

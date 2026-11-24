@@ -5,6 +5,7 @@ import { ArtworkImage } from '../../components/ArtworkImage';
 import { ListenAndShare } from '../../components/ListenAndShare';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { likeTheseState, openTopThreeState } from './listNavigation';
+import { SaveStoryButton } from './SaveStoryButton';
 import { ShareListButton } from './ShareListButton';
 import { useList } from './useList';
 
@@ -123,7 +124,10 @@ export function ListPage(): React.ReactElement {
             <div className="list-page-heading">
               <h1 className="list-page-title">{state.list.title}</h1>
               {state.list.albums.length >= state.list.size && (
-                <ShareListButton list={state.list} variant="icon" />
+                <div className="list-page-actions">
+                  {state.list.isOwner && <SaveStoryButton list={state.list} />}
+                  <ShareListButton list={state.list} variant="icon" />
+                </div>
               )}
             </div>
             <UnfinishedNotice list={state.list} />

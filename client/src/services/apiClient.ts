@@ -379,6 +379,20 @@ export function noteListShared(id: string): void {
   fetch(`${base}/image`, { mode: 'no-cors' }).catch(() => undefined);
 }
 
+/**
+ * The tall picture of a list, to post as a Story. The first drawing takes seconds (it fetches the
+ * covers), which the request's timeout allows for.
+ */
+export async function fetchListStory(id: string, signal?: AbortSignal): Promise<Blob> {
+  const res = await fetchWithTimeout(
+    `${API_BASE}${API_V1}/lists/${encodeURIComponent(id)}/story`,
+    undefined,
+    signal,
+  );
+  if (!res.ok) throw await toApiError(res);
+  return res.blob();
+}
+
 export interface NewListRequest {
   readonly kind: ListKind;
   readonly qualifier: ListQualifier;
