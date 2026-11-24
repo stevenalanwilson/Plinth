@@ -85,26 +85,26 @@ describe('CrateMenu', () => {
       await userEvent.click(screen.getByRole('button', { name: 'My crate' }));
       expect(onNavigate).toHaveBeenCalledWith('crate');
     });
-    it('names the top 3 page and marks My top 3 as the one you are on', () => {
-      renderMenu({ view: 'top3' });
+    it('names the lists page and marks My lists as the one you are on', () => {
+      renderMenu({ view: 'lists' });
 
-      expect(screen.getByRole('heading', { name: 'My top 3' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'My top 3' })).toHaveAttribute(
+      expect(screen.getByRole('heading', { name: 'My lists' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'My lists' })).toHaveAttribute(
         'aria-current',
         'page',
       );
     });
 
-    it('goes to My top 3 when it is tapped', async () => {
+    it('goes to My lists when it is tapped', async () => {
       const { onNavigate } = renderMenu({ view: 'crate' });
 
-      await userEvent.click(screen.getByRole('button', { name: 'My top 3' }));
+      await userEvent.click(screen.getByRole('button', { name: 'My lists' }));
 
-      expect(onNavigate).toHaveBeenCalledWith('top3');
+      expect(onNavigate).toHaveBeenCalledWith('lists');
     });
 
     it('leaves out the actions on the whole crate where they do not apply', () => {
-      renderMenu({ view: 'top3' });
+      renderMenu({ view: 'lists' });
 
       expect(screen.queryByRole('group', { name: 'Crate actions' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();

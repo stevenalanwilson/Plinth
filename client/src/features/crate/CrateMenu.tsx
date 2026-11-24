@@ -5,7 +5,7 @@ import { ConfirmButton } from '../../components/ConfirmButton';
 import { PageHeader } from '../../components/PageHeader';
 
 /** The pages under Crate in the main menu. */
-export type CrateView = 'crate' | 'insights' | 'top3';
+export type CrateView = 'crate' | 'insights' | 'lists';
 
 interface CrateMenuProps {
   readonly view: CrateView;
@@ -22,7 +22,7 @@ const VIEWS: readonly {
 }[] = [
   { view: 'crate', label: 'My crate', title: 'Your Crate' },
   { view: 'insights', label: 'Insights', title: 'Insights' },
-  { view: 'top3', label: 'My top 3', title: 'My top 3' },
+  { view: 'lists', label: 'My lists', title: 'My lists' },
 ];
 
 /**
@@ -72,7 +72,7 @@ export function CrateMenu({
               </button>
             ))}
           </nav>
-          {view !== 'top3' && (
+          {view !== 'lists' && (
             <div className="crate-tools" role="group" aria-label="Crate actions">
               <button
                 type="button"

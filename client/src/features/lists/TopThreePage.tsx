@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { genreOfQualifier, ListQualifier } from '@shared/types';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { SearchCombobox } from '../../components/SearchCombobox';
 import { ShareListButton } from './ShareListButton';
@@ -9,6 +10,10 @@ import { useAlbumSearch } from './useAlbumSearch';
 import { useTopThree } from './useTopThree';
 
 interface TopThreePageProps {
+  /** Which of the person's lists this is: all time, or a genre. */
+  readonly qualifier: ListQualifier;
+  /** Goes back to the person's lists. */
+  readonly onBack: () => void;
   /** Albums in the person's crate, offered first when searching. */
   readonly crateAlbums: readonly PickedAlbum[];
   /** Whether and how to invite someone to sign in once they have shared their list. */
@@ -21,14 +26,34 @@ interface PendingFocus {
   readonly control: 'up' | 'down';
 }
 
+function BackToLists({ onBack }: { readonly onBack: () => void }): React.ReactElement {
+  return (
+    <button type="button" className="crate-action top-three-back" onClick={onBack}>
+      ← My lists
+    </button>
+  );
+}
+
 const SLOTS = Array.from({ length: TOP_THREE_SIZE }, (_unused, index) => index);
 
+/** "albums of all time" or "hip-hop albums", to follow "Your three best". */
+function aboutList(qualifier: ListQualifier): string {
+  const genre = genreOfQualifier(qualifier);
+  return genre ? `${genre.toLowerCase()} albums` : 'albums of all time';
+}
+
 /**
- * Where someone picks their three best albums of all time, in order. Albums come from searching
- * (the crate first) and can be moved or removed; nothing is saved until the person says so.
+ * Where someone picks their three best albums of all time, or of a genre, in order. Albums come
+ * from searching (the crate first) and can be moved or removed; nothing is saved until the person
+ * says so.
  */
-export function TopThreePage({ crateAlbums, signIn }: TopThreePageProps): React.ReactElement {
-  const topThree = useTopThree();
+export function TopThreePage({
+  qualifier,
+  onBack,
+  crateAlbums,
+  signIn,
+}: TopThreePageProps): React.ReactElement {
+  const topThree = useTopThree(qualifier);
   const { albums, isFull, status } = topThree;
   const [query, setQuery] = useState('');
   const [hasShared, setHasShared] = useState(false);
@@ -76,6 +101,7 @@ export function TopThreePage({ crateAlbums, signIn }: TopThreePageProps): React.
   if (status === 'loading') {
     return (
       <section className="top-three" aria-label="My top 3">
+        <BackToLists onBack={onBack} />
         <p role="status" className="top-three-note">
           Loading your list…
         </p>
@@ -86,6 +112,7 @@ export function TopThreePage({ crateAlbums, signIn }: TopThreePageProps): React.
   if (status === 'failed') {
     return (
       <section className="top-three" aria-label="My top 3">
+        <BackToLists onBack={onBack} />
         <p role="alert" className="top-three-note">
           We couldn&apos;t load your list.
         </p>
@@ -101,8 +128,9 @@ export function TopThreePage({ crateAlbums, signIn }: TopThreePageProps): React.
 
   return (
     <section className="top-three" aria-label="My top 3">
+      <BackToLists onBack={onBack} />
       <p className="top-three-intro">
-        Your three best albums of all time, in order. Add them by searching for the album or the
+        Your three best {aboutList(qualifier)}, in order. Add them by searching for the album or the
         artist.
       </p>
 

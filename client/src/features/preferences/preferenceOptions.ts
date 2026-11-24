@@ -1,20 +1,5 @@
-// The genres and moods people can choose. Presets are typed against these, so one can't name a
-// genre the panel doesn't offer.
-export const GENRE_OPTIONS = [
-  'Electronic',
-  'Post-punk',
-  'Ambient',
-  'Indie',
-  'Krautrock',
-  'Drum & Bass',
-  'Art Rock',
-  'Jazz',
-  'Folk',
-  'Metal',
-  'Hip-hop',
-  'Classical',
-] as const;
-
+// The genres (shared with lists) and moods people can choose. Presets are typed against these, so
+// one can't name a genre the panel doesn't offer.
 export const MOOD_OPTIONS = [
   'Late night',
   'High energy',
@@ -25,5 +10,6 @@ export const MOOD_OPTIONS = [
   'Hopeful',
 ] as const;
 
-export type Genre = (typeof GENRE_OPTIONS)[number];
+export { GENRE_OPTIONS } from '@shared/types';
+export type { Genre } from '@shared/types';
 export type Mood = (typeof MOOD_OPTIONS)[number];

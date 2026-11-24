@@ -1908,6 +1908,48 @@ body::before {
   margin-bottom: 16px;
 }
 
+.top-three-back {
+  margin-bottom: 16px;
+}
+
+.my-lists {
+  max-width: 680px;
+  padding: 0 4px;
+}
+
+.my-lists-items {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.my-lists-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.my-lists-title {
+  font-family: var(--serif);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.my-lists-genres {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .top-three-slots {
   list-style: none;
   display: flex;

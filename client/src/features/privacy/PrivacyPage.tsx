@@ -71,10 +71,11 @@ export function PrivacyPage(): React.ReactElement {
 
       <h2>If you make a top 3</h2>
       <p>
-        A top 3 is a list of albums you choose, in order. When you save one, Plinth keeps the albums
-        in it, their order, when you made it and last changed it, and who it belongs to: your
-        device, or your account once you sign in, when it moves across. It has an address made from
-        a short random code.
+        A top 3 is a list of albums you choose, in order: your best of all time, or your best in a
+        genre such as jazz or hip-hop, and you can make one of each. When you save one, Plinth keeps
+        the albums in it, their order, when you made it and last changed it, and who it belongs to:
+        your device, or your account once you sign in, when it moves across. It has an address made
+        from a short random code.
       </p>
       <p>
         <strong>Anyone who has the link can see it</strong>: the albums, their covers and their
@@ -86,7 +87,7 @@ export function PrivacyPage(): React.ReactElement {
         seen by you.
       </p>
       <p>
-        <strong>You can delete it from My top 3</strong> whenever you like, which removes the page
+        <strong>You can delete it from My lists</strong> whenever you like, which removes the page
         and its picture, so the link shows nothing. Deleting your account deletes it too, and a
         device not used for a year is forgotten along with its list.
       </p>

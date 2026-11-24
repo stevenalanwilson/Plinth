@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ListResponse } from '@shared/types';
+import { ListQualifier, ListResponse } from '@shared/types';
 import { createList, deleteList, fetchOwnLists, replaceList } from '../../services/apiClient';
 import { toFailure } from '../../services/failure';
 import {
@@ -62,10 +62,11 @@ function toSaved(list: ListResponse): SavedList {
 }
 
 /**
- * The person's top 3 albums of all time: what is saved on the server, and the changes being made
- * to it. Nothing is saved until asked, so a list can be built over several visits.
+ * One of the person's top 3 lists (of all time, or of a genre): what is saved on the server, and
+ * the changes being made to it. Nothing is saved until asked, so a list can be built over several
+ * visits. Each list needs its own hook, so a page shows one list at a time.
  */
-export function useTopThree(): TopThree {
+export function useTopThree(qualifier: ListQualifier): TopThree {
   const [status, setStatus] = useState<TopThreeStatus>('loading');
   const [albums, setAlbums] = useState<readonly PickedAlbum[]>([]);
   const [saved, setSaved] = useState<SavedList | null>(null);
@@ -78,7 +79,7 @@ export function useTopThree(): TopThree {
     setStatus('loading');
     fetchOwnLists(controller.signal)
       .then(({ lists }) => {
-        const list = lists.find((l) => l.kind === 'top' && l.qualifier === 'all-time');
+        const list = lists.find((l) => l.kind === 'top' && l.qualifier === qualifier);
         const found = list ? toSaved(list) : null;
         setSaved(found);
         setAlbums(found?.albums ?? []);
@@ -88,7 +89,7 @@ export function useTopThree(): TopThree {
         if (!controller.signal.aborted) setStatus('failed');
       });
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, qualifier]);
 
   const edit = useCallback((change: (current: readonly PickedAlbum[]) => PickedAlbum[]) => {
     setAlbums(change);
@@ -113,7 +114,7 @@ export function useTopThree(): TopThree {
     try {
       const list = saved
         ? await replaceList(saved.id, releaseGroupIds)
-        : await createList({ kind: 'top', qualifier: 'all-time', releaseGroupIds });
+        : await createList({ kind: 'top', qualifier, releaseGroupIds });
       const now = toSaved(list);
       setSaved(now);
       setAlbums(now.albums);
@@ -122,7 +123,7 @@ export function useTopThree(): TopThree {
       setSaveError(toFailure(error, "Couldn't save your list. Please try again.").message);
       setSaveState('failed');
     }
-  }, [albums, saved, saveState]);
+  }, [albums, qualifier, saved, saveState]);
 
   const discard = useCallback(async (): Promise<void> => {
     setSaveError(null);
