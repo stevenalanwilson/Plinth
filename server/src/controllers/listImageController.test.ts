@@ -134,6 +134,18 @@ describe('list image', () => {
     expect(res.headers.get('cross-origin-resource-policy')).toBe('cross-origin');
   });
 
+  it('allows other sites on every answer, redirects included, or a browser stops at the first', async () => {
+    const stale = await fetch(`${baseUrl}/lists/${LIST_ID}/image`, { redirect: 'manual' });
+    const unknown = await fetch(`${baseUrl}/lists/zzzzzzzzzz/image`);
+    const notACode = await fetch(`${baseUrl}/lists/not-a-code/image`);
+    render.mockRejectedValue(new Error('the renderer is broken'));
+    const fallback = await fetch(`${baseUrl}${await currentAddress()}`, { redirect: 'manual' });
+
+    for (const res of [stale, unknown, notACode, fallback]) {
+      expect(res.headers.get('cross-origin-resource-policy')).toBe('cross-origin');
+    }
+  });
+
   it('draws the list’s title and each album’s cover, in order', async () => {
     await currentImage();
 
