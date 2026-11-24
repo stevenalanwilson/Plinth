@@ -87,6 +87,11 @@ export function PrivacyPage(): React.ReactElement {
         seen by you.
       </p>
       <p>
+        You can also save your list as a tall picture to post as a Story. Plinth draws it from the
+        same list, with the same covers and the names of the albums, and keeps nothing about who
+        asked for it.
+      </p>
+      <p>
         <strong>You can delete it from My lists</strong> whenever you like, which removes the page
         and its picture, so the link shows nothing. Deleting your account deletes it too, and a
         device not used for a year is forgotten along with its list.

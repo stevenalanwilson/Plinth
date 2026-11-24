@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { genreOfQualifier, ListQualifier } from '@shared/types';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { SearchCombobox } from '../../components/SearchCombobox';
+import { SaveStoryButton } from './SaveStoryButton';
 import { ShareListButton } from './ShareListButton';
 import { ShareListInvite, SignInOffer } from './ShareListInvite';
 import { PickedAlbum, TOP_THREE_SIZE } from './topThree';
@@ -209,6 +210,7 @@ export function TopThreePage({
               label="Share my top 3"
               onShare={() => setHasShared(true)}
             />
+            <SaveStoryButton list={topThree.shareable} />
             <a href={`/list/${encodeURIComponent(topThree.shareable.id)}`} className="crate-action">
               View your page
             </a>

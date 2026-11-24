@@ -64,6 +64,15 @@ describe('PrivacyPage', () => {
       expect(screen.getByText(/fewer than three albums/)).toBeInTheDocument();
     });
 
+    it('says a list can be saved as a picture for Stories, and that nothing is kept about it', () => {
+      renderPage();
+
+      expect(
+        screen.getByText(/save your list as a tall picture to post as a Story/),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/keeps nothing about who asked for it/)).toBeInTheDocument();
+    });
+
     it('says how to delete one, and what else removes it', () => {
       renderPage();
 

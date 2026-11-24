@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AlbumResponse, ListResponse } from '@shared/types';
@@ -311,6 +311,19 @@ describe('ListPage sharing', () => {
 
     expect(writeText).toHaveBeenCalled();
     expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('offers the owner a picture for Stories, and no one else', async () => {
+    renderPage();
+    await shown();
+    expect(screen.queryByRole('button', { name: 'Save for Stories' })).not.toBeInTheDocument();
+
+    cleanup();
+    mockFetchList.mockResolvedValue(list({ isOwner: true }));
+    renderPage();
+    await shown();
+
+    expect(screen.getByRole('button', { name: 'Save for Stories' })).toBeEnabled();
   });
 
   it('does not offer to share a list that is not finished', async () => {

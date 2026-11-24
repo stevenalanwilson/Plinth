@@ -4,6 +4,7 @@ import {
   createList,
   deleteList,
   fetchList,
+  fetchListStory,
   fetchOwnLists,
   noteListShared,
   replaceList,
@@ -291,5 +292,33 @@ describe('noteListShared', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/lists/a%2Fb/shared'))).toBe(
       true,
     );
+  });
+});
+
+describe('fetchListStory', () => {
+  it('asks for the tall picture of the list, and returns it', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(new Uint8Array([0xff, 0xd8, 0xff, 1]), {
+        status: 200,
+        headers: { 'Content-Type': 'image/jpeg' },
+      }),
+    );
+
+    const blob = await fetchListStory('abcdefghjk');
+
+    expect(requestedUrl()).toBe('/api/v1/lists/abcdefghjk/story');
+    expect(blob.size).toBe(4);
+    expect(blob.type).toBe('image/jpeg');
+  });
+
+  it('fails with what the server said when the picture could not be made', async () => {
+    fetchMock.mockResolvedValue(
+      json({ error: "Couldn't make the picture. Please try again." }, 502),
+    );
+
+    await expect(fetchListStory('abcdefghjk')).rejects.toMatchObject({
+      message: "Couldn't make the picture. Please try again.",
+      status: 502,
+    });
   });
 });

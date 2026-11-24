@@ -414,8 +414,17 @@ describe('TopThreePage sharing', () => {
     );
   });
 
+  it('offers to save the list as a picture for Stories, once it can be shared', async () => {
+    mockFetchOwn.mockResolvedValue({ lists: [savedList(BLUE, NEVERMIND, THRILLER)] });
+
+    await openPage();
+
+    expect(screen.getByRole('button', { name: 'Save for Stories' })).toBeEnabled();
+  });
+
   it('has nothing to share before there is a saved list', async () => {
     await openPage();
+    expect(screen.queryByRole('button', { name: 'Save for Stories' })).not.toBeInTheDocument();
 
     expect(screen.queryByRole('button', { name: 'Share my top 3' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View your page' })).not.toBeInTheDocument();
